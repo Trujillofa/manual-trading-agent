@@ -50,8 +50,9 @@ strategy:
   lookback_bars: 20
 
 risk:
-  tp_usd: 500
-  sl_usd: 1800
+  tp_usd: 300
+  sl_usd: 900
+  max_daily_loss_usd: 1500
   max_concurrent_positions: 1
 
 news:
@@ -67,3 +68,6 @@ data:
     api_key: "${OANDA_API_KEY}"
     account_id: "${OANDA_ACCOUNT_ID}"
     practice: true
+  telegram:
+    bot_token: "${TELEGRAM_BOT_TOKEN}"
+    chat_id: "${TELEGRAM_CHAT_ID}"

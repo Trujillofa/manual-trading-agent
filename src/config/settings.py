@@ -111,12 +111,28 @@ class OandaConfig:
     account_id: str | None = None
     practice: bool = True
 
+@dataclass
+class TelegramConfig:
+    bot_token: str | None = None
+    chat_id: str | None = None
+    enabled: bool = True
+
+    signal_notifications: bool = True
+
+    scan_results: bool = True
+
     def __post_init__(self) -> None:
-        # Allow env var substitution like "${OANDA_API_KEY}"
-        if self.api_key and self.api_key.startswith("${"):
-            self.api_key = None
-        if self.account_id and self.account_id.startswith("${"):
-            self.account_id = None
+        if self.bot_token and self.bot_token.startswith("${"):
+            self.bot_token = None
+        if self.chat_id and self.chat_id.startswith("${"):
+            self.chat_id = None
+
+    @property
+    def is_configured(self) -> bool:
+        return self.bot_token is not None and self.chat_id is not None
+
+
+
 
 
 @dataclass
@@ -140,6 +156,7 @@ class Settings:
     risk: RiskConfig = field(default_factory=RiskConfig)
     news: NewsConfig = field(default_factory=NewsConfig)
     data: DataConfig = field(default_factory=DataConfig)
+    telegram: TelegramConfig = field(default_factory=TelegramConfig)
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> Settings:
@@ -203,6 +220,18 @@ class Settings:
             ),
         }
 
+        telegram_data = payload.get("telegram", {})
+        if not isinstance(telegram_data, dict):
+            telegram_data = {}
+
+        telegram_payload: dict[str, Any] = {
+            "bot_token": telegram_data.get("bot_token"),
+            "chat_id": telegram_data.get("chat_id"),
+            "enabled": telegram_data.get("enabled", True),
+            "signal_notifications": telegram_data.get("signal_notifications", True),
+            "scan_results": telegram_data.get("scan_results", True),
+        }
+
         return cls(
             trading=TradingConfig(**trading_payload),
             timeframes=TimeframesConfig(**timeframes_data),
@@ -210,6 +239,7 @@ class Settings:
             risk=RiskConfig(**risk_data),
             news=NewsConfig(**news_data),
             data=DataConfig(**data_payload),
+            telegram=TelegramConfig(**telegram_payload),
         )
 
 

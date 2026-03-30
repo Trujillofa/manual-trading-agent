@@ -1,0 +1,24 @@
+services:
+  manual-trading-agent:
+    build: .
+    container_name: manual-trading-agent
+    restart: unless-stopped
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    environment:
+      - OANDA_API_KEY=${OANDA_API_KEY:-}
+      - OANDA_ACCOUNT_ID=${OANDA_ACCOUNT_ID:-}
+      - TZ=America/Bogota
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      while true; do
+        echo "=== $$(date) ===" >> /app/logs/scan.log
+        python -m src.cli scan >> /app/logs/scan.log 2>&1
+        sleep 900
+      done
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/logs/scan.log"]
+      interval: 5m
+      timeout: 10s
+      retries: 3

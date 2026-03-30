@@ -17,9 +17,25 @@ trading:
       - EUR/CAD
       - GBP/JPY
       - GBP/CHF
+      - GBP/AUD
+      - GBP/CAD
+      - GBP/NZD
       - AUD/JPY
+      - AUD/CAD
+      - AUD/CHF
+      - AUD/NZD
       - CAD/JPY
       - CHF/JPY
+      - NZD/JPY
+    exotics:
+      - USD/SGD
+      - USD/HKD
+      - USD/SEK
+      - USD/NOK
+      - USD/MXN
+      - USD/ZAR
+      - EUR/SEK
+      - EUR/NOK
   lot_size: 3
 
 timeframes:
@@ -47,3 +63,7 @@ news:
 data:
   provider: "yfinance"
   warmup_candles: 200
+  oanda:
+    api_key: "${OANDA_API_KEY}"
+    account_id: "${OANDA_ACCOUNT_ID}"
+    practice: true

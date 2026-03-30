@@ -106,9 +106,24 @@ class NewsConfig:
 
 
 @dataclass
+class OandaConfig:
+    api_key: str | None = None
+    account_id: str | None = None
+    practice: bool = True
+
+    def __post_init__(self) -> None:
+        # Allow env var substitution like "${OANDA_API_KEY}"
+        if self.api_key and self.api_key.startswith("${"):
+            self.api_key = None
+        if self.account_id and self.account_id.startswith("${"):
+            self.account_id = None
+
+
+@dataclass
 class DataConfig:
     provider: str = "yfinance"
     warmup_candles: int = 200
+    oanda: OandaConfig = field(default_factory=OandaConfig)
 
     def __post_init__(self) -> None:
         if not _is_non_empty_string(self.provider):
@@ -165,6 +180,7 @@ class Settings:
         risk_data = payload.get("risk", {})
         news_data = payload.get("news", {})
         data_data = payload.get("data", {})
+        oanda_data = data_data.get("oanda", {}) if isinstance(data_data.get("oanda"), dict) else {}
 
         for section_name, section_data in (
             ("timeframes", timeframes_data),
@@ -176,13 +192,24 @@ class Settings:
             if not isinstance(section_data, dict):
                 raise ValueError(f"'{section_name}' must be a YAML object")
 
+        # Build DataConfig with nested OandaConfig
+        data_payload = {
+            "provider": data_data.get("provider", "yfinance"),
+            "warmup_candles": data_data.get("warmup_candles", 200),
+            "oanda": OandaConfig(
+                api_key=oanda_data.get("api_key"),
+                account_id=oanda_data.get("account_id"),
+                practice=oanda_data.get("practice", True),
+            ),
+        }
+
         return cls(
             trading=TradingConfig(**trading_payload),
             timeframes=TimeframesConfig(**timeframes_data),
             strategy=StrategyConfig(**strategy_data),
             risk=RiskConfig(**risk_data),
             news=NewsConfig(**news_data),
-            data=DataConfig(**data_data),
+            data=DataConfig(**data_payload),
         )
 
 

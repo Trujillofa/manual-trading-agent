@@ -1,0 +1,49 @@
+trading:
+  mode: "paper"
+  pairs:
+    majors:
+      - EUR/USD
+      - GBP/USD
+      - USD/JPY
+      - USD/CHF
+      - USD/CAD
+      - AUD/USD
+      - NZD/USD
+    minors:
+      - EUR/GBP
+      - EUR/JPY
+      - EUR/CHF
+      - EUR/AUD
+      - EUR/CAD
+      - GBP/JPY
+      - GBP/CHF
+      - AUD/JPY
+      - CAD/JPY
+      - CHF/JPY
+  lot_size: 3
+
+timeframes:
+  regime: "1h"
+  momentum: "30m"
+  entry: "15m"
+
+strategy:
+  rsi_period: 14
+  rsi_overbought: 70
+  rsi_oversold: 30
+  lookback_bars: 20
+
+risk:
+  tp_usd: 500
+  sl_usd: 1800
+  max_concurrent_positions: 1
+
+news:
+  enabled: true
+  lockout_minutes_before: 60
+  lockout_minutes_after: 30
+  importance_threshold: 3
+
+data:
+  provider: "yfinance"
+  warmup_candles: 200

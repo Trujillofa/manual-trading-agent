@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
+import os
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 
@@ -23,6 +26,7 @@ class NewsChecker:
     """Check for 3-star news events that should block trading."""
 
     FOREX_FACTORY_URL: str = "https://nfs.faireconomy.media/ff_calendar_thisweek.xml"
+    CACHE_PATH: Path = Path("/app/logs/news_cache.json")
     _IMPACT_TO_IMPORTANCE: dict[str, int] = {
         "high": 3,
         "medium": 2,
@@ -40,24 +44,88 @@ class NewsChecker:
         self.importance_threshold: int = importance_threshold
         self._events: list[NewsEvent] = []
         self._last_fetch: datetime | None = None
+        self._next_allowed_fetch: datetime | None = None
+        self._cache_ttl = timedelta(minutes=15)
+        self._load_cache()
+
+    def _load_cache(self) -> None:
+        if not self.CACHE_PATH.exists():
+            return
+        try:
+            payload = json.loads(self.CACHE_PATH.read_text(encoding="utf-8"))
+            events_raw = payload.get("events", [])
+            self._events = [
+                NewsEvent(
+                    timestamp=datetime.fromisoformat(item["timestamp"]),
+                    currency=item["currency"],
+                    name=item["name"],
+                    importance=int(item["importance"]),
+                    country=item.get("country", ""),
+                )
+                for item in events_raw
+            ]
+            last_fetch = payload.get("last_fetch")
+            next_allowed = payload.get("next_allowed_fetch")
+            self._last_fetch = datetime.fromisoformat(last_fetch) if last_fetch else None
+            self._next_allowed_fetch = datetime.fromisoformat(next_allowed) if next_allowed else None
+        except Exception:
+            self._events = []
+            self._last_fetch = None
+            self._next_allowed_fetch = None
+
+    def _save_cache(self) -> None:
+        self.CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "last_fetch": self._last_fetch.isoformat() if self._last_fetch else None,
+            "next_allowed_fetch": self._next_allowed_fetch.isoformat() if self._next_allowed_fetch else None,
+            "events": [
+                {
+                    **asdict(event),
+                    "timestamp": event.timestamp.isoformat(),
+                }
+                for event in self._events
+            ],
+        }
+        self.CACHE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     async def fetch_events(self, hours_ahead: int = 24) -> list[NewsEvent]:
-        """Fetch upcoming high-impact news events."""
+        """Fetch upcoming high-impact news events with cache/backoff."""
         now = datetime.now(UTC)
         window_end = now + timedelta(hours=hours_ahead)
 
+        # Use recent cache first
+        if self._last_fetch and now - self._last_fetch < self._cache_ttl:
+            return list(self._events)
+
+        # Respect backoff window
+        if self._next_allowed_fetch and now < self._next_allowed_fetch:
+            return list(self._events)
+
+        response_text: str | None = None
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 response = await client.get(self.FOREX_FACTORY_URL)
+                if response.status_code == 429:
+                    self._next_allowed_fetch = now + timedelta(minutes=30)
+                    self._save_cache()
+                    logger.warning("forex factory rate-limited (429), using cache until %s", self._next_allowed_fetch)
+                    return list(self._events)
                 _ = response.raise_for_status()
+                response_text = response.text
         except httpx.HTTPError as exc:
             logger.warning("failed to fetch forex factory events: %s", exc)
+            # Best-effort fallback: keep cached data, optionally ask Grok to verify if something major is expected
+            await self._best_effort_grok_verify(now, window_end)
+            return list(self._events)
+
+        if response_text is None:
             return list(self._events)
 
         try:
-            root = ET.fromstring(response.text)
+            root = ET.fromstring(response_text)
         except ET.ParseError as exc:
             logger.warning("failed to parse forex factory xml: %s", exc)
+            await self._best_effort_grok_verify(now, window_end)
             return list(self._events)
 
         parsed_events: list[NewsEvent] = []
@@ -74,7 +142,71 @@ class NewsChecker:
         parsed_events.sort(key=lambda event: event.timestamp)
         self._events = parsed_events
         self._last_fetch = now
+        self._next_allowed_fetch = now + self._cache_ttl
+        self._save_cache()
         return list(self._events)
+
+    async def _best_effort_grok_verify(self, now: datetime, window_end: datetime) -> None:
+        api_key = os.getenv("XAI_API_KEY")
+        model = os.getenv("XAI_MODEL", "grok-4.20-beta-latest-non-reasoning")
+        if not api_key:
+            return
+        prompt = (
+            "Return only JSON array. List high-impact macroeconomic events within the next 24 hours relevant to FX majors. "
+            "Each item must include: timestamp_utc, currency, name, importance, country. "
+            "If unsure, return []."
+        )
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    "https://api.x.ai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": prompt},
+                            {"role": "user", "content": f"Now UTC: {now.isoformat()}. Window end UTC: {window_end.isoformat()}."},
+                        ],
+                        "temperature": 0,
+                    },
+                )
+                response.raise_for_status()
+                payload = response.json()
+            content = payload.get("choices", [{}])[0].get("message", {}).get("content", "[]")
+            events_raw = json.loads(content)
+            if not isinstance(events_raw, list):
+                return
+            parsed: list[NewsEvent] = []
+            for item in events_raw:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    ts = datetime.fromisoformat(str(item["timestamp_utc"]).replace("Z", "+00:00")).astimezone(UTC)
+                    importance = int(item.get("importance", 0))
+                    if importance < self.importance_threshold:
+                        continue
+                    if not now <= ts <= window_end:
+                        continue
+                    parsed.append(
+                        NewsEvent(
+                            timestamp=ts,
+                            currency=str(item.get("currency", "")).upper()[:3],
+                            name=str(item.get("name", "")).strip(),
+                            importance=importance,
+                            country=str(item.get("country", "")).strip(),
+                        )
+                    )
+                except Exception:
+                    continue
+            if parsed:
+                parsed.sort(key=lambda event: event.timestamp)
+                self._events = parsed
+                self._last_fetch = now
+                self._next_allowed_fetch = now + timedelta(minutes=30)
+                self._save_cache()
+                logger.info("loaded %d fallback news events via Grok", len(parsed))
+        except Exception as exc:
+            logger.warning("grok fallback verification failed: %s", exc)
 
     def is_blocked(self, symbol: str, timestamp: datetime | None = None) -> bool:
         """Check if symbol is blocked due to news."""
@@ -114,6 +246,21 @@ class NewsChecker:
             return None
 
         return max(active_lockout_ends)
+
+    def get_source_status(self) -> str:
+        if self._next_allowed_fetch and self._last_fetch and self._next_allowed_fetch - self._last_fetch > self._cache_ttl:
+            return "cache/backoff"
+        if self._last_fetch:
+            return "forex_factory_or_grok"
+        return "none"
+
+    def get_upcoming_events(self, hours_ahead: int = 24, timestamp: datetime | None = None) -> list[NewsEvent]:
+        now = timestamp.astimezone(UTC) if timestamp is not None else datetime.now(UTC)
+        window_end = now + timedelta(hours=hours_ahead)
+        return [
+            event for event in self._events
+            if now <= event.timestamp <= window_end and event.importance >= self.importance_threshold
+        ]
 
     def get_blocked_currencies(self, timestamp: datetime | None = None) -> set[str]:
         """Get set of currencies currently blocked by news."""

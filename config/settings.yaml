@@ -48,6 +48,20 @@ strategy:
   rsi_overbought: 70
   rsi_oversold: 30
   lookback_bars: 20
+  cooldown_minutes: 60
+  session_filter_enabled: true
+  session_allowed_utc:
+    - "06-17"
+    - "12-21"
+  breakout_buffer_pips: 0.0
+  spread_filter_enabled: false
+  max_spread_pips: 2.0
+  pair_priorities:
+    EUR/GBP: 100
+    USD/JPY: 80
+    GBP/USD: 60
+    GBP/CHF: 60
+    EUR/USD: 40
 
 risk:
   tp_usd: 500
@@ -67,3 +81,6 @@ data:
     api_key: "${OANDA_API_KEY}"
     account_id: "${OANDA_ACCOUNT_ID}"
     practice: true
+
+telegram:
+  enabled: true

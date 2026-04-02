@@ -55,6 +55,10 @@ class TelegramNotifier:
         else:
             logger.debug("Telegram notifications disabled (missing token or chat_id)")
 
+    def is_configured(self) -> bool:
+        """Check if Telegram is configured."""
+        return self.enabled
+
     async def send(self, message: str, parse_mode: str = "Markdown") -> bool:
         """Send a message via Telegram."""
         if not self.enabled or not self._bot_token or not self._chat_id:
@@ -87,6 +91,9 @@ class TelegramNotifier:
         except Exception as e:
             logger.error(f"Error sending Telegram message: {e}")
             return False
+
+    # Alias for compatibility
+    send_message = send
 
     def dispatch(self, coro: Coroutine[object, object, object], context: str) -> None:
         """Dispatch a coroutine to run asynchronously."""
@@ -159,7 +166,6 @@ class TelegramNotifier:
 
         # Build message with entry/TP/SL if provided
         if entry is not None and tp is not None and sl is not None:
-            # Determine pip multiplier for display
             pip_mult = 100 if "JPY" in pair else 10000
             tp_pips = abs(tp - entry) * pip_mult
             sl_pips = abs(sl - entry) * pip_mult
@@ -179,7 +185,6 @@ class TelegramNotifier:
                 f"{div_text}"
             )
         else:
-            # Fallback to basic message
             message = (
                 f"{emoji} *{direction} Signal*\n\n"
                 f"Pair: `{pair}`\n"
@@ -201,3 +206,22 @@ class TelegramNotifier:
         """Send scan error alert."""
         message = f"⚠️ *Scan Error*\n\nPair: `{pair}`\nError: `{error}`"
         _ = await self.send(message)
+
+
+# Global instance
+_notifier: TelegramNotifier | None = None
+
+
+def get_notifier() -> TelegramNotifier:
+    """Get or create the global notifier instance."""
+    global _notifier
+    if _notifier is None:
+        _notifier = TelegramNotifier(None, None)
+    return _notifier
+
+
+async def notify_signal(*args, **kwargs) -> bool:
+    """Convenience function to send signal notification."""
+    notifier = get_notifier()
+    await notifier.send_signal(*args, **kwargs)
+    return True

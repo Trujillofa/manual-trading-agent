@@ -1,5 +1,7 @@
-"""Notifications module for manual trading agent."""
+"""Notifications module for trading alerts."""
 
-from .telegram import TelegramNotifier
+from __future__ import annotations
 
-__all__ = ["TelegramNotifier"]
+from .telegram import TelegramNotifier, notify_signal
+
+__all__ = ["TelegramNotifier", "notify_signal"]

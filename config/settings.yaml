@@ -64,8 +64,9 @@ strategy:
     EUR/USD: 40
 
 risk:
-  tp_usd: 500
-  sl_usd: 1800
+  tp_usd: 300
+  sl_usd: 900
+  max_daily_loss_usd: 1500
   max_concurrent_positions: 1
 
 news:
@@ -84,3 +85,5 @@ data:
 
 telegram:
   enabled: true
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  chat_id: "${TELEGRAM_CHAT_ID}"

@@ -1,108 +1,211 @@
-"""Telegram notification service for trading alerts."""
+"""Telegram notifications for manual trading agent."""
 
-from __future__ import annotations
-
+import asyncio
+import importlib
 import logging
-import os
+import threading
+from collections.abc import Callable, Coroutine
+from types import ModuleType
+from typing import TYPE_CHECKING, Protocol, cast
 
-import httpx
+if TYPE_CHECKING:
+    from src.indicators.candlestick import CandlePattern
+    from src.indicators.rsi import Divergence
 
 logger = logging.getLogger(__name__)
 
 
-class TelegramNotifier:
-    """Send trading signals to Telegram."""
+class _HttpxResponse(Protocol):
+    status_code: int
+    text: str
 
-    def __init__(
+
+class _HttpxClient(Protocol):
+    async def __aenter__(self) -> "_HttpxClient": ...
+
+    async def __aexit__(
         self,
-        bot_token: str | None = None,
-        chat_id: str | None = None,
-    ) -> None:
-        self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
-        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID")
-        self.base_url = f"https://api.telegram.org/bot/{self.bot_token}"
-        self._client: httpx.Client | None = None
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: object | None,
+    ) -> None: ...
 
-    def _get_client(self) -> httpx.Client:
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.Client(timeout=10.0)
-        return self._client
+    async def post(
+        self,
+        url: str,
+        *,
+        json: dict[str, object],
+        timeout: float,
+    ) -> _HttpxResponse: ...
+
+
+HttpxClientFactory = Callable[[], _HttpxClient]
+
+
+class TelegramNotifier:
+    """Send notifications via Telegram bot."""
+
+    def __init__(self, bot_token: str | None, chat_id: str | None):
+        self.enabled = bool(bot_token and chat_id)
+        self._bot_token = bot_token
+        self._chat_id = chat_id
+
+        if self.enabled:
+            logger.info("Telegram notifications enabled")
+        else:
+            logger.debug("Telegram notifications disabled (missing token or chat_id)")
 
     def is_configured(self) -> bool:
         """Check if Telegram is configured."""
-        return bool(self.bot_token and self.chat_id)
+        return self.enabled
 
-    async def send_message(self, text: str, parse_mode: str = "Markdown") -> bool:
-        """Send a message to Telegram."""
-        if not self.is_configured():
-            logger.debug("Telegram not configured, skipping notification")
+    async def send(self, message: str, parse_mode: str = "Markdown") -> bool:
+        """Send a message via Telegram."""
+        if not self.enabled or not self._bot_token or not self._chat_id:
+            logger.debug("Telegram notifications disabled")
             return False
 
-        url = f"{self.base_url}/sendMessage"
-        payload = {
-            "chat_id": self.chat_id,
-            "text": text,
-            "parse_mode": parse_mode,
-        }
+        url = f"https://api.telegram.org/bot{self._bot_token}/sendMessage"
 
         try:
-            client = self._get_client()
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            if data.get("ok"):
-                logger.info(f"Telegram message sent: {text[:50]}...")
-                return True
-            else:
-                logger.error(f"Telegram API error: {data}")
-                return False
-        except httpx.HTTPError as e:
-            logger.error(f"Telegram HTTP error: {e}")
-            return False
+            httpx_module: ModuleType = importlib.import_module("httpx")
+            client_factory = cast(HttpxClientFactory, httpx_module.AsyncClient)
+            async with client_factory() as client:
+                response = await client.post(
+                    url,
+                    json={
+                        "chat_id": self._chat_id,
+                        "text": message,
+                        "parse_mode": parse_mode,
+                    },
+                    timeout=10.0,
+                )
+
+                if response.status_code == 200:
+                    logger.info(f"Telegram message sent: {message[:50]}...")
+                    return True
+                else:
+                    logger.error(f"Failed to send Telegram message: {response.text}")
+                    return False
+
         except Exception as e:
-            logger.error(f"Telegram error: {e}")
+            logger.error(f"Error sending Telegram message: {e}")
             return False
+
+    # Alias for compatibility
+    send_message = send
+
+    def dispatch(self, coro: Coroutine[object, object, object], context: str) -> None:
+        """Dispatch a coroutine to run asynchronously."""
+        if not self.enabled:
+            return
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            thread = threading.Thread(
+                target=self._run_in_thread,
+                args=(coro, context),
+                daemon=True,
+            )
+            thread.start()
+            return
+
+        _ = loop.create_task(self._wrap_send(coro, context))
+
+    async def _wrap_send(self, coro: Coroutine[object, object, object], context: str) -> None:
+        try:
+            await coro
+        except Exception as exc:
+            logger.error("Telegram notification failed (%s): %s", context, exc)
+
+    def _run_in_thread(self, coro: Coroutine[object, object, object], context: str) -> None:
+        try:
+            asyncio.run(self._wrap_send(coro, context))
+        except Exception as exc:
+            logger.error("Telegram notification failed (%s): %s", context, exc)
 
     async def send_signal(
         self,
-        symbol: str,
-        side: str,
-        entry_price: float,
-        tp_price: float | None,
-        sl_price: float | None,
+        pair: str,
+        direction: str,
         rsi_1h: float,
         rsi_30m: float,
         rsi_15m: float,
-        confidence: float = 0.0,
-    ) -> bool:
-        """Send a trading signal notification."""
-        if not self.is_configured():
-            return False
+        price: float,
+        hh: float,
+        ll: float,
+        entry: float | None = None,
+        tp: float | None = None,
+        sl: float | None = None,
+        patterns: list | None = None,
+        divergence: object | None = None,
+    ) -> None:
+        """Send signal alert with enhanced pattern/divergence info."""
+        emoji = "🟢" if direction == "BUY" else "🔴"
 
-        direction = "🟢 LONG" if side == "buy" else "🔴 SHORT"
-        rsi_status = f"RSI: {rsi_1h:.0f} | {rsi_30m:.0f} | {rsi_15m:.0f}"
+        # Build pattern info
+        pattern_text = ""
+        if patterns:
+            from src.indicators.candlestick import PatternType
+            bullish = [p for p in patterns if hasattr(p, "pattern_type") and p.pattern_type == PatternType.BULLISH]
+            bearish = [p for p in patterns if hasattr(p, "pattern_type") and p.pattern_type == PatternType.BEARISH]
+            if bullish:
+                pattern_text += f"\n🟢 Patterns: {', '.join(p.name for p in bullish)}"
+            if bearish:
+                pattern_text += f"\n🔴 Patterns: {', '.join(p.name for p in bearish)}"
 
-        message = f"""
-{direction} *{symbol}*
+        # Build divergence info
+        div_text = ""
+        if divergence and hasattr(divergence, "divergence_type"):
+            from src.indicators.rsi import DivergenceType
+            if divergence.divergence_type == DivergenceType.BULLISH:
+                div_text += f"\n📈 Bullish Divergence (strength: {divergence.strength:.2f})"
+            elif divergence.divergence_type == DivergenceType.BEARISH:
+                div_text += f"\n📉 Bearish Divergence (strength: {divergence.strength:.2f})"
 
-📊 *Signal Details*
-• Entry: `{entry_price:.5f}`
-• TP: `{tp_price:.5f}` (+${tp_price:.2f}%)
-• SL: `{sl_price:.5f}` (-${sl_price:.2f}%)
-• Confidence: {confidence:.0%}
+        # Build message with entry/TP/SL if provided
+        if entry is not None and tp is not None and sl is not None:
+            pip_mult = 100 if "JPY" in pair else 10000
+            tp_pips = abs(tp - entry) * pip_mult
+            sl_pips = abs(sl - entry) * pip_mult
 
-📈 *MTF RSI Alignment*
-{rsi_status}
+            message = (
+                f"{emoji} *{direction} Signal*\n\n"
+                f"Pair: `{pair}`\n"
+                f"Entry: `{entry:.5f}`\n"
+                f"TP: `{tp:.5f}` ({tp_pips:.1f} pips)\n"
+                f"SL: `{sl:.5f}` ({sl_pips:.1f} pips)\n\n"
+                f"RSI(14):\n"
+                f"  15m: `{rsi_15m:.1f}`\n\n"
+                f"20-bar Range:\n"
+                f"  High: `{hh:.5f}`\n"
+                f"  Low: `{ll:.5f}`"
+                f"{pattern_text}"
+                f"{div_text}"
+            )
+        else:
+            message = (
+                f"{emoji} *{direction} Signal*\n\n"
+                f"Pair: `{pair}`\n"
+                f"Price: `{price:.5f}`\n\n"
+                f"RSI(14):\n"
+                f"  1h: `{rsi_1h:.1f}`\n"
+                f"  30m: `{rsi_30m:.1f}`\n"
+                f"  15m: `{rsi_15m:.1f}`\n\n"
+                f"20-bar Range:\n"
+                f"  High: `{hh:.5f}`\n"
+                f"  Low: `{ll:.5f}`"
+                f"{pattern_text}"
+                f"{div_text}"
+            )
 
-⏰ {self._get_timestamp()}
-"""
-        return await self.send_message(message)
+        _ = await self.send(message)
 
-    def _get_timestamp(self) -> str:
-        """Get formatted timestamp."""
-        from datetime import UTC, datetime
-
-        return datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    async def send_scan_error(self, pair: str, error: str) -> None:
+        """Send scan error alert."""
+        message = f"⚠️ *Scan Error*\n\nPair: `{pair}`\nError: `{error}`"
+        _ = await self.send(message)
 
 
 # Global instance
@@ -113,11 +216,12 @@ def get_notifier() -> TelegramNotifier:
     """Get or create the global notifier instance."""
     global _notifier
     if _notifier is None:
-        _notifier = TelegramNotifier()
+        _notifier = TelegramNotifier(None, None)
     return _notifier
 
 
 async def notify_signal(*args, **kwargs) -> bool:
     """Convenience function to send signal notification."""
     notifier = get_notifier()
-    return await notifier.send_signal(*args, **kwargs)
+    await notifier.send_signal(*args, **kwargs)
+    return True

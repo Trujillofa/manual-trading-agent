@@ -6,12 +6,13 @@ services:
     volumes:
       - ./config:/app/config:ro
       - ./logs:/app/logs
+      - ./results:/app/results
+    env_file:
+      - .env
     environment:
-      - OANDA_API_KEY=${OANDA_API_KEY:-}
-      - OANDA_ACCOUNT_ID=${OANDA_ACCOUNT_ID:-}
       - TZ=America/Bogota
-    # Run scan every 15 minutes
-    entrypoint: ["/bin/sh", "-c", "while true; do echo '===' $(date) '===' >> /app/logs/scan.log; python -m src.cli scan >> /app/logs/scan.log 2>&1; sleep 900; done"]
+    # Run scan every 15 minutes + poll Telegram commands continuously
+    entrypoint: ["/bin/sh", "-c", "python -m src.cli telegram-poll >> /app/logs/telegram.log 2>&1 & while true; do echo '===' $(date) '===' >> /app/logs/scan.log; python -m src.cli scan >> /app/logs/scan.log 2>&1; sleep 900; done"]
     healthcheck:
       test: ["CMD", "test", "-f", "/app/logs/scan.log"]
       interval: 5m

@@ -15,9 +15,11 @@ RUN pip install --no-cache-dir -e ".[dev]"
 COPY src/ ./src/
 COPY config/ ./config/
 COPY tests/ ./tests/
+COPY scripts/ ./scripts/
+COPY docs/ ./docs/
 
-# Create logs directory
-RUN mkdir -p /app/logs
+# Create logs/results directories
+RUN mkdir -p /app/logs /app/results
 
 # Default command
 ENTRYPOINT ["python", "-m", "src.cli"]

@@ -16,6 +16,8 @@ dependencies = [
     "pandas>=2.0",
     "numpy>=1.26",
     "yfinance>=0.2.36",
+    "twelvedata>=1.2.0",
+    "dukascopy-python>=4.0.0",
 ]
 
 [project.optional-dependencies]

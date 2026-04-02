@@ -2,4 +2,6 @@
 
 from __future__ import annotations
 
-__all__ = ["TelegramNotifier", "Notification", "notify_signal"]
+from .telegram import TelegramNotifier, notify_signal
+
+__all__ = ["TelegramNotifier", "notify_signal"]

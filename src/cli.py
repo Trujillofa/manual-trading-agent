@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import os
 import sys
@@ -15,10 +16,13 @@ from typing import Literal
 from src.backtest.engine import BacktestEngine
 from src.config import get_settings
 from src.data.fetcher import DataFetcher
-from src.indicators.candlestick import CandlePattern, PatternType, detect_patterns, get_pattern_score
+from src.indicators.candlestick import (
+    CandlePattern,
+    PatternType,
+    detect_patterns,
+)
 from src.indicators.high_low import highest_high, is_breakout_high, is_breakout_low, lowest_low
 from src.indicators.rsi import (
-    DivergenceType,
     calculate_rsi,
     calculate_rsi_series,
     detect_bearish_divergence,
@@ -27,7 +31,6 @@ from src.indicators.rsi import (
 from src.news.news_checker import NewsChecker
 from src.notifications.telegram import TelegramNotifier
 from src.strategy.multi_timeframe import MTFRSIStrategy
-
 
 # Pair-specific confirmation profiles from bakeoff results (2026-03-31).
 # Format: {"variant": "V1"|"V2", "buffer_pips": float, "confirm_bars": int}
@@ -282,10 +285,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
         importance_threshold=settings.news.importance_threshold,
     )
     if settings.news.enabled:
-        try:
+        with contextlib.suppress(Exception):
             await news_checker.fetch_events(hours_ahead=24)
-        except Exception:
-            pass
 
     # Initialize Telegram notifier if enabled
     notifier = None
@@ -566,7 +567,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 rsi_5m = micro_context.get("rsi_5m")
                 rsi_1m = micro_context.get("rsi_1m")
                 print(f"  ⏳ ALIGNED / BREAKOUT PENDING: {near_direction}")
-                print(f"     Missing: breakout confirmation only")
+                print("     Missing: breakout confirmation only")
                 if isinstance(rsi_5m, float):
                     print(f"     RSI 5m: {rsi_5m:.1f}")
                 if isinstance(rsi_1m, float):

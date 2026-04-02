@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -99,6 +98,7 @@ class RiskConfig:
     tp_usd: float = 500.0
     sl_usd: float = 1800.0
     max_concurrent_positions: int = 1
+    max_daily_loss_usd: float = 1500.0
 
     def __post_init__(self) -> None:
         if self.tp_usd <= 0:
@@ -107,6 +107,8 @@ class RiskConfig:
             raise ValueError("risk.sl_usd must be greater than 0")
         if self.max_concurrent_positions <= 0:
             raise ValueError("risk.max_concurrent_positions must be greater than 0")
+        if self.max_daily_loss_usd <= 0:
+            raise ValueError("risk.max_daily_loss_usd must be greater than 0")
 
 
 @dataclass
@@ -131,6 +133,7 @@ class OandaConfig:
     account_id: str | None = None
     practice: bool = True
 
+
 @dataclass
 class TelegramConfig:
     bot_token: str | None = None
@@ -150,9 +153,6 @@ class TelegramConfig:
     @property
     def is_configured(self) -> bool:
         return self.bot_token is not None and self.chat_id is not None
-
-
-
 
 
 @dataclass

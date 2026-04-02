@@ -16,20 +16,14 @@ from src.indicators.candlestick import (
     get_pattern_score,
 )
 from src.indicators.high_low import (
-    highest_high,
-    lowest_low,
     rolling_highest_highs,
     rolling_lowest_lows,
-    previous_rolling_highest_high,
-    previous_rolling_lowest_low,
 )
 from src.indicators.rsi import (
     Divergence,
-    DivergenceType,
     calculate_rsi,
-    calculate_rsi_series,
-    detect_bullish_divergence,
     detect_bearish_divergence,
+    detect_bullish_divergence,
 )
 
 

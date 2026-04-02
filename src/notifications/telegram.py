@@ -9,8 +9,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Protocol, cast
 
 if TYPE_CHECKING:
-    from src.indicators.candlestick import CandlePattern
-    from src.indicators.rsi import Divergence
+    pass
 
 logger = logging.getLogger(__name__)
 

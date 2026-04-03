@@ -303,8 +303,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     # Initialize Telegram notifier if enabled
     notifier = None
     if settings.telegram.enabled:
-        token = settings.telegram.bot_token_resolved
-        chat_id = settings.telegram.chat_id_resolved
+        token = settings.telegram.bot_token
+        chat_id = settings.telegram.chat_id
         if token and chat_id:
             notifier = TelegramNotifier(token, chat_id)
 
@@ -991,8 +991,8 @@ async def run_telegram_poll() -> None:
     if not settings.telegram.enabled:
         print("Telegram disabled in settings")
         return
-    token = settings.telegram.bot_token_resolved
-    chat_id = settings.telegram.chat_id_resolved
+    token = settings.telegram.bot_token
+    chat_id = settings.telegram.chat_id
     if not token or not chat_id:
         print("Telegram token/chat_id missing")
         return

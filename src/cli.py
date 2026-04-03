@@ -22,6 +22,7 @@ from src.indicators.candlestick import (
     detect_patterns,
 )
 from src.indicators.high_low import highest_high, is_breakout_high, is_breakout_low, lowest_low
+from src.indicators.adx import calculate_adx
 from src.indicators.rsi import (
     calculate_rsi,
     calculate_rsi_series,
@@ -32,23 +33,26 @@ from src.news.news_checker import NewsChecker
 from src.notifications.telegram import TelegramNotifier
 from src.strategy.multi_timeframe import MTFRSIStrategy
 
-# Pair-specific confirmation profiles from bakeoff results (2026-03-31).
+# Pair-specific confirmation profiles from optimization bakeoff (2026-04-03).
 # Format: {"variant": "V1"|"V2", "buffer_pips": float, "confirm_bars": int}
 # V1 = continuation breakout (BUY below LL, SELL above HH)
-# V2 = reversal breakout (BUY reclaim above LL, SELL rejection below HH)
+# V2 = reversal breakout (BUY wick through + close reclaim, SELL wick through + close reject)
 # buffer_pips = pip buffer on breakout threshold
 # confirm_bars = max bars after MTF alignment to accept breakout (0 = immediate only)
 CONFIRMATION_PROFILES: dict[str, dict[str, object]] = {
-    "EUR/GBP": {"variant": "V2", "buffer_pips": 0.5, "confirm_bars": 0},
-    "GBP/CHF": {"variant": "V1", "buffer_pips": 0.5, "confirm_bars": 0},
-    "AUD/CAD": {"variant": "V1", "buffer_pips": 2.0, "confirm_bars": 0},
-    "EUR/CHF": {"variant": "V1", "buffer_pips": 0.0, "confirm_bars": 0},
+    "EUR/GBP": {"variant": "V2", "buffer_pips": 1.0, "confirm_bars": 3},
+    "GBP/CHF": {"variant": "V2", "buffer_pips": 1.0, "confirm_bars": 3},
+    "AUD/CAD": {"variant": "V2", "buffer_pips": 1.0, "confirm_bars": 3},
+    "EUR/CHF": {"variant": "V2", "buffer_pips": 1.0, "confirm_bars": 3},
 }
 
 # Default profile for pairs without a specific one
 DEFAULT_CONFIRMATION_PROFILE: dict[str, object] = {
-    "variant": "V1", "buffer_pips": 0.0, "confirm_bars": 0,
+    "variant": "V2", "buffer_pips": 1.0, "confirm_bars": 3,
 }
+
+# ADX threshold: only take mean-reversion signals when ADX < this value (ranging market)
+ADX_TREND_THRESHOLD = 25.0
 
 
 def _get_confirmation_profile(pair: str) -> dict[str, object]:
@@ -69,10 +73,12 @@ def _check_breakout_with_profile(
     hh: float | None,
     ll: float | None,
     pip_size: float,
+    bar_high: float | None = None,
+    bar_low: float | None = None,
 ) -> bool:
     """Check breakout using the pair's confirmation profile."""
     buffer_pips = float(profile.get("buffer_pips", 0.0))
-    variant = str(profile.get("variant", "V1"))
+    variant = str(profile.get("variant", "V2"))
     buffer_pct = (buffer_pips * pip_size) / close_price if close_price else 0.0
 
     if variant == "V1":
@@ -82,13 +88,19 @@ def _check_breakout_with_profile(
         if direction == "SELL" and hh is not None:
             return is_breakout_high(close_price, hh, buffer_pct)
     elif variant == "V2":
-        # Reversal: BUY reclaims above LL, SELL rejects below HH
+        # Reversal: wick through level + close back inside
+        # BUY: bar low wicked through LL, but close reclaimed above LL
+        # SELL: bar high wicked through HH, but close rejected below HH
         if direction == "BUY" and ll is not None:
-            trigger = ll * (1.0 + buffer_pct)
-            return close_price > trigger
+            down_trigger = ll - buffer_pips * pip_size
+            wick_through = (bar_low is not None and bar_low <= down_trigger) if bar_low is not None else True
+            close_reclaim = close_price > ll
+            return wick_through and close_reclaim
         if direction == "SELL" and hh is not None:
-            trigger = hh * (1.0 - buffer_pct)
-            return close_price < trigger
+            up_trigger = hh + buffer_pips * pip_size
+            wick_through = (bar_high is not None and bar_high >= up_trigger) if bar_high is not None else True
+            close_reject = close_price < hh
+            return wick_through and close_reject
     return False
 
 
@@ -344,9 +356,19 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             # Calculate ATR for TP/SL
             atr = _calculate_atr(high_15m[-14:], low_15m[-14:], close_15m[-14:])
             pip_size = 0.01 if "JPY" in pair else 0.0001
+            bar_high = high_15m[-1] if high_15m else None
+            bar_low = low_15m[-1] if low_15m else None
             profile = _get_confirmation_profile(pair)
-            breakout_buy = _check_breakout_with_profile(profile, "BUY", close_price, hh, ll, pip_size)
-            breakout_sell = _check_breakout_with_profile(profile, "SELL", close_price, hh, ll, pip_size)
+            breakout_buy = _check_breakout_with_profile(profile, "BUY", close_price, hh, ll, pip_size, bar_high, bar_low)
+            breakout_sell = _check_breakout_with_profile(profile, "SELL", close_price, hh, ll, pip_size, bar_high, bar_low)
+
+            # ADX trend filter on 1h timeframe
+            adx_1h = calculate_adx(
+                data_1h["high"].values.tolist()[-50:],
+                data_1h["low"].values.tolist()[-50:],
+                data_1h["close"].values.tolist()[-50:],
+            )
+            is_ranging = adx_1h is not None and adx_1h < ADX_TREND_THRESHOLD
             # Spread: requires real bid/ask source (OANDA)
             quote = None
             try:
@@ -400,6 +422,11 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 print(f"  Spread: {spread_pips:.2f} pips ({'ok' if spread_ok else 'too wide'})")
             else:
                 print("  Spread: unavailable")
+            if adx_1h is not None:
+                regime = "ranging" if is_ranging else "trending"
+                print(f"  ADX(14) 1h: {adx_1h:.1f} ({regime})")
+            else:
+                print("  ADX(14) 1h: insufficient data")
 
             # Show patterns and divergence
             if bullish_pats:
@@ -545,6 +572,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     no_trade_reasons.append("blocked by high-impact news")
                 if settings.strategy.spread_filter_enabled and not spread_ok:
                     no_trade_reasons.append("spread unavailable/too wide")
+                if not is_ranging:
+                    adx_str = f"{adx_1h:.0f}" if adx_1h is not None else "N/A"
+                    no_trade_reasons.append(f"trending market (ADX {adx_str} >= {ADX_TREND_THRESHOLD:.0f})")
                 if cooldown_active:
                     no_trade_reasons.append("cooldown active")
                 if no_trade_reasons:
@@ -611,26 +641,28 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 print(f"  ⚠️ MTF SIGNAL: {signal_direction} (confidence: {signal_confidence:.0%})")
                 print(f"     Reasons: {', '.join(signal_reasons)}")
 
-                # Calculate TP/SL
+                # Calculate TP/SL (TP=1×ATR, SL=3×ATR — optimized for high win-rate reversal)
+                tp_mult = 1.0
+                sl_mult = 3.0
                 if atr and atr > 0:
                     if signal_direction == "SELL":
                         entry = close_price
-                        tp = entry - (atr * 1.5)
-                        sl = entry + (atr * 2.0)
+                        tp = entry - (atr * tp_mult)
+                        sl = entry + (atr * sl_mult)
                     else:
                         entry = close_price
-                        tp = entry + (atr * 1.5)
-                        sl = entry - (atr * 2.0)
+                        tp = entry + (atr * tp_mult)
+                        sl = entry - (atr * sl_mult)
                 else:
                     pip_size = 0.0001 if "JPY" not in pair else 0.01
                     if signal_direction == "SELL":
                         entry = close_price
-                        tp = entry - (50 * pip_size)
-                        sl = entry + (30 * pip_size)
+                        tp = entry - (30 * pip_size)
+                        sl = entry + (90 * pip_size)
                     else:
                         entry = close_price
-                        tp = entry + (50 * pip_size)
-                        sl = entry - (30 * pip_size)
+                        tp = entry + (30 * pip_size)
+                        sl = entry - (90 * pip_size)
 
                 micro_context = _fetch_micro_context(fetcher, symbol, rsi_period)
                 exec_note = _execution_note(

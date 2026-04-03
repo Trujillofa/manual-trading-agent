@@ -45,8 +45,8 @@ timeframes:
 
 strategy:
   rsi_period: 14
-  rsi_overbought: 70
-  rsi_oversold: 30
+  rsi_overbought: 65
+  rsi_oversold: 35
   lookback_bars: 20
   cooldown_minutes: 60
   session_filter_enabled: true

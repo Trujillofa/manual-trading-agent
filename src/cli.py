@@ -16,13 +16,13 @@ from typing import Literal
 from src.backtest.engine import BacktestEngine
 from src.config import get_settings
 from src.data.fetcher import DataFetcher
+from src.indicators.adx import calculate_adx
 from src.indicators.candlestick import (
     CandlePattern,
     PatternType,
     detect_patterns,
 )
 from src.indicators.high_low import highest_high, is_breakout_high, is_breakout_low, lowest_low
-from src.indicators.adx import calculate_adx
 from src.indicators.rsi import (
     calculate_rsi,
     calculate_rsi_series,
@@ -40,15 +40,12 @@ from src.strategy.multi_timeframe import MTFRSIStrategy
 # buffer_pips = pip buffer on breakout threshold
 # confirm_bars = max bars after MTF alignment to accept breakout (0 = immediate only)
 CONFIRMATION_PROFILES: dict[str, dict[str, object]] = {
-    "EUR/GBP": {"variant": "V2", "buffer_pips": 1.0, "confirm_bars": 3},
-    "GBP/CHF": {"variant": "V2", "buffer_pips": 1.0, "confirm_bars": 3},
-    "AUD/CAD": {"variant": "V2", "buffer_pips": 1.0, "confirm_bars": 3},
-    "EUR/CHF": {"variant": "V2", "buffer_pips": 1.0, "confirm_bars": 3},
+    "GBP/USD": {"variant": "V2", "buffer_pips": 2.0, "confirm_bars": 5},
 }
 
 # Default profile for pairs without a specific one
 DEFAULT_CONFIRMATION_PROFILE: dict[str, object] = {
-    "variant": "V2", "buffer_pips": 1.0, "confirm_bars": 3,
+    "variant": "V2", "buffer_pips": 2.0, "confirm_bars": 5,
 }
 
 # ADX threshold: only take mean-reversion signals when ADX < this value (ranging market)
@@ -641,7 +638,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 print(f"  ⚠️ MTF SIGNAL: {signal_direction} (confidence: {signal_confidence:.0%})")
                 print(f"     Reasons: {', '.join(signal_reasons)}")
 
-                # Calculate TP/SL (TP=1×ATR, SL=3×ATR — optimized for high win-rate reversal)
+                # Calculate TP/SL (TP=1×ATR, SL=3×ATR — validated over 360d OOS backtest)
                 tp_mult = 1.0
                 sl_mult = 3.0
                 if atr and atr > 0:

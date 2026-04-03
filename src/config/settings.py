@@ -59,8 +59,8 @@ class TimeframesConfig:
 @dataclass
 class StrategyConfig:
     rsi_period: int = 14
-    rsi_overbought: float = 65.0
-    rsi_oversold: float = 35.0
+    rsi_overbought: float = 70.0
+    rsi_oversold: float = 30.0
     lookback_bars: int = 20
     cooldown_minutes: int = 60
     session_filter_enabled: bool = True

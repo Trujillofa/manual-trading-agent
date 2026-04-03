@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import itertools
 import sys
 import time
 from dataclasses import dataclass, field
@@ -29,6 +28,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pandas as pd
 import yfinance as yf
 
+from src.data.dukascopy_fetcher import get_multi_timeframe_data_dukascopy
+from src.indicators.adx import calculate_adx
 from src.indicators.high_low import previous_rolling_highest_high, previous_rolling_lowest_low
 from src.indicators.rsi import calculate_rsi
 
@@ -74,6 +75,20 @@ class ConfigResult:
     trades_list: list[TradeRecord] = field(default_factory=list)
 
 
+def _adx_at_bar(data_1h: pd.DataFrame, ts: pd.Timestamp, period: int = 14) -> float | None:
+    """Compute ADX from 1h data up to timestamp ts."""
+    subset = data_1h.loc[:ts]
+    if len(subset) < period * 2 + 1:
+        return None
+    tail = subset.iloc[-(period * 3):]  # enough history for smoothing
+    return calculate_adx(
+        tail["high"].tolist(),
+        tail["low"].tolist(),
+        tail["close"].tolist(),
+        period,
+    )
+
+
 def latest_rsi_at_or_before(df: pd.DataFrame, ts: pd.Timestamp, period: int = 14) -> float | None:
     subset = df.loc[:ts]
     if len(subset) < period + 1:
@@ -107,8 +122,10 @@ def run_config(
     sl_mult: float = 2.0,
     max_hold_bars: int = 16,
     lookback: int = 20,
+    adx_threshold: float = 0.0,
 ) -> ConfigResult:
-    label = f"{variant}_ob{rsi_ob:g}_os{rsi_os:g}_b{buffer_pips:g}_c{confirm_bars}_tp{tp_mult:g}_sl{sl_mult:g}"
+    adx_label = f"_adx{adx_threshold:g}" if adx_threshold > 0 else ""
+    label = f"{variant}_ob{rsi_ob:g}_os{rsi_os:g}_b{buffer_pips:g}_c{confirm_bars}_tp{tp_mult:g}_sl{sl_mult:g}{adx_label}"
     result = ConfigResult(
         pair=pair, config_label=label, variant=variant,
         rsi_ob=rsi_ob, rsi_os=rsi_os, buffer_pips=buffer_pips,
@@ -236,6 +253,12 @@ def run_config(
                 ))
                 position = None
 
+        # ADX trend filter: skip mean-reversion signals in trending markets
+        if current_signal is not None and adx_threshold > 0:
+            adx_1h = _adx_at_bar(data_1h, ts)
+            if adx_1h is not None and adx_1h >= adx_threshold:
+                current_signal = None
+
         # Open new trade
         if position is None and current_signal is not None:
             position = current_signal
@@ -335,7 +358,6 @@ def write_outputs(results: list[ConfigResult], output_dir: Path) -> tuple[Path, 
     for label, config_results in config_agg.items():
         total_trades = sum(r.trades for r in config_results)
         total_wins = sum(r.wins for r in config_results)
-        total_losses = sum(r.losses for r in config_results)
         total_timeouts = sum(r.timeouts for r in config_results)
         avg_pnl_pct = sum(r.total_pnl_pct for r in config_results) / len(config_results)
         gross_win = sum(r.avg_win * r.wins for r in config_results)
@@ -451,6 +473,8 @@ def main() -> int:
         "--tp-sl-ratios", default="1.5:2.0,1.0:1.0,2.0:1.0,1.0:3.0,2.0:2.0,3.0:2.0",
         help="Comma-separated TP:SL ATR multiplier pairs",
     )
+    parser.add_argument("--adx-threshold", type=float, default=0.0, help="ADX threshold (0=disabled, 25=recommended)")
+    parser.add_argument("--source", default="yfinance", choices=["yfinance", "dukascopy"], help="Data source")
     parser.add_argument("--output-dir", default="results")
     parser.add_argument("--max-hold", type=int, default=16, help="Max bars to hold (15m)")
     args = parser.parse_args()
@@ -474,14 +498,17 @@ def main() -> int:
     n_vx = sum(1 for v in variants if v in ("V1", "V2"))
     total_configs = (v0_configs if "V0" in variants else 0) + n_vx * vx_configs
     total_runs = total_configs * len(pairs)
+    adx_threshold = args.adx_threshold
 
-    print(f"=== Entry Configuration Optimizer ===")
+    print("=== Entry Configuration Optimizer ===")
+    print(f"Source: {args.source}")
     print(f"Pairs: {len(pairs)}")
     print(f"Variants: {variants}")
     print(f"RSI thresholds: {rsi_pairs}")
     print(f"Buffers: {buffers}")
     print(f"Confirm bars: {confirm_bars_list}")
     print(f"TP/SL ratios: {tp_sl_pairs}")
+    print(f"ADX threshold: {adx_threshold} {'(disabled)' if adx_threshold == 0 else ''}")
     print(f"Total configs per pair: {total_configs}")
     print(f"Total runs: {total_runs}")
     print(f"Days: {args.days}")
@@ -492,9 +519,27 @@ def main() -> int:
     for pair in pairs:
         print(f"[FETCH] {pair}")
         try:
-            mtf = fetch_mtf_data(pair, args.days)
+            if args.source == "dukascopy":
+                end_date = datetime.now(UTC)
+                start_date = end_date - timedelta(days=args.days)
+                print(f"  Fetching {args.days}d via Dukascopy ({pair})...")
+                mtf = get_multi_timeframe_data_dukascopy(
+                    pair, start_date, end_date,
+                    timeframes=["h1", "m30", "m15"],
+                )
+                # Remap keys to match yfinance format
+                mtf_remapped: dict[str, pd.DataFrame] = {}
+                key_map = {"h1": "1h", "m30": "30m", "m15": "15m"}
+                for k, v in mtf.items():
+                    mtf_remapped[key_map.get(k, k)] = v
+                mtf = mtf_remapped
+                for tf_key in ["1h", "30m", "15m"]:
+                    if tf_key in mtf:
+                        print(f"    {tf_key}: {len(mtf[tf_key])} bars")
+            else:
+                mtf = fetch_mtf_data(pair, args.days)
             if any(tf not in mtf or mtf[tf].empty for tf in ["1h", "30m", "15m"]):
-                print(f"  SKIPPED: insufficient data")
+                print("  SKIPPED: insufficient data")
                 continue
             bars_15m = len(mtf["15m"])
             print(f"  OK: {bars_15m} bars on 15m ({bars_15m * 15 / 60 / 24:.0f} days)")
@@ -530,6 +575,7 @@ def main() -> int:
                                 buffer_pips=buffer_pips, confirm_bars=cb,
                                 tp_mult=tp_mult, sl_mult=sl_mult,
                                 max_hold_bars=args.max_hold,
+                                adx_threshold=adx_threshold,
                             )
                             results.append(r)
                             run_count += 1

@@ -1,242 +1,209 @@
-"""Dukascopy data downloader for high-quality forex historical data."""
+"""Dukascopy data downloader for high-quality forex historical data.
+
+Downloads M1 candle data from Dukascopy's public datafeed in bi5 (LZMA-compressed
+binary) format, then resamples to any desired timeframe.
+
+URL format: https://datafeed.dukascopy.com/datafeed/{SYMBOL}/{YEAR}/{MONTH-1}/{DAY}/BID_candles_min_1.bi5
+Note: Dukascopy uses 0-indexed months (January = 00).
+
+Each bi5 record is 24 bytes, big-endian:
+  - time_offset (uint32): minutes from day start (0-1439)
+  - open (uint32): price as integer (divide by point_value)
+  - close (uint32)
+  - low (uint32)
+  - high (uint32)
+  - volume (float32)
+"""
 
 from __future__ import annotations
 
-import gzip
-import os
-from datetime import datetime, timedelta
-from typing import Literal
+import lzma
+import struct
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 import requests
 
-# Dukascopy URL format
 DUKASCOPY_BASE_URL = "https://datafeed.dukascopy.com/datafeed"
-INTERVALS = {
-    "tick": "TICK",
-    "m1": "M1",
-    "h1": "H1",
-}
-INTERVAL_MINUTES = {
-    "m1": 1,
-    "h1": 60,
-}
+
+# Point values for converting integer prices to decimals.
+# JPY pairs use 3 decimal places (1000), others use 5 (100000).
+POINT_VALUES: dict[str, int] = {}
+JPY_PAIRS = {"USDJPY", "EURJPY", "GBPJPY", "CHFJPY", "AUDJPY", "CADJPY", "NZDJPY",
+             "SGDJPY", "HKDJPY", "SEKJPY", "NOKJPY", "MXNJPY", "ZARJPY"}
+
+
+def _point_value(symbol: str) -> int:
+    sym = symbol.upper().replace("/", "")
+    if sym in JPY_PAIRS or sym.endswith("JPY"):
+        return 1000
+    return 100000
+
+
+def _download_day(symbol: str, date: datetime) -> list[dict]:
+    """Download M1 candles for a single day from Dukascopy."""
+    sym = symbol.upper().replace("/", "")
+    year = date.year
+    month = date.month - 1  # 0-indexed
+    day = date.day
+
+    url = f"{DUKASCOPY_BASE_URL}/{sym}/{year}/{month:02d}/{day:02d}/BID_candles_min_1.bi5"
+
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code != 200 or len(response.content) == 0:
+            return []
+    except requests.RequestException:
+        return []
+
+    try:
+        decompressed = lzma.decompress(response.content)
+    except lzma.LZMAError:
+        return []
+
+    record_size = 24
+    n_records = len(decompressed) // record_size
+    if n_records == 0:
+        return []
+
+    pv = _point_value(sym)
+    day_start = datetime(year, date.month, day, tzinfo=UTC)
+    records = []
+
+    for i in range(n_records):
+        offset = i * record_size
+        time_off, o, c, lo, hi, vol = struct.unpack(
+            ">IIIIIf", decompressed[offset:offset + record_size]
+        )
+        # time_off is seconds from midnight UTC
+        ts = day_start + timedelta(seconds=time_off)
+        op = o / pv
+        cl = c / pv
+        lw = lo / pv
+        hg = hi / pv
+
+        # Skip zero-price records (market closed)
+        if op == 0 and cl == 0:
+            continue
+
+        records.append({
+            "datetime": ts,
+            "open": op,
+            "high": hg,
+            "low": lw,
+            "close": cl,
+            "volume": round(vol, 2),
+        })
+
+    return records
 
 
 def download_dukascopy_data(
     symbol: str,
     start_date: datetime,
     end_date: datetime,
-    interval: Literal["tick", "m1", "h1"] = "h1",
-    bid_ask: Literal["bid", "ask"] = "bid",
     progress_callback=None,
 ) -> pd.DataFrame:
-    """Download historical forex data from Dukascopy.
+    """Download M1 candle data from Dukascopy.
 
     Args:
-        symbol: Forex pair (e.g., "EURUSD", "GBPUSD")
-        start_date: Start date
+        symbol: Forex pair (e.g., "EURUSD", "EUR/USD")
+        start_date: Start date (timezone-aware or naive)
         end_date: End date
-        interval: Time interval (tick, m1, h1)
-        bid_ask: Bid or ask side
-        progress_callback: Optional callback for progress updates
+        progress_callback: Optional callback(fraction) for progress
 
     Returns:
-        DataFrame with OHLCV data (and spread for tick data)
+        DataFrame with columns: datetime, open, high, low, close, volume
     """
-    symbol_upper = symbol.upper().replace("/", "")
-    interval_code = INTERVALS.get(interval, "H1")
+    start = start_date.replace(tzinfo=None) if start_date.tzinfo else start_date
+    end = end_date.replace(tzinfo=None) if end_date.tzinfo else end_date
 
-    all_data = []
-    current_date = start_date.replace(tzinfo=None)
-    end_date_naive = end_date.replace(tzinfo=None) if end_date.tzinfo else end_date
+    total_days = (end - start).days + 1
+    all_records: list[dict] = []
 
-    total_days = (end_date_naive - current_date).days
-    processed_days = 0
+    current = start
+    day_num = 0
+    while current <= end:
+        records = _download_day(symbol, current)
+        all_records.extend(records)
+        current += timedelta(days=1)
+        day_num += 1
 
-    while current_date <= end_date_naive:
-        # Build URL
-        year = current_date.year
-        month = current_date.month
+        if progress_callback and day_num % 7 == 0:
+            progress_callback(day_num / total_days)
 
-        if interval == "tick":
-            # Tick data URL format: /{YEAR}/{MONTH:02d}/{SYMBOL}_T_{BIDASK}.zip
-            url = f"{DUKASCOPY_BASE_URL}/{year}/{month:02d}/{interval_code}/{symbol}.zip"
-        else:
-            # Bar data URL format: /{YEAR}/{MONTH:02d}/{SYMBOL}_{INTERVAL}_{BIDASK}.zip
-            url = f"{DUKASCOPY_BASE_URL}/{year}/{month:02d}/{interval_code}/{symbol.lower()}/{symbol_upper}_{interval_code}_{bid_ask.upper()}.zip"
-
-        try:
-            response = requests.get(url, timeout=30)
-            if response.status_code == 200:
-                # Decompress and parse
-                df = _parse_dukascopy_data(response.content, interval)
-                if df is not None and not df.empty:
-                    all_data.append(df)
-        except requests.RequestException:
-            pass  # Skip missing data
-
-        current_date = current_date + timedelta(days=1)
-        processed_days += 1
-
-        if progress_callback and processed_days % 7 == 0:
-            progress_callback(processed_days / total_days)
-
-    if not all_data:
+    if not all_records:
         return pd.DataFrame()
 
-    result = pd.concat(all_data, ignore_index=True)
-    result = result.drop_duplicates(subset=["datetime"], keep="last")
-    result = result.sort_values("datetime").reset_index(drop=True)
-
-    return result
-
-
-def _parse_dukascopy_data(content: bytes, interval: str) -> pd.DataFrame | None:
-    """Parse Dukascopy compressed data."""
-    try:
-        # Decompress gzip
-        decompressed = gzip.decompress(content)
-        lines = decompressed.decode("utf-8").strip().split("\n")
-
-        if interval == "tick":
-            # Tick format: timestamp, ask, bid, volume
-            data = []
-            for line in lines:
-                parts = line.split(",")
-                if len(parts) >= 4:
-                    data.append({
-                        "datetime": pd.to_datetime(float(parts[0]), unit="ms"),
-                        "ask": float(parts[1]),
-                        "bid": float(parts[2]),
-                        "volume": float(parts[3]),
-                    })
-            df = pd.DataFrame(data)
-            df["mid"] = (df["ask"] + df["bid"]) / 2
-            df["spread"] = df["ask"] - df["bid"]
-            return df
-        else:
-            # Bar format: timestamp, open, high, low, close, volume
-            data = []
-            for line in lines:
-                parts = line.split(",")
-                if len(parts) >= 6:
-                    data.append({
-                        "datetime": pd.to_datetime(float(parts[0]), unit="ms"),
-                        "open": float(parts[1]),
-                        "high": float(parts[2]),
-                        "low": float(parts[3]),
-                        "close": float(parts[4]),
-                        "volume": float(parts[5]),
-                    })
-            return pd.DataFrame(data)
-    except Exception:
-        return None
+    df = pd.DataFrame(all_records)
+    df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
+    df = df.drop_duplicates(subset=["datetime"], keep="last")
+    df = df.sort_values("datetime").reset_index(drop=True)
+    return df
 
 
-def download_histdata_csv(
-    symbol: str,
-    year: int,
-    month: int,
-    data_dir: str = "/tmp/forex_data",
-) -> pd.DataFrame | None:
-    """Download historical data from HistData.com format.
+def _resample_ohlc(df: pd.DataFrame, freq: str) -> pd.DataFrame:
+    """Resample OHLCV data to a different timeframe."""
+    df = df.copy()
+    if "datetime" in df.columns:
+        df = df.set_index("datetime")
 
-    HistData provides free M1 data in CSV format.
-    URL format: https://www.histdata.com/download-free-forex-data/?/meta/
+    agg = {
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+    }
+    if "volume" in df.columns:
+        agg["volume"] = "sum"
 
-    Args:
-        symbol: Forex pair (e.g., "EURUSD")
-        year: Year to download
-        month: Month to download
-        data_dir: Directory to save data
-
-    Returns:
-        DataFrame with M1 data
-    """
-    # HistData requires manual download from browser
-    # For automated use, we'd need to use their FTP or direct links
-    # This is a placeholder for the CSV parsing once downloaded
-
-    os.makedirs(data_dir, exist_ok=True)
-    filename = f"{data_dir}/{symbol}_{year}_{month:02d}.csv"
-
-    if os.path.exists(filename):
-        return pd.read_csv(filename, parse_dates=["datetime"])
-
-    return None
+    resampled = df.resample(freq).agg(agg)
+    resampled = resampled.dropna()
+    return resampled
 
 
 def get_multi_timeframe_data_dukascopy(
     symbol: str,
     start_date: datetime,
     end_date: datetime,
-    timeframes: list[str] = None,
+    timeframes: list[str] | None = None,
+    progress_callback=None,
 ) -> dict[str, pd.DataFrame]:
-    """Download multi-timeframe data from Dukascopy.
+    """Download M1 data from Dukascopy and resample to multiple timeframes.
 
     Args:
-        symbol: Forex pair
+        symbol: Forex pair (e.g., "EURUSD")
         start_date: Start date
         end_date: End date
-        timeframes: List of timeframes to download
+        timeframes: Target timeframes (default: ["h1", "m30", "m15"])
+        progress_callback: Optional progress callback
 
     Returns:
-        Dictionary mapping timeframe to DataFrame
+        Dict mapping timeframe key to DataFrame with DatetimeIndex.
     """
     if timeframes is None:
         timeframes = ["h1", "m30", "m15"]
-    result = {}
 
-    # Download M1 data (highest resolution needed)
-    m1_data = download_dukascopy_data(symbol, start_date, end_date, interval="m1")
-
+    m1_data = download_dukascopy_data(symbol, start_date, end_date, progress_callback)
     if m1_data.empty:
-        return result
+        return {}
 
-    result["m1"] = m1_data
-
-    # Resample to other timeframes
-    for tf in timeframes:
-        if tf == "m1":
-            continue
-
-        if tf == "m5":
-            result["m5"] = _resample_ohlc(m1_data, "5min")
-        elif tf == "m15":
-            result["m15"] = _resample_ohlc(m1_data, "15min")
-        elif tf == "m30":
-            result["m30"] = _resample_ohlc(m1_data, "30min")
-        elif tf == "h1":
-            result["h1"] = _resample_ohlc(m1_data, "1h")
-        elif tf == "h4":
-            result["h4"] = _resample_ohlc(m1_data, "4h")
-        elif tf == "d1":
-            result["d1"] = _resample_ohlc(m1_data, "1D")
-
-    return result
-
-
-def _resample_ohlc(df: pd.DataFrame, freq: str) -> pd.DataFrame:
-    """Resample OHLCV data to a different timeframe."""
-    df = df.copy()
-    df = df.set_index("datetime")
-
-    ohlc = {
-        "open": "first",
-        "high": "max",
-        "low": "min",
-        "close": "last",
+    result: dict[str, pd.DataFrame] = {}
+    freq_map = {
+        "m1": "1min", "m5": "5min", "m15": "15min",
+        "m30": "30min", "h1": "1h", "h4": "4h", "d1": "1D",
     }
 
-    if "volume" in df.columns:
-        ohlc["volume"] = "sum"
+    for tf in timeframes:
+        freq = freq_map.get(tf)
+        if freq is None:
+            continue
+        if tf == "m1":
+            df = m1_data.copy()
+            if "datetime" in df.columns:
+                df = df.set_index("datetime")
+            result["m1"] = df
+        else:
+            result[tf] = _resample_ohlc(m1_data, freq)
 
-    if "spread" in df.columns:
-        ohlc["spread"] = "mean"
-
-    resampled = df.resample(freq).agg(ohlc)
-    resampled = resampled.dropna()
-    resampled = resampled.reset_index()
-
-    return resampled
+    return result

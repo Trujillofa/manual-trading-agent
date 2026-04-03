@@ -2,40 +2,9 @@ trading:
   mode: "paper"
   pairs:
     majors:
-      - EUR/USD
       - GBP/USD
-      - USD/JPY
-      - USD/CHF
-      - USD/CAD
-      - AUD/USD
-      - NZD/USD
-    minors:
-      - EUR/GBP
-      - EUR/JPY
-      - EUR/CHF
-      - EUR/AUD
-      - EUR/CAD
-      - GBP/JPY
-      - GBP/CHF
-      - GBP/AUD
-      - GBP/CAD
-      - GBP/NZD
-      - AUD/JPY
-      - AUD/CAD
-      - AUD/CHF
-      - AUD/NZD
-      - CAD/JPY
-      - CHF/JPY
-      - NZD/JPY
-    exotics:
-      - USD/SGD
-      - USD/HKD
-      - USD/SEK
-      - USD/NOK
-      - USD/MXN
-      - USD/ZAR
-      - EUR/SEK
-      - EUR/NOK
+    minors: []
+    exotics: []
   lot_size: 3
 
 timeframes:
@@ -45,8 +14,8 @@ timeframes:
 
 strategy:
   rsi_period: 14
-  rsi_overbought: 65
-  rsi_oversold: 35
+  rsi_overbought: 70
+  rsi_oversold: 30
   lookback_bars: 20
   cooldown_minutes: 60
   session_filter_enabled: true

@@ -3,6 +3,8 @@ trading:
   pairs:
     majors:
       - GBP/USD
+      - NZD/USD
+      - AUD/JPY
     minors: []
     exotics: []
   lot_size: 3

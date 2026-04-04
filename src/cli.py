@@ -9,7 +9,7 @@ import json
 import os
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -281,6 +281,9 @@ def create_parser() -> argparse.ArgumentParser:
     enhanced_backtest_parser.add_argument("--no-divergence", action="store_true", help="Disable divergence detection")
 
     subparsers.add_parser("telegram-poll", help="Poll Telegram commands (e.g. /watchlist)")
+
+    dash_parser = subparsers.add_parser("dashboard", help="Signal dashboard and paper P&L")
+    dash_parser.add_argument("--days", type=int, default=30, help="Days of history to show")
 
     return parser
 
@@ -1001,6 +1004,140 @@ async def run_telegram_poll() -> None:
     await handler.run_forever()
 
 
+async def run_dashboard(days: int) -> None:
+    """Show signal dashboard: entries, block reasons, paper P&L tracking."""
+    audit_path = _audit_log_path()
+    if not audit_path.exists():
+        print("No signal audit log found.")
+        return
+
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    entries: list[dict] = []
+    blocked: list[dict] = []
+    aligned: list[dict] = []
+    watched: list[dict] = []
+
+    with audit_path.open(encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            ts_str = rec.get("ts", "")
+            try:
+                ts = datetime.fromisoformat(ts_str)
+            except (ValueError, TypeError):
+                continue
+            if ts < cutoff:
+                continue
+            state = rec.get("state", "")
+            if state == "entry":
+                entries.append(rec)
+            elif state == "blocked":
+                blocked.append(rec)
+            elif state == "aligned_pending_breakout":
+                aligned.append(rec)
+            elif state == "watch":
+                watched.append(rec)
+
+    print(f"=== Signal Dashboard (last {days} days) ===\n")
+
+    # Summary counts
+    print(f"Entry signals:    {len(entries)}")
+    print(f"Blocked signals:  {len(blocked)}")
+    print(f"Aligned pending:  {len(aligned)}")
+    print(f"Watch list:       {len(watched)}")
+    print()
+
+    # Entry signals detail
+    if entries:
+        print("--- ENTRY SIGNALS ---")
+        print(f"{'Timestamp':<22} {'Pair':<10} {'Dir':<5} {'Entry':>10} {'TP':>10} {'SL':>10} {'RSI 1h':>7} {'RSI 30m':>8} {'RSI 15m':>8}")
+        print("-" * 95)
+        for e in entries:
+            print(
+                f"{e.get('ts', '')[:19]:<22} {e.get('pair', ''):<10} {e.get('direction', ''):<5} "
+                f"{e.get('entry', 0):>10.5f} {e.get('tp', 0):>10.5f} {e.get('sl', 0):>10.5f} "
+                f"{e.get('rsi_1h', 0):>7.1f} {e.get('rsi_30m', 0):>8.1f} {e.get('rsi_15m', 0):>8.1f}"
+            )
+
+        # Paper P&L estimation using current price
+        print("\n--- PAPER P&L (mark-to-market) ---")
+        fetcher = DataFetcher()
+        pairs_seen = {e.get("pair") for e in entries}
+        current_prices: dict[str, float] = {}
+        for pair in pairs_seen:
+            if not pair:
+                continue
+            try:
+                symbol = pair.replace("/", "")
+                df = fetcher.fetch(symbol, period="1d", interval="15m")
+                if not df.empty:
+                    current_prices[pair] = float(df["close"].iloc[-1])
+            except Exception:
+                pass
+
+        total_paper_pnl = 0.0
+        print(f"{'Timestamp':<22} {'Pair':<10} {'Dir':<5} {'Entry':>10} {'Current':>10} {'P&L pips':>10} {'Status':>10}")
+        print("-" * 82)
+        for e in entries:
+            pair = e.get("pair", "")
+            direction = e.get("direction", "")
+            entry_px = float(e.get("entry", 0))
+            tp_px = float(e.get("tp", 0))
+            sl_px = float(e.get("sl", 0))
+            pip_size = 0.01 if "JPY" in pair else 0.0001
+            current = current_prices.get(pair)
+
+            if current is None:
+                print(f"{e.get('ts', '')[:19]:<22} {pair:<10} {direction:<5} {entry_px:>10.5f} {'N/A':>10} {'N/A':>10} {'no data':>10}")
+                continue
+
+            if direction == "BUY":
+                pnl_pips = (current - entry_px) / pip_size
+                hit_tp = current >= tp_px
+                hit_sl = current <= sl_px
+            else:
+                pnl_pips = (entry_px - current) / pip_size
+                hit_tp = current <= tp_px
+                hit_sl = current >= sl_px
+
+            status = "TP HIT" if hit_tp else ("SL HIT" if hit_sl else "OPEN")
+            total_paper_pnl += pnl_pips
+            print(
+                f"{e.get('ts', '')[:19]:<22} {pair:<10} {direction:<5} "
+                f"{entry_px:>10.5f} {current:>10.5f} {pnl_pips:>+10.1f} {status:>10}"
+            )
+        print(f"\nTotal paper P&L: {total_paper_pnl:+.1f} pips")
+    else:
+        print("No entry signals in this period.")
+
+    # Block reason breakdown
+    if blocked:
+        print("\n--- BLOCK REASONS ---")
+        reason_counts: dict[str, int] = {}
+        for b in blocked:
+            for reason in b.get("reasons", []):
+                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        for reason, count in sorted(reason_counts.items(), key=lambda x: -x[1])[:15]:
+            print(f"  {count:>4}x  {reason}")
+
+    # Pairs with most aligned-pending (closest to triggering)
+    if aligned:
+        print("\n--- MOST ACTIVE PAIRS (aligned pending breakout) ---")
+        pair_counts: dict[str, int] = {}
+        for a in aligned:
+            p = a.get("pair", "unknown")
+            pair_counts[p] = pair_counts.get(p, 0) + 1
+        for pair, count in sorted(pair_counts.items(), key=lambda x: -x[1])[:10]:
+            print(f"  {count:>4}x  {pair}")
+
+    print()
+
+
 def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
@@ -1020,6 +1157,7 @@ def main() -> int:
             use_divergence=not args.no_divergence,
         ),
         "telegram-poll": run_telegram_poll,
+        "dashboard": lambda: run_dashboard(args.days),
     }
 
     handler = handlers.get(args.command)

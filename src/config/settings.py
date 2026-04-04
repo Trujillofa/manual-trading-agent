@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -146,9 +147,11 @@ class TelegramConfig:
 
     def __post_init__(self) -> None:
         if self.bot_token and self.bot_token.startswith("${"):
-            self.bot_token = None
+            env_key = self.bot_token[2:-1]
+            self.bot_token = os.environ.get(env_key)
         if self.chat_id and self.chat_id.startswith("${"):
-            self.chat_id = None
+            env_key = self.chat_id[2:-1]
+            self.chat_id = os.environ.get(env_key)
 
     @property
     def is_configured(self) -> bool:

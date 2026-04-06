@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.execution.lot_sizing import LotResult, LotSizer, SymbolInfo
+from src.execution.lot_sizing import LotSizer, SymbolInfo
 
 
 class TestLotSizer:

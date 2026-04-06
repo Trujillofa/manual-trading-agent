@@ -4,21 +4,26 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import os
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
 from src.backtest.engine import BacktestEngine
 from src.config import get_settings
 from src.data.fetcher import DataFetcher
-from src.indicators.candlestick import CandlePattern, PatternType, detect_patterns, get_pattern_score
+from src.indicators.adx import calculate_adx
+from src.indicators.candlestick import (
+    CandlePattern,
+    PatternType,
+    detect_patterns,
+)
 from src.indicators.high_low import highest_high, is_breakout_high, is_breakout_low, lowest_low
 from src.indicators.rsi import (
-    DivergenceType,
     calculate_rsi,
     calculate_rsi_series,
     detect_bearish_divergence,
@@ -28,24 +33,23 @@ from src.news.news_checker import NewsChecker
 from src.notifications.telegram import TelegramNotifier
 from src.strategy.multi_timeframe import MTFRSIStrategy
 
-
-# Pair-specific confirmation profiles from bakeoff results (2026-03-31).
+# Pair-specific confirmation profiles from optimization bakeoff (2026-04-03).
 # Format: {"variant": "V1"|"V2", "buffer_pips": float, "confirm_bars": int}
 # V1 = continuation breakout (BUY below LL, SELL above HH)
-# V2 = reversal breakout (BUY reclaim above LL, SELL rejection below HH)
+# V2 = reversal breakout (BUY wick through + close reclaim, SELL wick through + close reject)
 # buffer_pips = pip buffer on breakout threshold
 # confirm_bars = max bars after MTF alignment to accept breakout (0 = immediate only)
 CONFIRMATION_PROFILES: dict[str, dict[str, object]] = {
-    "EUR/GBP": {"variant": "V2", "buffer_pips": 0.5, "confirm_bars": 0},
-    "GBP/CHF": {"variant": "V1", "buffer_pips": 0.5, "confirm_bars": 0},
-    "AUD/CAD": {"variant": "V1", "buffer_pips": 2.0, "confirm_bars": 0},
-    "EUR/CHF": {"variant": "V1", "buffer_pips": 0.0, "confirm_bars": 0},
+    "GBP/USD": {"variant": "V2", "buffer_pips": 2.0, "confirm_bars": 5},
 }
 
 # Default profile for pairs without a specific one
 DEFAULT_CONFIRMATION_PROFILE: dict[str, object] = {
-    "variant": "V1", "buffer_pips": 0.0, "confirm_bars": 0,
+    "variant": "V2", "buffer_pips": 2.0, "confirm_bars": 5,
 }
+
+# ADX threshold: only take mean-reversion signals when ADX < this value (ranging market)
+ADX_TREND_THRESHOLD = 25.0
 
 
 def _get_confirmation_profile(pair: str) -> dict[str, object]:
@@ -66,10 +70,12 @@ def _check_breakout_with_profile(
     hh: float | None,
     ll: float | None,
     pip_size: float,
+    bar_high: float | None = None,
+    bar_low: float | None = None,
 ) -> bool:
     """Check breakout using the pair's confirmation profile."""
     buffer_pips = float(profile.get("buffer_pips", 0.0))
-    variant = str(profile.get("variant", "V1"))
+    variant = str(profile.get("variant", "V2"))
     buffer_pct = (buffer_pips * pip_size) / close_price if close_price else 0.0
 
     if variant == "V1":
@@ -79,13 +85,19 @@ def _check_breakout_with_profile(
         if direction == "SELL" and hh is not None:
             return is_breakout_high(close_price, hh, buffer_pct)
     elif variant == "V2":
-        # Reversal: BUY reclaims above LL, SELL rejects below HH
+        # Reversal: wick through level + close back inside
+        # BUY: bar low wicked through LL, but close reclaimed above LL
+        # SELL: bar high wicked through HH, but close rejected below HH
         if direction == "BUY" and ll is not None:
-            trigger = ll * (1.0 + buffer_pct)
-            return close_price > trigger
+            down_trigger = ll - buffer_pips * pip_size
+            wick_through = (bar_low is not None and bar_low <= down_trigger) if bar_low is not None else True
+            close_reclaim = close_price > ll
+            return wick_through and close_reclaim
         if direction == "SELL" and hh is not None:
-            trigger = hh * (1.0 - buffer_pct)
-            return close_price < trigger
+            up_trigger = hh + buffer_pips * pip_size
+            wick_through = (bar_high is not None and bar_high >= up_trigger) if bar_high is not None else True
+            close_reject = close_price < hh
+            return wick_through and close_reject
     return False
 
 
@@ -270,6 +282,9 @@ def create_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("telegram-poll", help="Poll Telegram commands (e.g. /watchlist)")
 
+    dash_parser = subparsers.add_parser("dashboard", help="Signal dashboard and paper P&L")
+    dash_parser.add_argument("--days", type=int, default=30, help="Days of history to show")
+
     return parser
 
 
@@ -282,16 +297,14 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
         importance_threshold=settings.news.importance_threshold,
     )
     if settings.news.enabled:
-        try:
+        with contextlib.suppress(Exception):
             await news_checker.fetch_events(hours_ahead=24)
-        except Exception:
-            pass
 
     # Initialize Telegram notifier if enabled
     notifier = None
     if settings.telegram.enabled:
-        token = settings.telegram.bot_token_resolved
-        chat_id = settings.telegram.chat_id_resolved
+        token = settings.telegram.bot_token
+        chat_id = settings.telegram.chat_id
         if token and chat_id:
             notifier = TelegramNotifier(token, chat_id)
 
@@ -343,9 +356,19 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             # Calculate ATR for TP/SL
             atr = _calculate_atr(high_15m[-14:], low_15m[-14:], close_15m[-14:])
             pip_size = 0.01 if "JPY" in pair else 0.0001
+            bar_high = high_15m[-1] if high_15m else None
+            bar_low = low_15m[-1] if low_15m else None
             profile = _get_confirmation_profile(pair)
-            breakout_buy = _check_breakout_with_profile(profile, "BUY", close_price, hh, ll, pip_size)
-            breakout_sell = _check_breakout_with_profile(profile, "SELL", close_price, hh, ll, pip_size)
+            breakout_buy = _check_breakout_with_profile(profile, "BUY", close_price, hh, ll, pip_size, bar_high, bar_low)
+            breakout_sell = _check_breakout_with_profile(profile, "SELL", close_price, hh, ll, pip_size, bar_high, bar_low)
+
+            # ADX trend filter on 1h timeframe
+            adx_1h = calculate_adx(
+                data_1h["high"].values.tolist()[-50:],
+                data_1h["low"].values.tolist()[-50:],
+                data_1h["close"].values.tolist()[-50:],
+            )
+            is_ranging = adx_1h is not None and adx_1h < ADX_TREND_THRESHOLD
             # Spread: requires real bid/ask source (OANDA)
             quote = None
             try:
@@ -399,6 +422,11 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 print(f"  Spread: {spread_pips:.2f} pips ({'ok' if spread_ok else 'too wide'})")
             else:
                 print("  Spread: unavailable")
+            if adx_1h is not None:
+                regime = "ranging" if is_ranging else "trending"
+                print(f"  ADX(14) 1h: {adx_1h:.1f} ({regime})")
+            else:
+                print("  ADX(14) 1h: insufficient data")
 
             # Show patterns and divergence
             if bullish_pats:
@@ -544,6 +572,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     no_trade_reasons.append("blocked by high-impact news")
                 if settings.strategy.spread_filter_enabled and not spread_ok:
                     no_trade_reasons.append("spread unavailable/too wide")
+                if not is_ranging:
+                    adx_str = f"{adx_1h:.0f}" if adx_1h is not None else "N/A"
+                    no_trade_reasons.append(f"trending market (ADX {adx_str} >= {ADX_TREND_THRESHOLD:.0f})")
                 if cooldown_active:
                     no_trade_reasons.append("cooldown active")
                 if no_trade_reasons:
@@ -566,7 +597,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 rsi_5m = micro_context.get("rsi_5m")
                 rsi_1m = micro_context.get("rsi_1m")
                 print(f"  ⏳ ALIGNED / BREAKOUT PENDING: {near_direction}")
-                print(f"     Missing: breakout confirmation only")
+                print("     Missing: breakout confirmation only")
                 if isinstance(rsi_5m, float):
                     print(f"     RSI 5m: {rsi_5m:.1f}")
                 if isinstance(rsi_1m, float):
@@ -610,26 +641,28 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 print(f"  ⚠️ MTF SIGNAL: {signal_direction} (confidence: {signal_confidence:.0%})")
                 print(f"     Reasons: {', '.join(signal_reasons)}")
 
-                # Calculate TP/SL
+                # Calculate TP/SL (TP=1×ATR, SL=3×ATR — validated over 360d OOS backtest)
+                tp_mult = 1.0
+                sl_mult = 3.0
                 if atr and atr > 0:
                     if signal_direction == "SELL":
                         entry = close_price
-                        tp = entry - (atr * 1.5)
-                        sl = entry + (atr * 2.0)
+                        tp = entry - (atr * tp_mult)
+                        sl = entry + (atr * sl_mult)
                     else:
                         entry = close_price
-                        tp = entry + (atr * 1.5)
-                        sl = entry - (atr * 2.0)
+                        tp = entry + (atr * tp_mult)
+                        sl = entry - (atr * sl_mult)
                 else:
                     pip_size = 0.0001 if "JPY" not in pair else 0.01
                     if signal_direction == "SELL":
                         entry = close_price
-                        tp = entry - (50 * pip_size)
-                        sl = entry + (30 * pip_size)
+                        tp = entry - (30 * pip_size)
+                        sl = entry + (90 * pip_size)
                     else:
                         entry = close_price
-                        tp = entry + (50 * pip_size)
-                        sl = entry - (30 * pip_size)
+                        tp = entry + (30 * pip_size)
+                        sl = entry - (90 * pip_size)
 
                 micro_context = _fetch_micro_context(fetcher, symbol, rsi_period)
                 exec_note = _execution_note(
@@ -958,8 +991,8 @@ async def run_telegram_poll() -> None:
     if not settings.telegram.enabled:
         print("Telegram disabled in settings")
         return
-    token = settings.telegram.bot_token_resolved
-    chat_id = settings.telegram.chat_id_resolved
+    token = settings.telegram.bot_token
+    chat_id = settings.telegram.chat_id
     if not token or not chat_id:
         print("Telegram token/chat_id missing")
         return
@@ -969,6 +1002,140 @@ async def run_telegram_poll() -> None:
     handler = TelegramCommandHandler(token, chat_id)
     print("[TELEGRAM] Polling commands...")
     await handler.run_forever()
+
+
+async def run_dashboard(days: int) -> None:
+    """Show signal dashboard: entries, block reasons, paper P&L tracking."""
+    audit_path = _audit_log_path()
+    if not audit_path.exists():
+        print("No signal audit log found.")
+        return
+
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    entries: list[dict] = []
+    blocked: list[dict] = []
+    aligned: list[dict] = []
+    watched: list[dict] = []
+
+    with audit_path.open(encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            ts_str = rec.get("ts", "")
+            try:
+                ts = datetime.fromisoformat(ts_str)
+            except (ValueError, TypeError):
+                continue
+            if ts < cutoff:
+                continue
+            state = rec.get("state", "")
+            if state == "entry":
+                entries.append(rec)
+            elif state == "blocked":
+                blocked.append(rec)
+            elif state == "aligned_pending_breakout":
+                aligned.append(rec)
+            elif state == "watch":
+                watched.append(rec)
+
+    print(f"=== Signal Dashboard (last {days} days) ===\n")
+
+    # Summary counts
+    print(f"Entry signals:    {len(entries)}")
+    print(f"Blocked signals:  {len(blocked)}")
+    print(f"Aligned pending:  {len(aligned)}")
+    print(f"Watch list:       {len(watched)}")
+    print()
+
+    # Entry signals detail
+    if entries:
+        print("--- ENTRY SIGNALS ---")
+        print(f"{'Timestamp':<22} {'Pair':<10} {'Dir':<5} {'Entry':>10} {'TP':>10} {'SL':>10} {'RSI 1h':>7} {'RSI 30m':>8} {'RSI 15m':>8}")
+        print("-" * 95)
+        for e in entries:
+            print(
+                f"{e.get('ts', '')[:19]:<22} {e.get('pair', ''):<10} {e.get('direction', ''):<5} "
+                f"{e.get('entry', 0):>10.5f} {e.get('tp', 0):>10.5f} {e.get('sl', 0):>10.5f} "
+                f"{e.get('rsi_1h', 0):>7.1f} {e.get('rsi_30m', 0):>8.1f} {e.get('rsi_15m', 0):>8.1f}"
+            )
+
+        # Paper P&L estimation using current price
+        print("\n--- PAPER P&L (mark-to-market) ---")
+        fetcher = DataFetcher()
+        pairs_seen = {e.get("pair") for e in entries}
+        current_prices: dict[str, float] = {}
+        for pair in pairs_seen:
+            if not pair:
+                continue
+            try:
+                symbol = pair.replace("/", "")
+                df = fetcher.fetch(symbol, period="1d", interval="15m")
+                if not df.empty:
+                    current_prices[pair] = float(df["close"].iloc[-1])
+            except Exception:
+                pass
+
+        total_paper_pnl = 0.0
+        print(f"{'Timestamp':<22} {'Pair':<10} {'Dir':<5} {'Entry':>10} {'Current':>10} {'P&L pips':>10} {'Status':>10}")
+        print("-" * 82)
+        for e in entries:
+            pair = e.get("pair", "")
+            direction = e.get("direction", "")
+            entry_px = float(e.get("entry", 0))
+            tp_px = float(e.get("tp", 0))
+            sl_px = float(e.get("sl", 0))
+            pip_size = 0.01 if "JPY" in pair else 0.0001
+            current = current_prices.get(pair)
+
+            if current is None:
+                print(f"{e.get('ts', '')[:19]:<22} {pair:<10} {direction:<5} {entry_px:>10.5f} {'N/A':>10} {'N/A':>10} {'no data':>10}")
+                continue
+
+            if direction == "BUY":
+                pnl_pips = (current - entry_px) / pip_size
+                hit_tp = current >= tp_px
+                hit_sl = current <= sl_px
+            else:
+                pnl_pips = (entry_px - current) / pip_size
+                hit_tp = current <= tp_px
+                hit_sl = current >= sl_px
+
+            status = "TP HIT" if hit_tp else ("SL HIT" if hit_sl else "OPEN")
+            total_paper_pnl += pnl_pips
+            print(
+                f"{e.get('ts', '')[:19]:<22} {pair:<10} {direction:<5} "
+                f"{entry_px:>10.5f} {current:>10.5f} {pnl_pips:>+10.1f} {status:>10}"
+            )
+        print(f"\nTotal paper P&L: {total_paper_pnl:+.1f} pips")
+    else:
+        print("No entry signals in this period.")
+
+    # Block reason breakdown
+    if blocked:
+        print("\n--- BLOCK REASONS ---")
+        reason_counts: dict[str, int] = {}
+        for b in blocked:
+            for reason in b.get("reasons", []):
+                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        for reason, count in sorted(reason_counts.items(), key=lambda x: -x[1])[:15]:
+            print(f"  {count:>4}x  {reason}")
+
+    # Pairs with most aligned-pending (closest to triggering)
+    if aligned:
+        print("\n--- MOST ACTIVE PAIRS (aligned pending breakout) ---")
+        pair_counts: dict[str, int] = {}
+        for a in aligned:
+            p = a.get("pair", "unknown")
+            pair_counts[p] = pair_counts.get(p, 0) + 1
+        for pair, count in sorted(pair_counts.items(), key=lambda x: -x[1])[:10]:
+            print(f"  {count:>4}x  {pair}")
+
+    print()
 
 
 def main() -> int:
@@ -990,6 +1157,7 @@ def main() -> int:
             use_divergence=not args.no_divergence,
         ),
         "telegram-poll": run_telegram_poll,
+        "dashboard": lambda: run_dashboard(args.days),
     }
 
     handler = handlers.get(args.command)

@@ -2,40 +2,11 @@ trading:
   mode: "paper"
   pairs:
     majors:
-      - EUR/USD
       - GBP/USD
-      - USD/JPY
-      - USD/CHF
-      - USD/CAD
-      - AUD/USD
       - NZD/USD
-    minors:
-      - EUR/GBP
-      - EUR/JPY
-      - EUR/CHF
-      - EUR/AUD
-      - EUR/CAD
-      - GBP/JPY
-      - GBP/CHF
-      - GBP/AUD
-      - GBP/CAD
-      - GBP/NZD
       - AUD/JPY
-      - AUD/CAD
-      - AUD/CHF
-      - AUD/NZD
-      - CAD/JPY
-      - CHF/JPY
-      - NZD/JPY
-    exotics:
-      - USD/SGD
-      - USD/HKD
-      - USD/SEK
-      - USD/NOK
-      - USD/MXN
-      - USD/ZAR
-      - EUR/SEK
-      - EUR/NOK
+    minors: []
+    exotics: []
   lot_size: 3
 
 timeframes:
@@ -64,8 +35,9 @@ strategy:
     EUR/USD: 40
 
 risk:
-  tp_usd: 500
-  sl_usd: 1800
+  tp_usd: 300
+  sl_usd: 900
+  max_daily_loss_usd: 1500
   max_concurrent_positions: 1
 
 news:
@@ -84,3 +56,5 @@ data:
 
 telegram:
   enabled: true
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  chat_id: "${TELEGRAM_CHAT_ID}"

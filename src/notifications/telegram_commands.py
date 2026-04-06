@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
 import subprocess
 from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 import httpx
+
 from src.news.news_checker import NewsChecker
 
 OFFSET_PATH = Path("/app/logs/telegram_update_offset.json")

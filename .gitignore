@@ -30,8 +30,12 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs and runtime state
 *.log
+logs/
+
+# Backtest results
+results/
 
 # Ruff
 .ruff_cache/

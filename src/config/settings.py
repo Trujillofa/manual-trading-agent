@@ -99,6 +99,7 @@ class RiskConfig:
     tp_usd: float = 500.0
     sl_usd: float = 1800.0
     max_concurrent_positions: int = 1
+    max_daily_loss_usd: float = 1500.0
 
     def __post_init__(self) -> None:
         if self.tp_usd <= 0:
@@ -107,6 +108,8 @@ class RiskConfig:
             raise ValueError("risk.sl_usd must be greater than 0")
         if self.max_concurrent_positions <= 0:
             raise ValueError("risk.max_concurrent_positions must be greater than 0")
+        if self.max_daily_loss_usd <= 0:
+            raise ValueError("risk.max_daily_loss_usd must be greater than 0")
 
 
 @dataclass
@@ -131,12 +134,28 @@ class OandaConfig:
     account_id: str | None = None
     practice: bool = True
 
+
+@dataclass
+class TelegramConfig:
+    bot_token: str | None = None
+    chat_id: str | None = None
+    enabled: bool = True
+
+    signal_notifications: bool = True
+
+    scan_results: bool = True
+
     def __post_init__(self) -> None:
-        # Allow env var substitution like "${OANDA_API_KEY}"
-        if self.api_key and self.api_key.startswith("${"):
-            self.api_key = None
-        if self.account_id and self.account_id.startswith("${"):
-            self.account_id = None
+        if self.bot_token and self.bot_token.startswith("${"):
+            env_key = self.bot_token[2:-1]
+            self.bot_token = os.environ.get(env_key)
+        if self.chat_id and self.chat_id.startswith("${"):
+            env_key = self.chat_id[2:-1]
+            self.chat_id = os.environ.get(env_key)
+
+    @property
+    def is_configured(self) -> bool:
+        return self.bot_token is not None and self.chat_id is not None
 
 
 @dataclass
@@ -150,30 +169,6 @@ class DataConfig:
             raise ValueError("data.provider must be a non-empty string")
         if self.warmup_candles <= 0:
             raise ValueError("data.warmup_candles must be greater than 0")
-
-
-@dataclass
-class TelegramConfig:
-    enabled: bool = False
-    bot_token: str | None = None
-    chat_id: str | None = None
-
-    def __post_init__(self) -> None:
-        # Resolve from environment variables if available
-        if self.enabled:
-            self._bot_token = os.getenv("TELEGRAM_BOT_TOKEN") or self.bot_token
-            self._chat_id = os.getenv("TELEGRAM_CHAT_ID") or self.chat_id
-        else:
-            self._bot_token = None
-            self._chat_id = None
-
-    @property
-    def bot_token_resolved(self) -> str | None:
-        return getattr(self, "_bot_token", None)
-
-    @property
-    def chat_id_resolved(self) -> str | None:
-        return getattr(self, "_chat_id", None)
 
 
 @dataclass
@@ -250,11 +245,12 @@ class Settings:
             ),
         }
 
-        # Build TelegramConfig
-        telegram_payload = {
-            "enabled": telegram_data.get("enabled", False),
+        telegram_payload: dict[str, Any] = {
             "bot_token": telegram_data.get("bot_token"),
             "chat_id": telegram_data.get("chat_id"),
+            "enabled": telegram_data.get("enabled", True),
+            "signal_notifications": telegram_data.get("signal_notifications", True),
+            "scan_results": telegram_data.get("scan_results", True),
         }
 
         return cls(

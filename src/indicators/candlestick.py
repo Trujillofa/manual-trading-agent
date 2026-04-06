@@ -25,7 +25,9 @@ class CandlePattern:
     description: str
 
 
-def get_candle_body(open_price: float, close: float) -> tuple[float, float, Literal["bullish", "bearish", "doji"]]:
+def get_candle_body(
+    open_price: float, close: float
+) -> tuple[float, float, Literal["bullish", "bearish", "doji"]]:
     """Get candle body size and direction.
 
     Returns:
@@ -68,7 +70,10 @@ def is_hammer(
     upper_shadow = high - max(open_price, close)
 
     # Hammer: long lower shadow, small body at top
-    if lower_shadow >= body * body_ratio_threshold and upper_shadow <= body * shadow_ratio_threshold:
+    if (
+        lower_shadow >= body * body_ratio_threshold
+        and upper_shadow <= body * shadow_ratio_threshold
+    ):
         # Determine location: with trend context, hammer at support is stronger
         confidence = 0.7 if direction == "bullish" else 0.5
 
@@ -106,7 +111,10 @@ def is_shooting_star(
     upper_shadow = high - max(open_price, close)
 
     # Shooting star: long upper shadow, small body at bottom
-    if upper_shadow >= body * body_ratio_threshold and lower_shadow <= body * shadow_ratio_threshold:
+    if (
+        upper_shadow >= body * body_ratio_threshold
+        and lower_shadow <= body * shadow_ratio_threshold
+    ):
         confidence = 0.7 if direction == "bearish" else 0.5
 
         return CandlePattern(
@@ -227,9 +235,18 @@ def is_bearish_engulfing(
 
 
 def is_morning_star(
-    open1: float, high1: float, low1: float, close1: float,
-    open2: float, high2: float, low2: float, close2: float,
-    open3: float, high3: float, low3: float, close3: float,
+    open1: float,
+    high1: float,
+    low1: float,
+    close1: float,
+    open2: float,
+    high2: float,
+    low2: float,
+    close2: float,
+    open3: float,
+    high3: float,
+    low3: float,
+    close3: float,
 ) -> CandlePattern | None:
     """Detect morning star pattern (bullish reversal).
 
@@ -264,14 +281,23 @@ def is_morning_star(
         name="morning_star",
         pattern_type=PatternType.BULLISH,
         confidence=confidence,
-        description=f"Morning Star: 3-candle bullish reversal",
+        description="Morning Star: 3-candle bullish reversal",
     )
 
 
 def is_evening_star(
-    open1: float, high1: float, low1: float, close1: float,
-    open2: float, high2: float, low2: float, close2: float,
-    open3: float, high3: float, low3: float, close3: float,
+    open1: float,
+    high1: float,
+    low1: float,
+    close1: float,
+    open2: float,
+    high2: float,
+    low2: float,
+    close2: float,
+    open3: float,
+    high3: float,
+    low3: float,
+    close3: float,
 ) -> CandlePattern | None:
     """Detect evening star pattern (bearish reversal).
 
@@ -306,7 +332,7 @@ def is_evening_star(
         name="evening_star",
         pattern_type=PatternType.BEARISH,
         confidence=confidence,
-        description=f"Evening Star: 3-candle bearish reversal",
+        description="Evening Star: 3-candle bearish reversal",
     )
 
 
@@ -335,17 +361,17 @@ def detect_patterns(
     patterns: list[CandlePattern] = []
 
     # Check single-candle patterns on last candle
-    o, h, l, c = opens[-1], highs[-1], lows[-1], closes[-1]
+    o, h, lo, c = opens[-1], highs[-1], lows[-1], closes[-1]
 
-    hammer = is_hammer(o, h, l, c)
+    hammer = is_hammer(o, h, lo, c)
     if hammer:
         patterns.append(hammer)
 
-    shooting_star = is_shooting_star(o, h, l, c)
+    shooting_star = is_shooting_star(o, h, lo, c)
     if shooting_star:
         patterns.append(shooting_star)
 
-    doji = is_doji(o, h, l, c)
+    doji = is_doji(o, h, lo, c)
     if doji:
         patterns.append(doji)
 
@@ -353,25 +379,25 @@ def detect_patterns(
     if len(closes) >= 2:
         po, ph, pl, pc = opens[-2], highs[-2], lows[-2], closes[-2]
 
-        bullish_eng = is_bullish_engulfing(po, ph, pl, pc, o, h, l, c)
+        bullish_eng = is_bullish_engulfing(po, ph, pl, pc, o, h, lo, c)
         if bullish_eng:
             patterns.append(bullish_eng)
 
-        bearish_eng = is_bearish_engulfing(po, ph, pl, pc, o, h, l, c)
+        bearish_eng = is_bearish_engulfing(po, ph, pl, pc, o, h, lo, c)
         if bearish_eng:
             patterns.append(bearish_eng)
 
     # Check three-candle patterns
     if len(closes) >= 3:
-        o1, h1, l1, c1 = opens[-3], highs[-3], lows[-3], closes[-3]
-        o2, h2, l2, c2 = opens[-2], highs[-2], lows[-2], closes[-2]
-        o3, h3, l3, c3 = opens[-1], highs[-1], lows[-1], closes[-1]
+        o1, h1, lo1, c1 = opens[-3], highs[-3], lows[-3], closes[-3]
+        o2, h2, lo2, c2 = opens[-2], highs[-2], lows[-2], closes[-2]
+        o3, h3, lo3, c3 = opens[-1], highs[-1], lows[-1], closes[-1]
 
-        morning = is_morning_star(o1, h1, l1, c1, o2, h2, l2, c2, o3, h3, l3, c3)
+        morning = is_morning_star(o1, h1, lo1, c1, o2, h2, lo2, c2, o3, h3, lo3, c3)
         if morning:
             patterns.append(morning)
 
-        evening = is_evening_star(o1, h1, l1, c1, o2, h2, l2, c2, o3, h3, l3, c3)
+        evening = is_evening_star(o1, h1, lo1, c1, o2, h2, lo2, c2, o3, h3, lo3, c3)
         if evening:
             patterns.append(evening)
 

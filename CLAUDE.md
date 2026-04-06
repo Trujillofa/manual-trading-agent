@@ -22,12 +22,19 @@ ruff format src/ tests/
 mypy src/
 
 # CLI usage (all commands use: python -m src.cli <command>)
-python -m src.cli scan --pairs EUR/USD GBP/USD    # scan pairs for signals
-python -m src.cli analyze EUR/USD                  # deep single-pair analysis
+python -m src.cli scan --pairs GBP/USD             # scan pairs for signals
+python -m src.cli analyze GBP/USD                  # deep single-pair analysis
 python -m src.cli news --hours 24                  # upcoming high-impact news
-python -m src.cli backtest --pair EUR/USD --start 2024-01-01 --end 2024-06-01
-python -m src.cli backtest-enhanced --pair EUR/USD  # enhanced with TP/SL simulation
+python -m src.cli dashboard --days 30              # signal dashboard + paper P&L
+python -m src.cli backtest --pair GBP/USD --start 2024-01-01 --end 2024-06-01
+python -m src.cli backtest-enhanced --pair GBP/USD  # enhanced with TP/SL simulation
 python -m src.cli telegram-poll                    # long-running Telegram command listener
+
+# Backtest optimization (Dukascopy M1 data, runs on Hetzner)
+python scripts/run_entry_optimization.py \
+  --pairs "GBP/USD,NZD/USD,AUD/JPY" --days 360 --source dukascopy \
+  --variants V2 --rsi-thresholds 30/70 --buffers 2.0 \
+  --confirm-bars 5 --tp-sl-ratios 1.0:3.0 --adx-threshold 25
 
 # Docker (production on Hetzner)
 docker compose up -d                 # runs scan every 15min + telegram-poll
@@ -40,20 +47,23 @@ docker compose up -d                 # runs scan every 15min + telegram-poll
 ### Signal Pipeline (scan command)
 
 ```
-DataFetcher (yfinance/OANDA) → fetch 1h, 30m, 15m OHLCV per pair
+DataFetcher (yfinance) → fetch 1h, 30m, 15m OHLCV per pair
     ↓
-MTFRSIStrategy → RSI alignment check (>70 or <30 on all 3 TFs)
+V2 Reversal Breakout Check:
+    - RSI 14 alignment (all 3 TFs < 30 or > 70)
+    - Wick through 20-bar LL/HH + close reclaim (buffer 2.0 pips)
+    - Confirmation window: 5 bars after alignment
     + CandlePattern detection (hammer, shooting star, doji)
     + RSI divergence detection (bullish/bearish)
-    + HH/LL breakout confirmation
     ↓
 Validation gates:
+    - ADX trend filter (ADX < 25 = ranging, safe for mean-reversion)
     - NewsChecker (Forex Factory 3-star events → lockout window)
     - Session filter (configurable UTC hours)
     - Cooldown (min time between signals per pair)
-    - Spread filter (if OANDA quote available)
     ↓
 Signal output → signal_audit.jsonl + Telegram notification
+    TP = 1.0 × ATR(14), SL = 3.0 × ATR(14)
 ```
 
 ### Key design decisions
@@ -63,13 +73,24 @@ Signal output → signal_audit.jsonl + Telegram notification
 - **Async throughout**: CLI uses `asyncio.run()`, data fetchers and Telegram use async HTTP clients (httpx/aiohttp). TelegramNotifier falls back to background thread if no event loop.
 - **Graceful degradation**: missing news feed doesn't block scanning, missing OANDA quote skips spread check.
 
-### Strategy rules (from instruction.md)
+### Production config (validated 360-day OOS backtest, 2026-04-03)
 
-- RSI 14 must be >70 or <30 across all three timeframes (1h, 30m, 15m)
-- Entry references: highest high / lowest low over 20-bar lookback
-- Default lot size: 3.0
-- TP ~$500, SL ~$1800 (high-accuracy strategy)
-- 3-star Forex Factory news blocks trading within lockout window
+- **Pairs**: GBP/USD (+1.45%, PF 1.54), NZD/USD (+0.62%, PF 1.24), AUD/JPY (+0.63%, PF 1.16)
+- **Entry variant**: V2 reversal breakout (wick through LL/HH + close reclaim)
+- **RSI thresholds**: 30/70 across all three timeframes (1h, 30m, 15m)
+- **Buffer**: 2.0 pips on breakout level
+- **Confirm bars**: 5 (window after RSI alignment to accept breakout)
+- **TP/SL**: 1.0 ATR / 3.0 ATR (high win-rate, ~74% WR on GBP/USD)
+- **ADX filter**: ADX(14) < 25 on 1h (skip trending markets)
+- **Lot size**: 3.0
+- **News lockout**: 3-star Forex Factory events block trading
+- **Data source**: yfinance (live scanner), Dukascopy M1 (backtests)
+
+### Backtest data
+
+- **Dukascopy fetcher** (`src/data/dukascopy_fetcher.py`): Downloads M1 bi5 binary data, resamples to h1/m30/m15
+- **Optimization script** (`scripts/run_entry_optimization.py`): Grid search over variants, RSI, buffer, confirm bars, TP/SL, ADX
+- All 24 pairs screened over 360 days; only 3 profitable with current config
 
 ## Code Conventions
 

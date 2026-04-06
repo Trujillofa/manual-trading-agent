@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -62,6 +63,21 @@ class StrategyConfig:
     rsi_overbought: float = 70.0
     rsi_oversold: float = 30.0
     lookback_bars: int = 20
+    cooldown_minutes: int = 60
+    session_filter_enabled: bool = True
+    session_allowed_utc: list[str] = field(default_factory=lambda: ["06-17", "12-21"])
+    breakout_buffer_pips: float = 0.0
+    spread_filter_enabled: bool = False
+    max_spread_pips: float = 2.0
+    pair_priorities: dict[str, int] = field(
+        default_factory=lambda: {
+            "EUR/GBP": 100,
+            "USD/JPY": 80,
+            "GBP/USD": 60,
+            "GBP/CHF": 60,
+            "EUR/USD": 40,
+        }
+    )
 
     def __post_init__(self) -> None:
         if self.rsi_period <= 0:
@@ -72,6 +88,10 @@ class StrategyConfig:
             )
         if self.lookback_bars <= 0:
             raise ValueError("strategy.lookback_bars must be greater than 0")
+        if self.cooldown_minutes < 0:
+            raise ValueError("strategy.cooldown_minutes must be >= 0")
+        if self.max_spread_pips < 0:
+            raise ValueError("strategy.max_spread_pips must be >= 0")
 
 
 @dataclass
@@ -133,6 +153,30 @@ class DataConfig:
 
 
 @dataclass
+class TelegramConfig:
+    enabled: bool = False
+    bot_token: str | None = None
+    chat_id: str | None = None
+
+    def __post_init__(self) -> None:
+        # Resolve from environment variables if available
+        if self.enabled:
+            self._bot_token = os.getenv("TELEGRAM_BOT_TOKEN") or self.bot_token
+            self._chat_id = os.getenv("TELEGRAM_CHAT_ID") or self.chat_id
+        else:
+            self._bot_token = None
+            self._chat_id = None
+
+    @property
+    def bot_token_resolved(self) -> str | None:
+        return getattr(self, "_bot_token", None)
+
+    @property
+    def chat_id_resolved(self) -> str | None:
+        return getattr(self, "_chat_id", None)
+
+
+@dataclass
 class Settings:
     trading: TradingConfig = field(default_factory=TradingConfig)
     timeframes: TimeframesConfig = field(default_factory=TimeframesConfig)
@@ -140,6 +184,7 @@ class Settings:
     risk: RiskConfig = field(default_factory=RiskConfig)
     news: NewsConfig = field(default_factory=NewsConfig)
     data: DataConfig = field(default_factory=DataConfig)
+    telegram: TelegramConfig = field(default_factory=TelegramConfig)
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> Settings:
@@ -180,6 +225,7 @@ class Settings:
         risk_data = payload.get("risk", {})
         news_data = payload.get("news", {})
         data_data = payload.get("data", {})
+        telegram_data = payload.get("telegram", {})
         oanda_data = data_data.get("oanda", {}) if isinstance(data_data.get("oanda"), dict) else {}
 
         for section_name, section_data in (
@@ -188,6 +234,7 @@ class Settings:
             ("risk", risk_data),
             ("news", news_data),
             ("data", data_data),
+            ("telegram", telegram_data),
         ):
             if not isinstance(section_data, dict):
                 raise ValueError(f"'{section_name}' must be a YAML object")
@@ -203,6 +250,13 @@ class Settings:
             ),
         }
 
+        # Build TelegramConfig
+        telegram_payload = {
+            "enabled": telegram_data.get("enabled", False),
+            "bot_token": telegram_data.get("bot_token"),
+            "chat_id": telegram_data.get("chat_id"),
+        }
+
         return cls(
             trading=TradingConfig(**trading_payload),
             timeframes=TimeframesConfig(**timeframes_data),
@@ -210,6 +264,7 @@ class Settings:
             risk=RiskConfig(**risk_data),
             news=NewsConfig(**news_data),
             data=DataConfig(**data_payload),
+            telegram=TelegramConfig(**telegram_payload),
         )
 
 

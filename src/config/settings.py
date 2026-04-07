@@ -148,7 +148,7 @@ class TelegramConfig:
     enabled: bool = True
 
     signal_notifications: bool = True
-
+    near_setup_notifications: bool = True
     scan_results: bool = True
 
     def __post_init__(self) -> None:
@@ -256,6 +256,7 @@ class Settings:
             "chat_id": telegram_data.get("chat_id"),
             "enabled": telegram_data.get("enabled", True),
             "signal_notifications": telegram_data.get("signal_notifications", True),
+            "near_setup_notifications": telegram_data.get("near_setup_notifications", True),
             "scan_results": telegram_data.get("scan_results", True),
         }
 

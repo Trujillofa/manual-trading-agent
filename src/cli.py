@@ -815,7 +815,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 f"1h={r1:.1f} 30m={r30:.1f} 15m={r15:.1f}"
             )
 
-        if notifier:
+        if notifier and getattr(settings.telegram, "near_setup_notifications", True):
             changed = False
             active_pairs: set[str] = set(confirmed_pairs)
             for candidate in ranked[:3]:
@@ -903,6 +903,14 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 changed = True
 
             if changed:
+                _save_near_setup_state(near_state)
+            _save_cooldown_state(cooldown_state)
+            _save_alignment_state(alignment_state)
+        elif notifier:
+            # Near/setup notifications disabled: clear stale state so no invalidation alerts
+            # are emitted later if the feature is re-enabled.
+            if near_state:
+                near_state.clear()
                 _save_near_setup_state(near_state)
             _save_cooldown_state(cooldown_state)
             _save_alignment_state(alignment_state)

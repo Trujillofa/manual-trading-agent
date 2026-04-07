@@ -60,5 +60,7 @@ data:
 
 telegram:
   enabled: true
+  signal_notifications: true
+  near_setup_notifications: false
   bot_token: "${TELEGRAM_BOT_TOKEN}"
   chat_id: "${TELEGRAM_CHAT_ID}"

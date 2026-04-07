@@ -445,9 +445,11 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
 
             spread_pips = None
             spread_ok = True
+            pair_spread_limits = getattr(settings.strategy, "spread_limits_pips", {}) or {}
+            max_spread_for_pair = float(pair_spread_limits.get(pair, settings.strategy.max_spread_pips))
             if quote and isinstance(quote.get("spread"), float):
                 spread_pips = float(quote["spread"]) / pip_size
-                spread_ok = spread_pips <= float(settings.strategy.max_spread_pips)
+                spread_ok = spread_pips <= max_spread_for_pair
             elif settings.strategy.spread_filter_enabled:
                 spread_ok = False
 
@@ -482,7 +484,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             print(f"  Breakout SELL(high): {'yes' if breakout_sell else 'no'}")
             if spread_pips is not None:
                 spread_source = quote.get('source', 'live') if isinstance(quote, dict) else 'unknown'
-                print(f"  Spread: {spread_pips:.2f} pips ({'ok' if spread_ok else 'too wide'}, source={spread_source})")
+                print(f"  Spread: {spread_pips:.2f} pips ({'ok' if spread_ok else 'too wide'}, max={max_spread_for_pair:.2f}, source={spread_source})")
             else:
                 print("  Spread: unavailable")
             if adx_1h is not None:

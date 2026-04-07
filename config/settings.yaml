@@ -25,8 +25,12 @@ strategy:
     - "06-17"
     - "12-21"
   breakout_buffer_pips: 0.0
-  spread_filter_enabled: false
+  spread_filter_enabled: true
   max_spread_pips: 2.0
+  spread_limits_pips:
+    GBP/USD: 1.8
+    NZD/USD: 2.0
+    AUD/JPY: 1.5
   pair_priorities:
     EUR/GBP: 100
     USD/JPY: 80

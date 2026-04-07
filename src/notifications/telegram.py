@@ -1,5 +1,7 @@
 """Telegram notifications for manual trading agent."""
 
+from __future__ import annotations
+
 import asyncio
 import importlib
 import logging
@@ -21,7 +23,7 @@ class _HttpxResponse(Protocol):
 
 
 class _HttpxClient(Protocol):
-    async def __aenter__(self) -> "_HttpxClient": ...
+    async def __aenter__(self) -> _HttpxClient: ...
 
     async def __aexit__(
         self,
@@ -143,8 +145,8 @@ class TelegramNotifier:
         entry: float | None = None,
         tp: float | None = None,
         sl: float | None = None,
-        patterns: list["CandlePattern"] | None = None,
-        divergence: "Divergence" | None = None,
+        patterns: list[CandlePattern] | None = None,
+        divergence: Divergence | None = None,
     ) -> None:
         """Send signal alert with enhanced pattern/divergence info."""
         emoji = "🟢" if direction == "BUY" else "🔴"

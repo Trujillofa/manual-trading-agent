@@ -171,7 +171,7 @@ class TelegramCommandHandler:
                     idx = output.find(alt)
                 if idx != -1:
                     block = output[idx:].splitlines()
-                    lines = []
+                    lines: list[str] = []
                     for line in block[:14]:
                         if line.strip() == "" and lines:
                             break

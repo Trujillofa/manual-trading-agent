@@ -27,6 +27,8 @@ dev = [
     "pytest-cov>=4.1",
     "ruff>=0.3",
     "mypy>=1.8",
+    "types-PyYAML>=6.0",
+    "types-requests>=2.32",
 ]
 
 [tool.setuptools.packages.find]

@@ -6,7 +6,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import ClassVar, cast
+from typing import ClassVar, TypeAlias, cast
 
 import pandas as pd
 import yfinance as yf
@@ -19,6 +19,9 @@ except ImportError:
     HAS_HTTPX = False
 
 logger = logging.getLogger(__name__)
+
+RequestParam: TypeAlias = str | int | float | bool | None
+RequestParams: TypeAlias = dict[str, RequestParam]
 
 
 @dataclass
@@ -172,7 +175,7 @@ class DataFetcher:
         outputsize = self._TD_PERIOD_BARS.get(period or "", 200)
 
         import requests
-        params: dict[str, object] = {
+        params: RequestParams = {
             "symbol": td_symbol,
             "interval": td_interval,
             "apikey": self._td_api_key,
@@ -247,7 +250,7 @@ class DataFetcher:
                 "Twelve Data paginated: %s %s %s → %s",
                 td_symbol, td_interval, cursor.strftime("%Y-%m-%d"), chunk_end.strftime("%Y-%m-%d"),
             )
-            params: dict[str, object] = {
+            params: RequestParams = {
                 "symbol": td_symbol,
                 "interval": td_interval,
                 "apikey": self._td_api_key,
@@ -483,7 +486,7 @@ class OandaFetcher:
         instrument = self._to_oanda_instrument(symbol)
         granularity = self.INTERVAL_MAP.get(interval, "H1")
 
-        params: dict[str, object] = {
+        params: RequestParams = {
             "price": "M",  # Midpoint candles
             "granularity": granularity,
         }
@@ -543,7 +546,7 @@ class OandaFetcher:
         instrument = self._to_oanda_instrument(symbol)
         granularity = self.INTERVAL_MAP.get(interval, "H1")
 
-        params: dict[str, object] = {
+        params: RequestParams = {
             "price": "M",
             "granularity": granularity,
         }
@@ -606,7 +609,7 @@ class OandaFetcher:
         api_key = os.getenv("OANDA_API_KEY")
         if not api_key or not HAS_HTTPX:
             return None
-        instrument = self.OANDA_MAP.get(symbol, symbol.replace("/", "_"))
+        instrument = DataFetcher.OANDA_MAP.get(symbol, symbol.replace("/", "_"))
         url = f"{OandaFetcher.BASE_URL_PRACTICE}/accounts/{os.getenv('OANDA_ACCOUNT_ID','')}/pricing"
         params = {"instruments": instrument}
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}

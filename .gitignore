@@ -15,6 +15,7 @@ venv/
 # IDE
 .idea/
 .vscode/
+.codex
 *.swp
 
 # Local configs

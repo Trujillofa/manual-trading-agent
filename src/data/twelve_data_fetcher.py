@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta
-from typing import Literal
+from typing import Any, Literal, TypeAlias, cast
 
 import pandas as pd
 import requests
 
 TWELVE_DATA_BASE_URL = "https://api.twelvedata.com"
 DEFAULT_API_KEY = os.environ.get("TWELVE_DATA_API_KEY", "")
+TimeframeLiteral: TypeAlias = Literal["1min", "5min", "15min", "30min", "1h", "4h", "1d"]
+RequestParam: TypeAlias = str | int | float | bool | None
 
 
 class TwelveDataFetcher:
@@ -37,7 +39,7 @@ class TwelveDataFetcher:
     def fetch(
         self,
         symbol: str,
-        interval: Literal["1min", "5min", "15min", "30min", "1h", "4h", "1d"] = "1h",
+        interval: TimeframeLiteral = "1h",
         start_date: datetime | None = None,
         end_date: datetime | None = None,
         outputsize: int = 5000,
@@ -64,7 +66,7 @@ class TwelveDataFetcher:
         symbol_formatted = f"{symbol_clean[:3]}/{symbol_clean[3:]}"
         endpoint = f"{TWELVE_DATA_BASE_URL}/time_series"
 
-        params = {
+        params: dict[str, RequestParam] = {
             "symbol": symbol_formatted,
             "interval": interval,
             "apikey": self.api_key,
@@ -79,7 +81,7 @@ class TwelveDataFetcher:
         response = requests.get(endpoint, params=params, timeout=30)
         response.raise_for_status()
 
-        data = response.json()
+        data = cast(dict[str, Any], response.json())
 
         if "status" in data and data["status"] == "error":
             raise ValueError(f"Twelve Data API error: {data.get('message', 'Unknown error')}")
@@ -118,7 +120,7 @@ class TwelveDataFetcher:
         symbol: str,
         start_date: datetime,
         end_date: datetime,
-        timeframes: list[str] = None,
+        timeframes: list[str] | None = None,
     ) -> dict[str, pd.DataFrame]:
         """Fetch data for multiple timeframes.
 
@@ -136,8 +138,15 @@ class TwelveDataFetcher:
         result = {}
 
         for tf in timeframes:
+            if tf not in self.TIMEFRAMES:
+                continue
             try:
-                df = self.fetch(symbol, interval=tf, start_date=start_date, end_date=end_date)
+                df = self.fetch(
+                    symbol,
+                    interval=cast(TimeframeLiteral, tf),
+                    start_date=start_date,
+                    end_date=end_date,
+                )
                 if not df.empty:
                     result[tf] = df
             except Exception as e:
@@ -145,7 +154,7 @@ class TwelveDataFetcher:
 
         return result
 
-    def get_quote(self, symbol: str) -> dict:
+    def get_quote(self, symbol: str) -> dict[str, Any]:
         """Get current quote for a forex pair.
 
         Args:
@@ -158,7 +167,7 @@ class TwelveDataFetcher:
             raise ValueError("API key required")
 
         endpoint = f"{TWELVE_DATA_BASE_URL}/quote"
-        params = {
+        params: dict[str, RequestParam] = {
             "symbol": symbol.replace("/", ""),
             "apikey": self.api_key,
         }
@@ -166,14 +175,14 @@ class TwelveDataFetcher:
         response = requests.get(endpoint, params=params, timeout=30)
         response.raise_for_status()
 
-        return response.json()
+        return cast(dict[str, Any], response.json())
 
 
 def get_free_forex_data(
     symbol: str,
     start_date: datetime,
     end_date: datetime,
-    timeframes: list[str] = None,
+    timeframes: list[str] | None = None,
     api_key: str | None = None,
 ) -> dict[str, pd.DataFrame]:
     """Get forex data using available sources.

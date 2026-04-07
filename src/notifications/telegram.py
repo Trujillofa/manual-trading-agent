@@ -9,7 +9,8 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Protocol, cast
 
 if TYPE_CHECKING:
-    pass
+    from src.indicators.candlestick import CandlePattern
+    from src.indicators.rsi import Divergence
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,11 @@ class _HttpxClient(Protocol):
 
 
 HttpxClientFactory = Callable[[], _HttpxClient]
+
+
+class _DivergenceLike(Protocol):
+    strength: float
+    divergence_type: object
 
 
 class TelegramNotifier:
@@ -137,8 +143,8 @@ class TelegramNotifier:
         entry: float | None = None,
         tp: float | None = None,
         sl: float | None = None,
-        patterns: list | None = None,
-        divergence: object | None = None,
+        patterns: list["CandlePattern"] | None = None,
+        divergence: "Divergence" | None = None,
     ) -> None:
         """Send signal alert with enhanced pattern/divergence info."""
         emoji = "🟢" if direction == "BUY" else "🔴"
@@ -158,10 +164,11 @@ class TelegramNotifier:
         div_text = ""
         if divergence and hasattr(divergence, "divergence_type"):
             from src.indicators.rsi import DivergenceType
-            if divergence.divergence_type == DivergenceType.BULLISH:
-                div_text += f"\n📈 Bullish Divergence (strength: {divergence.strength:.2f})"
-            elif divergence.divergence_type == DivergenceType.BEARISH:
-                div_text += f"\n📉 Bearish Divergence (strength: {divergence.strength:.2f})"
+            typed_divergence = cast(_DivergenceLike, divergence)
+            if typed_divergence.divergence_type == DivergenceType.BULLISH:
+                div_text += f"\n📈 Bullish Divergence (strength: {typed_divergence.strength:.2f})"
+            elif typed_divergence.divergence_type == DivergenceType.BEARISH:
+                div_text += f"\n📉 Bearish Divergence (strength: {typed_divergence.strength:.2f})"
 
         # Build message with entry/TP/SL if provided
         if entry is not None and tp is not None and sl is not None:

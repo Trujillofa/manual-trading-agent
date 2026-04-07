@@ -11,7 +11,7 @@ import sys
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, TypedDict, cast
 
 from src.backtest.engine import BacktestEngine
 from src.config import get_settings
@@ -39,12 +39,12 @@ from src.strategy.multi_timeframe import MTFRSIStrategy
 # V2 = reversal breakout (BUY wick through + close reclaim, SELL wick through + close reject)
 # buffer_pips = pip buffer on breakout threshold
 # confirm_bars = max bars after MTF alignment to accept breakout (0 = immediate only)
-CONFIRMATION_PROFILES: dict[str, dict[str, object]] = {
+CONFIRMATION_PROFILES: dict[str, ConfirmationProfile] = {
     "GBP/USD": {"variant": "V2", "buffer_pips": 2.0, "confirm_bars": 5},
 }
 
 # Default profile for pairs without a specific one
-DEFAULT_CONFIRMATION_PROFILE: dict[str, object] = {
+DEFAULT_CONFIRMATION_PROFILE: ConfirmationProfile = {
     "variant": "V2", "buffer_pips": 2.0, "confirm_bars": 5,
 }
 
@@ -68,14 +68,67 @@ DEFAULT_SPREAD_PIPS: dict[str, float] = {
 }
 
 
-def _get_static_spread_quote(pair: str, pip_size: float) -> dict[str, float] | None:
+class ConfirmationProfile(TypedDict):
+    variant: str
+    buffer_pips: float
+    confirm_bars: int
+
+
+class SpreadQuote(TypedDict, total=False):
+    bid: float
+    ask: float
+    spread: float
+    source: str
+
+
+class NearStateRecord(TypedDict, total=False):
+    fingerprint: str
+    sent_at: int
+    kind: str
+
+
+class CooldownStateRecord(TypedDict, total=False):
+    until: int
+
+
+class AlignmentStateRecord(TypedDict, total=False):
+    direction: str
+    bars: int
+
+
+class MicroContext(TypedDict):
+    rsi_5m: float | None
+    rsi_1m: float | None
+    execution_note: str | None
+
+
+class NearCandidate(TypedDict):
+    pair: str
+    direction: str
+    distance: float
+    remaining: int
+    missing_timeframes: list[str]
+    aligned: bool
+    breakout_pending: bool
+    rsi_1h: float
+    rsi_30m: float
+    rsi_15m: float
+    rsi_5m: float | None
+    rsi_1m: float | None
+    patterns: list[str]
+    bullish_div: float | None
+    bearish_div: float | None
+    price: float
+
+
+def _get_static_spread_quote(pair: str, pip_size: float) -> SpreadQuote | None:
     pips = DEFAULT_SPREAD_PIPS.get(pair.upper()) or DEFAULT_SPREAD_PIPS.get(pair)
     if pips is None:
         return None
     return {"spread": float(pips) * pip_size, "source": "static"}
 
 
-def _get_ctrader_spread(pair: str) -> dict[str, float] | None:
+def _get_ctrader_spread(pair: str) -> SpreadQuote | None:
     """Fetch live bid/ask from the cTrader spread endpoint.
 
     Expected endpoint: http://host.docker.internal:28081/spread/GBPUSD
@@ -90,6 +143,8 @@ def _get_ctrader_spread(pair: str) -> dict[str, float] | None:
     try:
         with urllib.request.urlopen(url, timeout=5) as resp:
             payload = json.loads(resp.read().decode())
+        if not isinstance(payload, dict):
+            return None
         bid = payload.get("bid")
         ask = payload.get("ask")
         spread = payload.get("spread")
@@ -100,11 +155,11 @@ def _get_ctrader_spread(pair: str) -> dict[str, float] | None:
     return None
 
 
-def _get_confirmation_profile(pair: str) -> dict[str, object]:
+def _get_confirmation_profile(pair: str) -> ConfirmationProfile:
     return CONFIRMATION_PROFILES.get(pair, DEFAULT_CONFIRMATION_PROFILE)
 
 
-def _profile_label(profile: dict[str, object]) -> str:
+def _profile_label(profile: ConfirmationProfile) -> str:
     v = profile["variant"]
     b = profile["buffer_pips"]
     c = profile["confirm_bars"]
@@ -112,7 +167,7 @@ def _profile_label(profile: dict[str, object]) -> str:
 
 
 def _check_breakout_with_profile(
-    profile: dict[str, object],
+    profile: ConfirmationProfile,
     direction: str,
     close_price: float,
     hh: float | None,
@@ -122,8 +177,8 @@ def _check_breakout_with_profile(
     bar_low: float | None = None,
 ) -> bool:
     """Check breakout using the pair's confirmation profile."""
-    buffer_pips = float(profile.get("buffer_pips", 0.0))
-    variant = str(profile.get("variant", "V2"))
+    buffer_pips = profile["buffer_pips"]
+    variant = profile["variant"]
     buffer_pct = (buffer_pips * pip_size) / close_price if close_price else 0.0
 
     if variant == "V1":
@@ -161,17 +216,22 @@ def _near_setup_state_path() -> Path:
     return Path("/app/logs/near_setup_state.json")
 
 
-def _load_near_setup_state() -> dict[str, dict[str, object]]:
-    path = _near_setup_state_path()
+def _load_json_mapping(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
+    return cast(dict[str, Any], payload) if isinstance(payload, dict) else {}
 
 
-def _save_near_setup_state(state: dict[str, dict[str, object]]) -> None:
+def _load_near_setup_state() -> dict[str, NearStateRecord]:
+    path = _near_setup_state_path()
+    return cast(dict[str, NearStateRecord], _load_json_mapping(path))
+
+
+def _save_near_setup_state(state: dict[str, NearStateRecord]) -> None:
     path = _near_setup_state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -181,17 +241,12 @@ def _alignment_state_path() -> Path:
     return Path("/app/logs/alignment_state.json")
 
 
-def _load_alignment_state() -> dict[str, dict[str, object]]:
+def _load_alignment_state() -> dict[str, AlignmentStateRecord]:
     path = _alignment_state_path()
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    return cast(dict[str, AlignmentStateRecord], _load_json_mapping(path))
 
 
-def _save_alignment_state(state: dict[str, dict[str, object]]) -> None:
+def _save_alignment_state(state: dict[str, AlignmentStateRecord]) -> None:
     path = _alignment_state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -201,17 +256,12 @@ def _cooldown_state_path() -> Path:
     return Path("/app/logs/cooldown_state.json")
 
 
-def _load_cooldown_state() -> dict[str, dict[str, object]]:
+def _load_cooldown_state() -> dict[str, CooldownStateRecord]:
     path = _cooldown_state_path()
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    return cast(dict[str, CooldownStateRecord], _load_json_mapping(path))
 
 
-def _save_cooldown_state(state: dict[str, dict[str, object]]) -> None:
+def _save_cooldown_state(state: dict[str, CooldownStateRecord]) -> None:
     path = _cooldown_state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -255,11 +305,11 @@ def _priority_for_pair(settings, pair: str) -> int:
     return int(priorities.get(pair, 50))
 
 
-def _fetch_micro_context(fetcher: DataFetcher, symbol: str, rsi_period: int) -> dict[str, float | str | None]:
+def _fetch_micro_context(fetcher: DataFetcher, symbol: str, rsi_period: int) -> MicroContext:
     """Fetch 5m/1m RSI for micro-timing context. Suppresses yfinance noise on cross pairs."""
     import logging as _logging
 
-    context: dict[str, float | str | None] = {
+    context: MicroContext = {
         "rsi_5m": None,
         "rsi_1m": None,
         "execution_note": None,
@@ -366,7 +416,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     lookback = int(settings.strategy.lookback_bars)
 
     print(f"\n[SCAN] Scanning {len(selected_pairs)} pairs (MTF: 1h + 30m + 15m)...")
-    near_candidates: list[dict[str, object]] = []
+    near_candidates: list[NearCandidate] = []
     near_state = _load_near_setup_state() if notifier else {}
     cooldown_state = _load_cooldown_state()
     alignment_state = _load_alignment_state()
@@ -418,15 +468,18 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             )
             is_ranging = adx_1h is not None and adx_1h < ADX_TREND_THRESHOLD
             # Spread: requires real bid/ask source (OANDA)
-            quote = None
+            quote: SpreadQuote | None = None
             try:
                 from src.data.fetcher import OandaFetcher
                 if os.getenv("OANDA_API_KEY") and os.getenv("OANDA_ACCOUNT_ID"):
-                    quote = OandaFetcher(
-                        api_key=os.getenv("OANDA_API_KEY"),
-                        account_id=os.getenv("OANDA_ACCOUNT_ID"),
-                        practice=True,
-                    ).get_bid_ask_quote(pair)
+                    quote = cast(
+                        SpreadQuote | None,
+                        OandaFetcher(
+                            api_key=os.getenv("OANDA_API_KEY"),
+                            account_id=os.getenv("OANDA_ACCOUNT_ID"),
+                            practice=True,
+                        ).get_bid_ask_quote(pair),
+                    )
             except Exception:
                 quote = None
 
@@ -483,7 +536,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             print(f"  Breakout BUY(low): {'yes' if breakout_buy else 'no'}")
             print(f"  Breakout SELL(high): {'yes' if breakout_sell else 'no'}")
             if spread_pips is not None:
-                spread_source = quote.get('source', 'live') if isinstance(quote, dict) else 'unknown'
+                spread_source = quote.get("source", "live") if quote is not None else "unknown"
                 print(f"  Spread: {spread_pips:.2f} pips ({'ok' if spread_ok else 'too wide'}, max={max_spread_for_pair:.2f}, source={spread_source})")
             else:
                 print("  Spread: unavailable")
@@ -526,18 +579,18 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 ]
             remaining = len(missing_timeframes)
 
-            micro_context: dict[str, float | str | None] = {"rsi_5m": None, "rsi_1m": None, "execution_note": None}
+            micro_context: MicroContext = {"rsi_5m": None, "rsi_1m": None, "execution_note": None}
             if remaining == 1 or near_distance <= 4.0:
                 micro_context = _fetch_micro_context(fetcher, symbol, rsi_period)
 
             aligned = bool(all_oversold or all_overbought)
 
             # Track alignment age for confirm_bars window
-            confirm_bars = int(profile.get("confirm_bars", 0))
+            confirm_bars = profile["confirm_bars"]
             if aligned:
                 prev_align = alignment_state.get(pair)
                 if prev_align and str(prev_align.get("direction", "")) == near_direction:
-                    bars_aligned = int(prev_align.get("bars", 0)) + 1
+                    bars_aligned = prev_align.get("bars", 0) + 1
                 else:
                     bars_aligned = 0
                 alignment_state[pair] = {"direction": near_direction, "bars": bars_aligned}
@@ -582,7 +635,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 session_ok = _session_allowed(now_utc, list(settings.strategy.session_allowed_utc))
             news_blocked = settings.news.enabled and news_checker.is_blocked(pair, now_utc)
             cooldown_info = cooldown_state.get(pair, {})
-            cooldown_until = int(cooldown_info.get("until", 0))
+            cooldown_until = cooldown_info.get("until", 0)
             cooldown_active = now_ts < cooldown_until
 
             signal_direction: Literal["BUY", "SELL", None] = None
@@ -732,17 +785,17 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 micro_context = _fetch_micro_context(fetcher, symbol, rsi_period)
                 exec_note = _execution_note(
                     signal_direction,
-                    micro_context.get("rsi_5m") if isinstance(micro_context.get("rsi_5m"), float) else None,
-                    micro_context.get("rsi_1m") if isinstance(micro_context.get("rsi_1m"), float) else None,
+                    micro_context["rsi_5m"],
+                    micro_context["rsi_1m"],
                 )
 
                 print(f"     Entry: {entry:.5f}")
                 print(f"     TP: {tp:.5f}")
                 print(f"     SL: {sl:.5f}")
-                if isinstance(micro_context.get('rsi_5m'), float):
-                    print(f"     RSI 5m: {float(micro_context['rsi_5m']):.1f}")
-                if isinstance(micro_context.get('rsi_1m'), float):
-                    print(f"     RSI 1m: {float(micro_context['rsi_1m']):.1f}")
+                if isinstance(micro_context["rsi_5m"], float):
+                    print(f"     RSI 5m: {micro_context['rsi_5m']:.1f}")
+                if isinstance(micro_context["rsi_1m"], float):
+                    print(f"     RSI 1m: {micro_context['rsi_1m']:.1f}")
                 print(f"     Execution: {exec_note}")
 
                 # Send Telegram notification
@@ -797,7 +850,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     if near_candidates:
         ranked = sorted(
             near_candidates,
-            key=lambda x: (float(x["distance"]), -_priority_for_pair(settings, str(x["pair"]))),
+            key=lambda candidate: (candidate["distance"], -_priority_for_pair(settings, candidate["pair"])),
         )
         print("\n[CLOSEST MTF SETUPS]")
         for candidate in ranked[:10]:
@@ -807,7 +860,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             r1 = float(candidate["rsi_1h"])
             r30 = float(candidate["rsi_30m"])
             r15 = float(candidate["rsi_15m"])
-            remaining = int(candidate["remaining"])
+            remaining = candidate["remaining"]
             missing = ",".join(candidate["missing_timeframes"])
             label = "aligned_pending_breakout" if bool(candidate.get("breakout_pending")) else ("near" if remaining > 0 else "aligned")
             print(
@@ -819,16 +872,16 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             changed = False
             active_pairs: set[str] = set(confirmed_pairs)
             for candidate in ranked[:3]:
-                distance = float(candidate["distance"])
-                pair = str(candidate["pair"])
-                direction = str(candidate["direction"])
-                r1 = float(candidate["rsi_1h"])
-                r30 = float(candidate["rsi_30m"])
-                r15 = float(candidate["rsi_15m"])
+                distance = candidate["distance"]
+                pair = candidate["pair"]
+                direction = candidate["direction"]
+                r1 = candidate["rsi_1h"]
+                r30 = candidate["rsi_30m"]
+                r15 = candidate["rsi_15m"]
                 r5 = candidate.get("rsi_5m")
                 r1m = candidate.get("rsi_1m")
-                remaining = int(candidate["remaining"])
-                missing = list(candidate["missing_timeframes"])
+                remaining = candidate["remaining"]
+                missing_timeframes = candidate["missing_timeframes"]
                 breakout_pending = bool(candidate.get("breakout_pending"))
                 qualifies_near = distance <= 4.0 or remaining == 1 or breakout_pending
                 if not qualifies_near:
@@ -844,11 +897,11 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     should_send = True
                 else:
                     prev_fp = str(prev.get("fingerprint", ""))
-                    prev_ts = int(prev.get("sent_at", 0))
+                    prev_ts = prev.get("sent_at", 0)
                     if prev_fp != fingerprint or now_ts - prev_ts >= 6 * 3600:
                         should_send = True
                 if should_send:
-                    missing_txt = ", ".join(missing) if missing else "none"
+                    missing_txt = ", ".join(missing_timeframes) if missing_timeframes else "none"
                     micro_lines = []
                     if isinstance(r5, float):
                         micro_lines.append(f"RSI 5m: `{r5:.1f}`")

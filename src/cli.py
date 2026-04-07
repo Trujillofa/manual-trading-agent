@@ -51,6 +51,54 @@ DEFAULT_CONFIRMATION_PROFILE: dict[str, object] = {
 # ADX threshold: only take mean-reversion signals when ADX < this value (ranging market)
 ADX_TREND_THRESHOLD = 25.0
 
+# Conservative fallback spreads (pips) when no live source is available.
+DEFAULT_SPREAD_PIPS: dict[str, float] = {
+    'EUR/USD': 0.8,
+    'GBP/USD': 1.2,
+    'USD/JPY': 0.9,
+    'USD/CHF': 1.2,
+    'USD/CAD': 1.4,
+    'AUD/USD': 1.1,
+    'NZD/USD': 1.4,
+    'EUR/JPY': 1.3,
+    'GBP/JPY': 2.1,
+    'EUR/GBP': 1.0,
+    'NZD/JPY': 1.9,
+    'AUD/JPY': 1.6,
+}
+
+
+def _get_static_spread_quote(pair: str, pip_size: float) -> dict[str, float] | None:
+    pips = DEFAULT_SPREAD_PIPS.get(pair.upper()) or DEFAULT_SPREAD_PIPS.get(pair)
+    if pips is None:
+        return None
+    return {"spread": float(pips) * pip_size, "source": "static"}
+
+
+def _get_ctrader_spread(pair: str) -> dict[str, float] | None:
+    """Fetch live bid/ask from the cTrader spread endpoint.
+
+    Expected endpoint: http://host.docker.internal:28081/spread/GBPUSD
+    Returns {bid, ask, spread} or None on failure.
+    """
+    import urllib.error
+    import urllib.request
+
+    base_url = os.getenv("CTRADER_SPREAD_URL", "http://host.docker.internal:28081")
+    normalized = pair.upper().replace("/", "")
+    url = f"{base_url.rstrip('/')}/spread/{normalized}"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            payload = json.loads(resp.read().decode())
+        bid = payload.get("bid")
+        ask = payload.get("ask")
+        spread = payload.get("spread")
+        if isinstance(bid, (int, float)) and isinstance(ask, (int, float)) and isinstance(spread, (int, float)):
+            return {"bid": float(bid), "ask": float(ask), "spread": float(spread)}
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
+        return None
+    return None
+
 
 def _get_confirmation_profile(pair: str) -> dict[str, object]:
     return CONFIRMATION_PROFILES.get(pair, DEFAULT_CONFIRMATION_PROFILE)
@@ -381,6 +429,20 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     ).get_bid_ask_quote(pair)
             except Exception:
                 quote = None
+
+            # Fallback 1: try cTrader spread server
+            if quote is None:
+                try:
+                    quote = _get_ctrader_spread(pair)
+                    if quote is not None:
+                        quote["source"] = quote.get("source", "ctrader")
+                except Exception:
+                    pass
+
+            # Fallback 2: conservative static spread defaults
+            if quote is None:
+                quote = _get_static_spread_quote(pair, pip_size)
+
             spread_pips = None
             spread_ok = True
             if quote and isinstance(quote.get("spread"), float):
@@ -419,7 +481,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             print(f"  Breakout BUY(low): {'yes' if breakout_buy else 'no'}")
             print(f"  Breakout SELL(high): {'yes' if breakout_sell else 'no'}")
             if spread_pips is not None:
-                print(f"  Spread: {spread_pips:.2f} pips ({'ok' if spread_ok else 'too wide'})")
+                spread_source = quote.get('source', 'live') if isinstance(quote, dict) else 'unknown'
+                print(f"  Spread: {spread_pips:.2f} pips ({'ok' if spread_ok else 'too wide'}, source={spread_source})")
             else:
                 print("  Spread: unavailable")
             if adx_1h is not None:

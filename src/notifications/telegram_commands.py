@@ -114,7 +114,7 @@ class TelegramCommandHandler:
             "Mode: `paper`\n"
             "Scanner: `MTF RSI (1h+30m+15m)`\n"
             "Breakout check: `enabled`\n"
-            "Spread source: `OANDA if configured, otherwise unavailable`\n"
+            "Spread source: `cTrader live endpoint -> OANDA if configured -> static fallback`\n"
             f"News source: `{source}`\n"
             f"Blocked currencies now: `{blocked}`\n"
             "Commands: `online`\n"

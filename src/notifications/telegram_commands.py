@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +15,7 @@ from src.news.news_checker import NewsChecker
 
 OFFSET_PATH = Path("/app/logs/telegram_update_offset.json")
 SCAN_LOG_PATH = Path("/app/logs/scan.log")
+logger = logging.getLogger(__name__)
 
 
 class TelegramCommandHandler:
@@ -50,10 +52,16 @@ class TelegramCommandHandler:
 
     async def send_message(self, text: str) -> None:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            await client.post(
+            response = await client.post(
                 f"{self.base_url}/sendMessage",
                 json={"chat_id": self.chat_id, "text": text, "parse_mode": "Markdown"},
             )
+            if not response.is_success:
+                logger.error(
+                    "Telegram command reply failed: status=%s body=%s",
+                    response.status_code,
+                    response.text,
+                )
 
     def _read_scan_log(self) -> str:
         if not SCAN_LOG_PATH.exists():

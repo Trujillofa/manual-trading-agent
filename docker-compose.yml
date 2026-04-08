@@ -15,7 +15,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # Run scan every 15 minutes + poll Telegram commands continuously
-    entrypoint: ["/bin/sh", "-c", "python -m src.cli telegram-poll >> /app/logs/telegram.log 2>&1 & while true; do echo '===' $(date) '===' >> /app/logs/scan.log; python -m src.cli scan >> /app/logs/scan.log 2>&1; sleep 900; done"]
+    entrypoint: ["/bin/sh", "-c", "python -u -m src.cli telegram-poll >> /app/logs/telegram.log 2>&1 & while true; do echo '===' $(date) '===' >> /app/logs/scan.log; python -u -m src.cli scan >> /app/logs/scan.log 2>&1; sleep 900; done"]
     healthcheck:
       test: ["CMD", "test", "-f", "/app/logs/scan.log"]
       interval: 5m

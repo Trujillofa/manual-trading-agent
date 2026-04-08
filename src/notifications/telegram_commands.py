@@ -94,7 +94,7 @@ class TelegramCommandHandler:
         lines = self._extract_section("[CLOSEST MTF SETUPS]", max_lines=10)
         if not lines:
             return "No watchlist section found yet."
-        formatted = "\n".join(f"• {line}" for line in lines[:5])
+        formatted = "\n".join(f"• `{line}`" for line in lines[:5])
         return f"*Current Watchlist*\n\n{formatted}"
 
     def _extract_last_signal(self) -> str:
@@ -109,7 +109,8 @@ class TelegramCommandHandler:
         lines = [line.strip() for line in snippet.splitlines() if line.strip()]
         # Keep last relevant chunk
         lines = lines[-8:]
-        return "*Latest Confirmed Signal*\n\n" + "\n".join(lines)
+        formatted = "\n".join(f"`{line}`" for line in lines)
+        return f"*Latest Confirmed Signal*\n\n{formatted}"
 
     def _extract_status(self) -> str:
         lines = self._extract_section("[CLOSEST MTF SETUPS]", max_lines=3)
@@ -183,14 +184,15 @@ class TelegramCommandHandler:
                     for line in block[:14]:
                         if line.strip() == "" and lines:
                             break
-                        lines.append(line.rstrip())
+                        lines.append(f"`{line.rstrip()}`")
                     return "*Pair Review*\n\n" + "\n".join(lines)
             idx = output.rfind("[CLOSEST MTF SETUPS]")
             if idx != -1:
                 tail = output[idx:].splitlines()
                 lines = [line.strip() for line in tail[1:6] if line.startswith("  ")]
                 if lines:
-                    return "*Fresh Scan Complete*\n\n" + "\n".join(f"• {line}" for line in lines)
+                    formatted = "\n".join(f"• `{line}`" for line in lines)
+                    return f"*Fresh Scan Complete*\n\n{formatted}"
             return "Fresh scan completed, but no ranked setups were found."
         except Exception as exc:
             return f"Fresh scan failed: `{exc}`"

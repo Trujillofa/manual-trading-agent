@@ -149,6 +149,7 @@ class TelegramConfig:
 
     signal_notifications: bool = True
     near_setup_notifications: bool = True
+    aligned_pending_notifications: bool = True
     scan_results: bool = True
 
     def __post_init__(self) -> None:
@@ -257,6 +258,7 @@ class Settings:
             "enabled": telegram_data.get("enabled", True),
             "signal_notifications": telegram_data.get("signal_notifications", True),
             "near_setup_notifications": telegram_data.get("near_setup_notifications", True),
+            "aligned_pending_notifications": telegram_data.get("aligned_pending_notifications", True),
             "scan_results": telegram_data.get("scan_results", True),
         }
 

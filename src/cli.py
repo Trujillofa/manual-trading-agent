@@ -868,7 +868,13 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 f"1h={r1:.1f} 30m={r30:.1f} 15m={r15:.1f}"
             )
 
-        if notifier and getattr(settings.telegram, "near_setup_notifications", True):
+        near_notifications_enabled = getattr(settings.telegram, "near_setup_notifications", True)
+        aligned_pending_notifications_enabled = getattr(
+            settings.telegram,
+            "aligned_pending_notifications",
+            True,
+        )
+        if notifier and (near_notifications_enabled or aligned_pending_notifications_enabled):
             changed = False
             active_pairs: set[str] = set(confirmed_pairs)
             for candidate in ranked[:3]:
@@ -883,8 +889,13 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 remaining = candidate["remaining"]
                 missing_timeframes = candidate["missing_timeframes"]
                 breakout_pending = bool(candidate.get("breakout_pending"))
-                qualifies_near = distance <= 4.0 or remaining == 1 or breakout_pending
-                if not qualifies_near:
+                qualifies_near = distance <= 4.0 or remaining == 1
+                should_track_candidate = (
+                    breakout_pending and aligned_pending_notifications_enabled
+                ) or (
+                    not breakout_pending and qualifies_near and near_notifications_enabled
+                )
+                if not should_track_candidate:
                     continue
                 active_pairs.add(pair)
                 state_kind = "aligned_pending_breakout" if breakout_pending else "near"
@@ -943,15 +954,20 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 if not prev:
                     continue
                 kind = str(prev.get("kind", "near"))
+                notifications_enabled_for_kind = (
+                    (kind == "near" and near_notifications_enabled)
+                    or (kind == "aligned_pending_breakout" and aligned_pending_notifications_enabled)
+                )
                 if kind == "near":
                     status = "near setup faded before confirmation"
                 elif kind == "aligned_pending_breakout":
                     status = "MTF alignment remained/changed but breakout confirmation is no longer pending"
                 else:
                     status = "entry condition no longer active"
-                await notifier.send(
-                    f"❌ *Setup Invalidated*\n\nPair: `{pair.replace('/', '')}`\nStatus: `{status}`"
-                )
+                if notifications_enabled_for_kind:
+                    await notifier.send(
+                        f"❌ *Setup Invalidated*\n\nPair: `{pair.replace('/', '')}`\nStatus: `{status}`"
+                    )
                 near_state.pop(pair, None)
                 changed = True
 
@@ -960,8 +976,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             _save_cooldown_state(cooldown_state)
             _save_alignment_state(alignment_state)
         elif notifier:
-            # Near/setup notifications disabled: clear stale state so no invalidation alerts
-            # are emitted later if the feature is re-enabled.
+            # Near and aligned-pending notifications disabled: clear stale state so no
+            # invalidation alerts are emitted later if the features are re-enabled.
             if near_state:
                 near_state.clear()
                 _save_near_setup_state(near_state)

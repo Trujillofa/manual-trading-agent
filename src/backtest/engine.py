@@ -1,8 +1,23 @@
-"""Backtesting engine for MTF RSI strategy."""
+"""Backtesting engine for MTF RSI strategy.
+
+.. deprecated::
+    This module is DEPRECATED. Use ``enhanced_engine.py`` instead.
+    Known bug: line 177 uses ``random.random()`` for PnL calculation,
+    producing unreliable backtest results. This file is kept for
+    reference only and will be removed in a future cleanup.
+"""
 
 from __future__ import annotations
 
 import random
+import warnings
+
+warnings.warn(
+    "backtest.engine is deprecated and has known bugs (random PnL). "
+    "Use backtest.enhanced_engine instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal

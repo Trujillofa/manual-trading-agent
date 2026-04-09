@@ -27,8 +27,33 @@ import pandas as pd
 
 from src.data.dukascopy_fetcher import get_multi_timeframe_data_dukascopy
 from src.data.fetcher import DataFetcher
+from src.indicators.adx import calculate_adx
 from src.indicators.high_low import previous_rolling_highest_high, previous_rolling_lowest_low
 from src.indicators.rsi import calculate_rsi
+
+# Default spread in pips per pair (used when no live spread available)
+DEFAULT_SPREAD_PIPS: dict[str, float] = {
+    "EUR/USD": 1.0,
+    "GBP/USD": 1.5,
+    "USD/JPY": 1.2,
+    "USD/CHF": 1.5,
+    "AUD/USD": 1.2,
+    "NZD/USD": 1.8,
+    "USD/CAD": 1.5,
+    "EUR/GBP": 1.2,
+    "EUR/JPY": 1.5,
+    "GBP/JPY": 2.5,
+    "EUR/CHF": 1.8,
+    "EUR/CAD": 2.0,
+    "GBP/CHF": 2.0,
+    "AUD/CAD": 2.0,
+    "AUD/JPY": 1.8,
+    "NZD/JPY": 2.0,
+    "GBP/AUD": 2.5,
+    "EUR/AUD": 2.0,
+}
+
+ADX_TREND_THRESHOLD = 25.0
 
 
 def _fetch_dukascopy_mtf(pair: str, days: int) -> dict[str, pd.DataFrame]:
@@ -39,7 +64,10 @@ def _fetch_dukascopy_mtf(pair: str, days: int) -> dict[str, pd.DataFrame]:
 
     print(f"  Downloading {days}d of M1 data from Dukascopy (this may take a while)...")
     raw = get_multi_timeframe_data_dukascopy(
-        symbol, start, end, timeframes=["h1", "m30", "m15"],
+        symbol,
+        start,
+        end,
+        timeframes=["h1", "m30", "m15"],
     )
 
     result: dict[str, pd.DataFrame] = {}
@@ -111,8 +139,11 @@ def run_variant(
     rsi_overbought = 70.0
     rsi_oversold = 30.0
     lookback = 20
-    risk_per_trade = 0.02
     reward_ratio = 1.5
+    sl_atr_multiplier = 2.0
+    pip_size = 0.01 if "JPY" in pair else 0.0001
+    spread_pips = DEFAULT_SPREAD_PIPS.get(pair, 2.0)
+    spread_price = spread_pips * pip_size
     max_hold_bars = 16  # 4h on 15m bars
     balance = 10000.0
     peak = balance
@@ -137,7 +168,7 @@ def run_variant(
         high = highs[i]
         low = lows[i]
 
-        rsi_15 = calculate_rsi(closes[max(0, i - 50): i + 1], 14)
+        rsi_15 = calculate_rsi(closes[max(0, i - 50) : i + 1], 14)
         rsi_30 = latest_rsi_at_or_before(data_30m, ts, 14)
         rsi_1h = latest_rsi_at_or_before(data_1h, ts, 14)
         if rsi_15 is None or rsi_30 is None or rsi_1h is None:
@@ -149,12 +180,24 @@ def run_variant(
         if hh_prev is None or ll_prev is None or atr is None:
             continue
 
-        pip_size = 0.01 if "JPY" in pair else 0.0001
         up_trigger = hh_prev + buffer_pips * pip_size
         down_trigger = ll_prev - buffer_pips * pip_size
 
+        adx_window = 2 * 14 + 1
+        if i >= adx_window:
+            adx = calculate_adx(
+                highs[i - adx_window + 1 : i + 1],
+                lows[i - adx_window + 1 : i + 1],
+                closes[i - adx_window + 1 : i + 1],
+                period=14,
+            )
+            if adx is not None and adx >= ADX_TREND_THRESHOLD:
+                continue
+
         all_oversold = rsi_1h < rsi_oversold and rsi_30 < rsi_oversold and rsi_15 < rsi_oversold
-        all_overbought = rsi_1h > rsi_overbought and rsi_30 > rsi_overbought and rsi_15 > rsi_overbought
+        all_overbought = (
+            rsi_1h > rsi_overbought and rsi_30 > rsi_overbought and rsi_15 > rsi_overbought
+        )
 
         # Track alignment age
         aligned = all_oversold or all_overbought
@@ -212,7 +255,11 @@ def run_variant(
                 exit_price = close
 
             if exit_price is not None:
-                pnl_pct = (exit_price - entry_price) / entry_price if position == "buy" else (entry_price - exit_price) / entry_price
+                pnl_pct = (
+                    (exit_price - entry_price) / entry_price
+                    if position == "buy"
+                    else (entry_price - exit_price) / entry_price
+                )
                 pnl = balance * pnl_pct
                 balance += pnl
                 trade_pnls.append(pnl)
@@ -224,14 +271,14 @@ def run_variant(
         # open new trade only if flat
         if position is None and current_signal is not None:
             position = current_signal
-            entry_price = close
+            entry_price = close + spread_price if current_signal == "buy" else close - spread_price
             entry_idx = i
             if position == "buy":
                 tp = entry_price + atr * reward_ratio
-                sl = entry_price - atr * 2.0
+                sl = entry_price - atr * sl_atr_multiplier
             else:
                 tp = entry_price - atr * reward_ratio
-                sl = entry_price + atr * 2.0
+                sl = entry_price + atr * sl_atr_multiplier
 
     wins = sum(1 for pnl in trade_pnls if pnl > 0)
     losses = sum(1 for pnl in trade_pnls if pnl <= 0)
@@ -267,16 +314,39 @@ def write_outputs(results: list[VariantResult], output_dir: Path) -> tuple[Path,
 
     with csv_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            "pair", "variant", "trades", "wins", "losses", "win_rate",
-            "total_pnl", "total_pnl_pct", "profit_factor", "avg_win", "avg_loss", "max_drawdown_pct",
-        ])
+        writer.writerow(
+            [
+                "pair",
+                "variant",
+                "trades",
+                "wins",
+                "losses",
+                "win_rate",
+                "total_pnl",
+                "total_pnl_pct",
+                "profit_factor",
+                "avg_win",
+                "avg_loss",
+                "max_drawdown_pct",
+            ]
+        )
         for r in results:
-            writer.writerow([
-                r.pair, r.variant, r.trades, r.wins, r.losses, f"{r.win_rate:.4f}",
-                f"{r.total_pnl:.2f}", f"{r.total_pnl_pct:.2f}", f"{r.profit_factor:.2f}",
-                f"{r.avg_win:.2f}", f"{r.avg_loss:.2f}", f"{r.max_drawdown_pct:.2f}",
-            ])
+            writer.writerow(
+                [
+                    r.pair,
+                    r.variant,
+                    r.trades,
+                    r.wins,
+                    r.losses,
+                    f"{r.win_rate:.4f}",
+                    f"{r.total_pnl:.2f}",
+                    f"{r.total_pnl_pct:.2f}",
+                    f"{r.profit_factor:.2f}",
+                    f"{r.avg_win:.2f}",
+                    f"{r.avg_loss:.2f}",
+                    f"{r.max_drawdown_pct:.2f}",
+                ]
+            )
 
     by_pair: dict[str, list[VariantResult]] = {}
     for r in results:
@@ -288,12 +358,18 @@ def write_outputs(results: list[VariantResult], output_dir: Path) -> tuple[Path,
         lines.append("")
         lines.append("| Variant | Trades | Win Rate | Total PnL % | Profit Factor | Max DD % |")
         lines.append("|---|---:|---:|---:|---:|---:|")
-        pair_results = sorted(pair_results, key=lambda r: (r.total_pnl_pct, r.profit_factor), reverse=True)
+        pair_results = sorted(
+            pair_results, key=lambda r: (r.total_pnl_pct, r.profit_factor), reverse=True
+        )
         for r in pair_results:
-            lines.append(f"| {r.variant} | {r.trades} | {r.win_rate:.1%} | {r.total_pnl_pct:.2f}% | {r.profit_factor:.2f} | {r.max_drawdown_pct:.2f}% |")
+            lines.append(
+                f"| {r.variant} | {r.trades} | {r.win_rate:.1%} | {r.total_pnl_pct:.2f}% | {r.profit_factor:.2f} | {r.max_drawdown_pct:.2f}% |"
+            )
         best = pair_results[0]
         lines.append("")
-        lines.append(f"**Best:** {best.variant} (PnL {best.total_pnl_pct:.2f}%, PF {best.profit_factor:.2f})")
+        lines.append(
+            f"**Best:** {best.variant} (PnL {best.total_pnl_pct:.2f}%, PF {best.profit_factor:.2f})"
+        )
         lines.append("")
 
     md_path.write_text("\n".join(lines), encoding="utf-8")
@@ -307,8 +383,12 @@ def main() -> int:
     parser.add_argument("--output-dir", default="/app/results")
     parser.add_argument("--buffers", default="0.0")
     parser.add_argument("--confirm-bars", default="0", help="Comma-separated confirm_bars values")
-    parser.add_argument("--source", default="twelvedata", choices=["twelvedata", "dukascopy"],
-                        help="Data source (default: twelvedata)")
+    parser.add_argument(
+        "--source",
+        default="twelvedata",
+        choices=["twelvedata", "dukascopy"],
+        help="Data source (default: twelvedata)",
+    )
     parser.add_argument("--days", type=int, default=60, help="Days of history (default: 60)")
     args = parser.parse_args()
 
@@ -332,16 +412,26 @@ def main() -> int:
         else:
             mtf = fetcher.fetch_multi_timeframe(pair, start=start_str, end=end_str)
         if any(tf not in mtf or mtf[tf].empty for tf in ["1h", "30m", "15m"]):
-            print(f"  skipped: insufficient data")
+            print("  skipped: insufficient data")
             continue
         for variant in variants:
             for buffer_pips in buffers:
                 for cb in confirm_bars_list:
                     variant_label = f"{variant}_b{buffer_pips:g}_c{cb}"
                     print(f"  [RUN] {variant_label}")
-                    result = run_variant(pair, variant, mtf["1h"], mtf["30m"], mtf["15m"], buffer_pips=buffer_pips, confirm_bars=cb)
+                    result = run_variant(
+                        pair,
+                        variant,
+                        mtf["1h"],
+                        mtf["30m"],
+                        mtf["15m"],
+                        buffer_pips=buffer_pips,
+                        confirm_bars=cb,
+                    )
                     result.variant = variant_label
-                    print(f"    trades={result.trades} pnl={result.total_pnl_pct:.2f}% pf={result.profit_factor:.2f}")
+                    print(
+                        f"    trades={result.trades} pnl={result.total_pnl_pct:.2f}% pf={result.profit_factor:.2f}"
+                    )
                     results.append(result)
 
     if not results:

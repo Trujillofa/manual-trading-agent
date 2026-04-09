@@ -102,16 +102,26 @@ class StrategyConfig:
 
 @dataclass
 class RiskConfig:
-    tp_usd: float = 500.0
-    sl_usd: float = 1800.0
+    tp_atr_multiplier: float = 1.5
+    sl_atr_multiplier: float = 2.0
+    tp_usd_legacy: float = 300.0
+    sl_usd_legacy: float = 900.0
     max_concurrent_positions: int = 1
     max_daily_loss_usd: float = 1500.0
 
+    @property
+    def tp_usd(self) -> float:
+        return self.tp_usd_legacy
+
+    @property
+    def sl_usd(self) -> float:
+        return self.sl_usd_legacy
+
     def __post_init__(self) -> None:
-        if self.tp_usd <= 0:
-            raise ValueError("risk.tp_usd must be greater than 0")
-        if self.sl_usd <= 0:
-            raise ValueError("risk.sl_usd must be greater than 0")
+        if self.tp_atr_multiplier <= 0:
+            raise ValueError("risk.tp_atr_multiplier must be greater than 0")
+        if self.sl_atr_multiplier <= 0:
+            raise ValueError("risk.sl_atr_multiplier must be greater than 0")
         if self.max_concurrent_positions <= 0:
             raise ValueError("risk.max_concurrent_positions must be greater than 0")
         if self.max_daily_loss_usd <= 0:
@@ -258,7 +268,9 @@ class Settings:
             "enabled": telegram_data.get("enabled", True),
             "signal_notifications": telegram_data.get("signal_notifications", True),
             "near_setup_notifications": telegram_data.get("near_setup_notifications", True),
-            "aligned_pending_notifications": telegram_data.get("aligned_pending_notifications", True),
+            "aligned_pending_notifications": telegram_data.get(
+                "aligned_pending_notifications", True
+            ),
             "scan_results": telegram_data.get("scan_results", True),
         }
 

@@ -40,12 +40,16 @@ from src.strategy.multi_timeframe import MTFRSIStrategy
 # buffer_pips = pip buffer on breakout threshold
 # confirm_bars = max bars after MTF alignment to accept breakout (0 = immediate only)
 CONFIRMATION_PROFILES: dict[str, ConfirmationProfile] = {
-    "GBP/USD": {"variant": "V2", "buffer_pips": 2.0, "confirm_bars": 5},
+    "EUR/GBP": {"variant": "V2", "buffer_pips": 0.5, "confirm_bars": 2},
+    "GBP/CHF": {"variant": "V1", "buffer_pips": 0.5, "confirm_bars": 2},
+    "AUD/CAD": {"variant": "V1", "buffer_pips": 2.0, "confirm_bars": 2},
 }
 
 # Default profile for pairs without a specific one
 DEFAULT_CONFIRMATION_PROFILE: ConfirmationProfile = {
-    "variant": "V2", "buffer_pips": 2.0, "confirm_bars": 5,
+    "variant": "V2",
+    "buffer_pips": 0.5,
+    "confirm_bars": 2,
 }
 
 # ADX threshold: only take mean-reversion signals when ADX < this value (ranging market)
@@ -53,18 +57,20 @@ ADX_TREND_THRESHOLD = 25.0
 
 # Conservative fallback spreads (pips) when no live source is available.
 DEFAULT_SPREAD_PIPS: dict[str, float] = {
-    'EUR/USD': 0.8,
-    'GBP/USD': 1.2,
-    'USD/JPY': 0.9,
-    'USD/CHF': 1.2,
-    'USD/CAD': 1.4,
-    'AUD/USD': 1.1,
-    'NZD/USD': 1.4,
-    'EUR/JPY': 1.3,
-    'GBP/JPY': 2.1,
-    'EUR/GBP': 1.0,
-    'NZD/JPY': 1.9,
-    'AUD/JPY': 1.6,
+    "EUR/USD": 0.8,
+    "GBP/USD": 1.2,
+    "USD/JPY": 0.9,
+    "USD/CHF": 1.2,
+    "USD/CAD": 1.4,
+    "AUD/USD": 1.1,
+    "NZD/USD": 1.4,
+    "EUR/JPY": 1.3,
+    "GBP/JPY": 2.1,
+    "EUR/GBP": 1.0,
+    "NZD/JPY": 1.9,
+    "AUD/JPY": 1.6,
+    "GBP/CHF": 2.0,
+    "AUD/CAD": 2.0,
 }
 
 
@@ -148,7 +154,11 @@ def _get_ctrader_spread(pair: str) -> SpreadQuote | None:
         bid = payload.get("bid")
         ask = payload.get("ask")
         spread = payload.get("spread")
-        if isinstance(bid, (int, float)) and isinstance(ask, (int, float)) and isinstance(spread, (int, float)):
+        if (
+            isinstance(bid, (int, float))
+            and isinstance(ask, (int, float))
+            and isinstance(spread, (int, float))
+        ):
             return {"bid": float(bid), "ask": float(ask), "spread": float(spread)}
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
         return None
@@ -193,12 +203,16 @@ def _check_breakout_with_profile(
         # SELL: bar high wicked through HH, but close rejected below HH
         if direction == "BUY" and ll is not None:
             down_trigger = ll - buffer_pips * pip_size
-            wick_through = (bar_low is not None and bar_low <= down_trigger) if bar_low is not None else True
+            wick_through = (
+                (bar_low is not None and bar_low <= down_trigger) if bar_low is not None else True
+            )
             close_reclaim = close_price > ll
             return wick_through and close_reclaim
         if direction == "SELL" and hh is not None:
             up_trigger = hh + buffer_pips * pip_size
-            wick_through = (bar_high is not None and bar_high >= up_trigger) if bar_high is not None else True
+            wick_through = (
+                (bar_high is not None and bar_high >= up_trigger) if bar_high is not None else True
+            )
             close_reject = close_price < hh
             return wick_through and close_reject
     return False
@@ -371,12 +385,20 @@ def create_parser() -> argparse.ArgumentParser:
     backtest_parser.add_argument("--start", help="Start date YYYY-MM-DD")
     backtest_parser.add_argument("--end", help="End date YYYY-MM-DD")
 
-    enhanced_backtest_parser = subparsers.add_parser("backtest-enhanced", help="Run enhanced backtest with TP/SL")
-    enhanced_backtest_parser.add_argument("--pair", required=True, help="Pair to backtest (e.g., EUR/USD)")
+    enhanced_backtest_parser = subparsers.add_parser(
+        "backtest-enhanced", help="Run enhanced backtest with TP/SL"
+    )
+    enhanced_backtest_parser.add_argument(
+        "--pair", required=True, help="Pair to backtest (e.g., EUR/USD)"
+    )
     enhanced_backtest_parser.add_argument("--start", help="Start date YYYY-MM-DD")
     enhanced_backtest_parser.add_argument("--end", help="End date YYYY-MM-DD")
-    enhanced_backtest_parser.add_argument("--no-patterns", action="store_true", help="Disable pattern detection")
-    enhanced_backtest_parser.add_argument("--no-divergence", action="store_true", help="Disable divergence detection")
+    enhanced_backtest_parser.add_argument(
+        "--no-patterns", action="store_true", help="Disable pattern detection"
+    )
+    enhanced_backtest_parser.add_argument(
+        "--no-divergence", action="store_true", help="Disable divergence detection"
+    )
 
     subparsers.add_parser("telegram-poll", help="Poll Telegram commands (e.g. /watchlist)")
 
@@ -457,8 +479,12 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             bar_high = high_15m[-1] if high_15m else None
             bar_low = low_15m[-1] if low_15m else None
             profile = _get_confirmation_profile(pair)
-            breakout_buy = _check_breakout_with_profile(profile, "BUY", close_price, hh, ll, pip_size, bar_high, bar_low)
-            breakout_sell = _check_breakout_with_profile(profile, "SELL", close_price, hh, ll, pip_size, bar_high, bar_low)
+            breakout_buy = _check_breakout_with_profile(
+                profile, "BUY", close_price, hh, ll, pip_size, bar_high, bar_low
+            )
+            breakout_sell = _check_breakout_with_profile(
+                profile, "SELL", close_price, hh, ll, pip_size, bar_high, bar_low
+            )
 
             # ADX trend filter on 1h timeframe
             adx_1h = calculate_adx(
@@ -471,6 +497,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             quote: SpreadQuote | None = None
             try:
                 from src.data.fetcher import OandaFetcher
+
                 if os.getenv("OANDA_API_KEY") and os.getenv("OANDA_ACCOUNT_ID"):
                     quote = cast(
                         SpreadQuote | None,
@@ -499,7 +526,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             spread_pips = None
             spread_ok = True
             pair_spread_limits = getattr(settings.strategy, "spread_limits_pips", {}) or {}
-            max_spread_for_pair = float(pair_spread_limits.get(pair, settings.strategy.max_spread_pips))
+            max_spread_for_pair = float(
+                pair_spread_limits.get(pair, settings.strategy.max_spread_pips)
+            )
             if quote and isinstance(quote.get("spread"), float):
                 spread_pips = float(quote["spread"]) / pip_size
                 spread_ok = spread_pips <= max_spread_for_pair
@@ -537,7 +566,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             print(f"  Breakout SELL(high): {'yes' if breakout_sell else 'no'}")
             if spread_pips is not None:
                 spread_source = quote.get("source", "live") if quote is not None else "unknown"
-                print(f"  Spread: {spread_pips:.2f} pips ({'ok' if spread_ok else 'too wide'}, max={max_spread_for_pair:.2f}, source={spread_source})")
+                print(
+                    f"  Spread: {spread_pips:.2f} pips ({'ok' if spread_ok else 'too wide'}, max={max_spread_for_pair:.2f}, source={spread_source})"
+                )
             else:
                 print("  Spread: unavailable")
             if adx_1h is not None:
@@ -560,21 +591,41 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             if rsi_1h is None or rsi_30m is None or rsi_15m_val is None:
                 continue
 
-            all_oversold = rsi_1h < rsi_oversold and rsi_30m < rsi_oversold and rsi_15m_val < rsi_oversold
-            all_overbought = rsi_1h > rsi_overbought and rsi_30m > rsi_overbought and rsi_15m_val > rsi_overbought
+            all_oversold = (
+                rsi_1h < rsi_oversold and rsi_30m < rsi_oversold and rsi_15m_val < rsi_oversold
+            )
+            all_overbought = (
+                rsi_1h > rsi_overbought
+                and rsi_30m > rsi_overbought
+                and rsi_15m_val > rsi_overbought
+            )
 
-            buy_distance = _mtf_distance_to_buy(float(rsi_1h), float(rsi_30m), float(rsi_15m_val), float(rsi_oversold))
-            sell_distance = _mtf_distance_to_sell(float(rsi_1h), float(rsi_30m), float(rsi_15m_val), float(rsi_overbought))
+            buy_distance = _mtf_distance_to_buy(
+                float(rsi_1h), float(rsi_30m), float(rsi_15m_val), float(rsi_oversold)
+            )
+            sell_distance = _mtf_distance_to_sell(
+                float(rsi_1h), float(rsi_30m), float(rsi_15m_val), float(rsi_overbought)
+            )
             near_direction = "BUY" if buy_distance <= sell_distance else "SELL"
             near_distance = min(buy_distance, sell_distance)
             if near_direction == "BUY":
                 missing_timeframes = [
-                    tf for tf, value in [("1h", float(rsi_1h)), ("30m", float(rsi_30m)), ("15m", float(rsi_15m_val))]
+                    tf
+                    for tf, value in [
+                        ("1h", float(rsi_1h)),
+                        ("30m", float(rsi_30m)),
+                        ("15m", float(rsi_15m_val)),
+                    ]
                     if value >= float(rsi_oversold)
                 ]
             else:
                 missing_timeframes = [
-                    tf for tf, value in [("1h", float(rsi_1h)), ("30m", float(rsi_30m)), ("15m", float(rsi_15m_val))]
+                    tf
+                    for tf, value in [
+                        ("1h", float(rsi_1h)),
+                        ("30m", float(rsi_30m)),
+                        ("15m", float(rsi_15m_val)),
+                    ]
                     if value <= float(rsi_overbought)
                 ]
             remaining = len(missing_timeframes)
@@ -600,8 +651,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
 
             # For confirm_bars > 0, allow breakout within N bars of first alignment
             within_confirm_window = aligned and bars_aligned <= confirm_bars
-            breakout_confirmed = (
-                (near_direction == "BUY" and breakout_buy) or (near_direction == "SELL" and breakout_sell)
+            breakout_confirmed = (near_direction == "BUY" and breakout_buy) or (
+                near_direction == "SELL" and breakout_sell
             )
             breakout_pending = aligned and not breakout_confirmed
             # If breakout happened but outside the confirmation window, treat as pending
@@ -646,7 +697,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             if all_oversold:
                 signal_direction = "BUY"
                 signal_confidence = 0.6
-                signal_reasons.append(f"MTF RSI oversold (1h:{rsi_1h:.0f}, 30m:{rsi_30m:.0f}, 15m:{rsi_15m_val:.0f})")
+                signal_reasons.append(
+                    f"MTF RSI oversold (1h:{rsi_1h:.0f}, 30m:{rsi_30m:.0f}, 15m:{rsi_15m_val:.0f})"
+                )
                 if breakout_confirmed:
                     signal_confidence += 0.1
                     signal_reasons.append("15m breakout low confirmed")
@@ -655,18 +708,24 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 else:
                     no_trade_reasons.append("15m breakout low not confirmed")
                     if confirm_bars > 0 and not within_confirm_window:
-                        no_trade_reasons.append(f"confirmation window expired ({bars_aligned} bars > {confirm_bars})")
+                        no_trade_reasons.append(
+                            f"confirmation window expired ({bars_aligned} bars > {confirm_bars})"
+                        )
                 if bullish_div:
                     signal_confidence += bullish_div.strength * 0.2
                     signal_reasons.append("bullish divergence")
                 if bullish_pats:
                     signal_confidence += 0.1
-                    signal_reasons.append(f"bullish pattern ({', '.join(p.name for p in bullish_pats[:2])})")
+                    signal_reasons.append(
+                        f"bullish pattern ({', '.join(p.name for p in bullish_pats[:2])})"
+                    )
 
             elif all_overbought:
                 signal_direction = "SELL"
                 signal_confidence = 0.6
-                signal_reasons.append(f"MTF RSI overbought (1h:{rsi_1h:.0f}, 30m:{rsi_30m:.0f}, 15m:{rsi_15m_val:.0f})")
+                signal_reasons.append(
+                    f"MTF RSI overbought (1h:{rsi_1h:.0f}, 30m:{rsi_30m:.0f}, 15m:{rsi_15m_val:.0f})"
+                )
                 if breakout_confirmed:
                     signal_confidence += 0.1
                     signal_reasons.append("15m breakout high confirmed")
@@ -675,13 +734,17 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 else:
                     no_trade_reasons.append("15m breakout high not confirmed")
                     if confirm_bars > 0 and not within_confirm_window:
-                        no_trade_reasons.append(f"confirmation window expired ({bars_aligned} bars > {confirm_bars})")
+                        no_trade_reasons.append(
+                            f"confirmation window expired ({bars_aligned} bars > {confirm_bars})"
+                        )
                 if bearish_div:
                     signal_confidence += bearish_div.strength * 0.2
                     signal_reasons.append("bearish divergence")
                 if bearish_pats:
                     signal_confidence += 0.1
-                    signal_reasons.append(f"bearish pattern ({', '.join(p.name for p in bearish_pats[:2])})")
+                    signal_reasons.append(
+                        f"bearish pattern ({', '.join(p.name for p in bearish_pats[:2])})"
+                    )
 
             if signal_direction:
                 if not session_ok:
@@ -692,23 +755,27 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     no_trade_reasons.append("spread unavailable/too wide")
                 if not is_ranging:
                     adx_str = f"{adx_1h:.0f}" if adx_1h is not None else "N/A"
-                    no_trade_reasons.append(f"trending market (ADX {adx_str} >= {ADX_TREND_THRESHOLD:.0f})")
+                    no_trade_reasons.append(
+                        f"trending market (ADX {adx_str} >= {ADX_TREND_THRESHOLD:.0f})"
+                    )
                 if cooldown_active:
                     no_trade_reasons.append("cooldown active")
                 if no_trade_reasons:
                     print(f"  🚫 NO TRADE: {', '.join(no_trade_reasons)}")
-                    _append_audit_log({
-                        "ts": now_utc.isoformat(),
-                        "pair": pair,
-                        "state": "blocked",
-                        "candidate_direction": signal_direction,
-                        "reasons": no_trade_reasons,
-                        "rsi_1h": float(rsi_1h),
-                        "rsi_30m": float(rsi_30m),
-                        "rsi_15m": float(rsi_15m_val),
-                        "breakout_buy": breakout_buy,
-                        "breakout_sell": breakout_sell,
-                    })
+                    _append_audit_log(
+                        {
+                            "ts": now_utc.isoformat(),
+                            "pair": pair,
+                            "state": "blocked",
+                            "candidate_direction": signal_direction,
+                            "reasons": no_trade_reasons,
+                            "rsi_1h": float(rsi_1h),
+                            "rsi_30m": float(rsi_30m),
+                            "rsi_15m": float(rsi_15m_val),
+                            "breakout_buy": breakout_buy,
+                            "breakout_sell": breakout_sell,
+                        }
+                    )
                     signal_direction = None
 
             if not signal_direction and breakout_pending:
@@ -720,48 +787,54 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     print(f"     RSI 5m: {rsi_5m:.1f}")
                 if isinstance(rsi_1m, float):
                     print(f"     RSI 1m: {rsi_1m:.1f}")
-                _append_audit_log({
-                    "ts": now_utc.isoformat(),
-                    "pair": pair,
-                    "state": "aligned_pending_breakout",
-                    "direction": near_direction,
-                    "missing_timeframes": [],
-                    "distance": near_distance,
-                    "rsi_1h": float(rsi_1h),
-                    "rsi_30m": float(rsi_30m),
-                    "rsi_15m": float(rsi_15m_val),
-                    "rsi_5m": rsi_5m,
-                    "rsi_1m": rsi_1m,
-                })
+                _append_audit_log(
+                    {
+                        "ts": now_utc.isoformat(),
+                        "pair": pair,
+                        "state": "aligned_pending_breakout",
+                        "direction": near_direction,
+                        "missing_timeframes": [],
+                        "distance": near_distance,
+                        "rsi_1h": float(rsi_1h),
+                        "rsi_30m": float(rsi_30m),
+                        "rsi_15m": float(rsi_15m_val),
+                        "rsi_5m": rsi_5m,
+                        "rsi_1m": rsi_1m,
+                    }
+                )
             elif not signal_direction and (near_distance <= 4.0 or remaining == 1):
                 rsi_5m = micro_context.get("rsi_5m")
                 rsi_1m = micro_context.get("rsi_1m")
-                print(f"  👀 WATCH MODE: {near_direction} | missing={','.join(missing_timeframes) or '-'} | gap={near_distance:.1f}")
+                print(
+                    f"  👀 WATCH MODE: {near_direction} | missing={','.join(missing_timeframes) or '-'} | gap={near_distance:.1f}"
+                )
                 if isinstance(rsi_5m, float):
                     print(f"     RSI 5m: {rsi_5m:.1f}")
                 if isinstance(rsi_1m, float):
                     print(f"     RSI 1m: {rsi_1m:.1f}")
-                _append_audit_log({
-                    "ts": now_utc.isoformat(),
-                    "pair": pair,
-                    "state": "watch",
-                    "direction": near_direction,
-                    "missing_timeframes": missing_timeframes,
-                    "distance": near_distance,
-                    "rsi_1h": float(rsi_1h),
-                    "rsi_30m": float(rsi_30m),
-                    "rsi_15m": float(rsi_15m_val),
-                    "rsi_5m": rsi_5m,
-                    "rsi_1m": rsi_1m,
-                })
+                _append_audit_log(
+                    {
+                        "ts": now_utc.isoformat(),
+                        "pair": pair,
+                        "state": "watch",
+                        "direction": near_direction,
+                        "missing_timeframes": missing_timeframes,
+                        "distance": near_distance,
+                        "rsi_1h": float(rsi_1h),
+                        "rsi_30m": float(rsi_30m),
+                        "rsi_15m": float(rsi_15m_val),
+                        "rsi_5m": rsi_5m,
+                        "rsi_1m": rsi_1m,
+                    }
+                )
 
             if signal_direction:
                 print(f"  ⚠️ MTF SIGNAL: {signal_direction} (confidence: {signal_confidence:.0%})")
                 print(f"     Reasons: {', '.join(signal_reasons)}")
 
-                # Calculate TP/SL (TP=1×ATR, SL=3×ATR — validated over 360d OOS backtest)
-                tp_mult = 1.0
-                sl_mult = 3.0
+                # Calculate TP/SL (TP=1.5×ATR, SL=2×ATR — unified with bakeoff/enhanced_engine)
+                tp_mult = 1.5
+                sl_mult = 2.0
                 if atr and atr > 0:
                     if signal_direction == "SELL":
                         entry = close_price
@@ -801,9 +874,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 # Send Telegram notification
                 if notifier and hh and ll:
                     confirmed_pairs.add(pair)
-                    entry_fp = (
-                        f"entry|{signal_direction}|{round(float(rsi_1h),1)}|{round(float(rsi_30m),1)}|{round(float(rsi_15m_val),1)}"
-                    )
+                    entry_fp = f"entry|{signal_direction}|{round(float(rsi_1h), 1)}|{round(float(rsi_30m), 1)}|{round(float(rsi_15m_val), 1)}"
                     prev = near_state.get(pair)
                     should_send_entry = not prev or str(prev.get("fingerprint", "")) != entry_fp
                     if should_send_entry:
@@ -823,23 +894,27 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             divergence=bullish_div if all_oversold else bearish_div,
                         )
                     near_state[pair] = {"fingerprint": entry_fp, "sent_at": now_ts, "kind": "entry"}
-                    cooldown_state[pair] = {"until": now_ts + settings.strategy.cooldown_minutes * 60}
-                    _append_audit_log({
-                        "ts": now_utc.isoformat(),
-                        "pair": pair,
-                        "state": "entry",
-                        "direction": signal_direction,
-                        "confidence": signal_confidence,
-                        "reasons": signal_reasons,
-                        "entry": entry,
-                        "tp": tp,
-                        "sl": sl,
-                        "rsi_1h": float(rsi_1h),
-                        "rsi_30m": float(rsi_30m),
-                        "rsi_15m": float(rsi_15m_val),
-                        "breakout_buy": breakout_buy,
-                        "breakout_sell": breakout_sell,
-                    })
+                    cooldown_state[pair] = {
+                        "until": now_ts + settings.strategy.cooldown_minutes * 60
+                    }
+                    _append_audit_log(
+                        {
+                            "ts": now_utc.isoformat(),
+                            "pair": pair,
+                            "state": "entry",
+                            "direction": signal_direction,
+                            "confidence": signal_confidence,
+                            "reasons": signal_reasons,
+                            "entry": entry,
+                            "tp": tp,
+                            "sl": sl,
+                            "rsi_1h": float(rsi_1h),
+                            "rsi_30m": float(rsi_30m),
+                            "rsi_15m": float(rsi_15m_val),
+                            "breakout_buy": breakout_buy,
+                            "breakout_sell": breakout_sell,
+                        }
+                    )
 
         except Exception as exc:
             print(f"  Error: {exc}")
@@ -850,7 +925,10 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     if near_candidates:
         ranked = sorted(
             near_candidates,
-            key=lambda candidate: (candidate["distance"], -_priority_for_pair(settings, candidate["pair"])),
+            key=lambda candidate: (
+                candidate["distance"],
+                -_priority_for_pair(settings, candidate["pair"]),
+            ),
         )
         print("\n[CLOSEST MTF SETUPS]")
         for candidate in ranked[:10]:
@@ -862,7 +940,11 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             r15 = float(candidate["rsi_15m"])
             remaining = candidate["remaining"]
             missing = ",".join(candidate["missing_timeframes"])
-            label = "aligned_pending_breakout" if bool(candidate.get("breakout_pending")) else ("near" if remaining > 0 else "aligned")
+            label = (
+                "aligned_pending_breakout"
+                if bool(candidate.get("breakout_pending"))
+                else ("near" if remaining > 0 else "aligned")
+            )
             print(
                 f"  {pair}: {direction} | state={label} | gap={distance:.1f} RSI points | remaining_tf={remaining} | missing={missing or '-'} | "
                 f"1h={r1:.1f} 30m={r30:.1f} 15m={r15:.1f}"
@@ -892,16 +974,12 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 qualifies_near = distance <= 4.0 or remaining == 1
                 should_track_candidate = (
                     breakout_pending and aligned_pending_notifications_enabled
-                ) or (
-                    not breakout_pending and qualifies_near and near_notifications_enabled
-                )
+                ) or (not breakout_pending and qualifies_near and near_notifications_enabled)
                 if not should_track_candidate:
                     continue
                 active_pairs.add(pair)
                 state_kind = "aligned_pending_breakout" if breakout_pending else "near"
-                fingerprint = (
-                    f"{state_kind}|{direction}|{round(r1,1)}|{round(r30,1)}|{round(r15,1)}|{remaining}"
-                )
+                fingerprint = f"{state_kind}|{direction}|{round(r1, 1)}|{round(r30, 1)}|{round(r15, 1)}|{remaining}"
                 prev = near_state.get(pair)
                 should_send = False
                 if not prev:
@@ -945,7 +1023,11 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             f"{micro_txt}"
                         )
                     await notifier.send(message)
-                    near_state[pair] = {"fingerprint": fingerprint, "sent_at": now_ts, "kind": state_kind}
+                    near_state[pair] = {
+                        "fingerprint": fingerprint,
+                        "sent_at": now_ts,
+                        "kind": state_kind,
+                    }
                     changed = True
 
             stale_pairs = [pair for pair in list(near_state.keys()) if pair not in active_pairs]
@@ -955,9 +1037,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     continue
                 kind = str(prev.get("kind", "near"))
                 notifications_enabled_for_kind = (
-                    (kind == "near" and near_notifications_enabled)
-                    or (kind == "aligned_pending_breakout" and aligned_pending_notifications_enabled)
-                )
+                    kind == "near" and near_notifications_enabled
+                ) or (kind == "aligned_pending_breakout" and aligned_pending_notifications_enabled)
                 if kind == "near":
                     status = "near setup faded before confirmation"
                 elif kind == "aligned_pending_breakout":
@@ -985,7 +1066,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             _save_alignment_state(alignment_state)
 
 
-def _calculate_atr(highs: list[float], lows: list[float], closes: list[float], period: int = 14) -> float | None:
+def _calculate_atr(
+    highs: list[float], lows: list[float], closes: list[float], period: int = 14
+) -> float | None:
     """Calculate Average True Range."""
     if len(highs) < period or len(lows) < period or len(closes) < period:
         return None
@@ -1118,11 +1201,17 @@ async def run_enhanced_backtest(
         print(f"  Sharpe ratio: {result.sharpe_ratio:.2f}")
 
         if use_patterns:
-            print(f"\n  Pattern trades: {result.pattern_trades} (win rate: {result.pattern_win_rate:.1%})")
+            print(
+                f"\n  Pattern trades: {result.pattern_trades} (win rate: {result.pattern_win_rate:.1%})"
+            )
         if use_divergence:
-            print(f"  Divergence trades: {result.divergence_trades} (win rate: {result.divergence_win_rate:.1%})")
+            print(
+                f"  Divergence trades: {result.divergence_trades} (win rate: {result.divergence_win_rate:.1%})"
+            )
         if use_patterns and use_divergence:
-            print(f"  Combined trades: {result.combined_trades} (win rate: {result.combined_win_rate:.1%})")
+            print(
+                f"  Combined trades: {result.combined_trades} (win rate: {result.combined_win_rate:.1%})"
+            )
 
     except Exception as exc:
         print(f"  Error: {exc}")
@@ -1197,7 +1286,9 @@ async def run_dashboard(days: int) -> None:
     # Entry signals detail
     if entries:
         print("--- ENTRY SIGNALS ---")
-        print(f"{'Timestamp':<22} {'Pair':<10} {'Dir':<5} {'Entry':>10} {'TP':>10} {'SL':>10} {'RSI 1h':>7} {'RSI 30m':>8} {'RSI 15m':>8}")
+        print(
+            f"{'Timestamp':<22} {'Pair':<10} {'Dir':<5} {'Entry':>10} {'TP':>10} {'SL':>10} {'RSI 1h':>7} {'RSI 30m':>8} {'RSI 15m':>8}"
+        )
         print("-" * 95)
         for e in entries:
             print(
@@ -1223,7 +1314,9 @@ async def run_dashboard(days: int) -> None:
                 pass
 
         total_paper_pnl = 0.0
-        print(f"{'Timestamp':<22} {'Pair':<10} {'Dir':<5} {'Entry':>10} {'Current':>10} {'P&L pips':>10} {'Status':>10}")
+        print(
+            f"{'Timestamp':<22} {'Pair':<10} {'Dir':<5} {'Entry':>10} {'Current':>10} {'P&L pips':>10} {'Status':>10}"
+        )
         print("-" * 82)
         for e in entries:
             pair = e.get("pair", "")
@@ -1235,7 +1328,9 @@ async def run_dashboard(days: int) -> None:
             current = current_prices.get(pair)
 
             if current is None:
-                print(f"{e.get('ts', '')[:19]:<22} {pair:<10} {direction:<5} {entry_px:>10.5f} {'N/A':>10} {'N/A':>10} {'no data':>10}")
+                print(
+                    f"{e.get('ts', '')[:19]:<22} {pair:<10} {direction:<5} {entry_px:>10.5f} {'N/A':>10} {'N/A':>10} {'no data':>10}"
+                )
                 continue
 
             if direction == "BUY":
@@ -1294,7 +1389,9 @@ def main() -> int:
         "news": lambda: run_news(args.hours),
         "backtest": lambda: run_backtest(args.pair, args.start, args.end),
         "backtest-enhanced": lambda: run_enhanced_backtest(
-            args.pair, args.start, args.end,
+            args.pair,
+            args.start,
+            args.end,
             use_patterns=not args.no_patterns,
             use_divergence=not args.no_divergence,
         ),

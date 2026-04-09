@@ -9,6 +9,7 @@ from typing import Literal
 
 import pandas as pd
 
+from src.indicators.adx import calculate_adx
 from src.indicators.candlestick import (
     CandlePattern,
     PatternType,
@@ -91,7 +92,10 @@ class EnhancedBacktestEngine:
         self,
         initial_balance: float = 10000.0,
         risk_per_trade: float = 0.02,  # 2% risk
-        reward_ratio: float = 1.5,  # TP = 1.5x ATR, SL = 2x ATR
+        reward_ratio: float = 1.5,
+        sl_atr_multiplier: float = 2.0,
+        spread_pips: float = 2.0,
+        adx_threshold: float = 25.0,
         max_hold_bars: int = 96,  # Max 24 hours at 15m bars
         use_patterns: bool = True,
         use_divergence: bool = True,
@@ -102,6 +106,9 @@ class EnhancedBacktestEngine:
         self.initial_balance = initial_balance
         self.risk_per_trade = risk_per_trade
         self.reward_ratio = reward_ratio
+        self.sl_atr_multiplier = sl_atr_multiplier
+        self.spread_pips = spread_pips
+        self.adx_threshold = adx_threshold
         self.max_hold_bars = max_hold_bars
         self.use_patterns = use_patterns
         self.use_divergence = use_divergence
@@ -109,7 +116,9 @@ class EnhancedBacktestEngine:
         self.rsi_overbought = rsi_overbought
         self.rsi_oversold = rsi_oversold
 
-    def _calculate_atr(self, highs: list[float], lows: list[float], closes: list[float], period: int = 14) -> float | None:
+    def _calculate_atr(
+        self, highs: list[float], lows: list[float], closes: list[float], period: int = 14
+    ) -> float | None:
         """Calculate ATR."""
         if len(highs) < period or len(lows) < period or len(closes) < period:
             return None
@@ -189,15 +198,15 @@ class EnhancedBacktestEngine:
 
             # MTF BUY: all timeframes oversold
             all_oversold = (
-                rsi_1h < self.rsi_oversold and
-                rsi_30m < self.rsi_oversold and
-                rsi < self.rsi_oversold
+                rsi_1h < self.rsi_oversold
+                and rsi_30m < self.rsi_oversold
+                and rsi < self.rsi_oversold
             )
             # MTF SELL: all timeframes overbought
             all_overbought = (
-                rsi_1h > self.rsi_overbought and
-                rsi_30m > self.rsi_overbought and
-                rsi > self.rsi_overbought
+                rsi_1h > self.rsi_overbought
+                and rsi_30m > self.rsi_overbought
+                and rsi > self.rsi_overbought
             )
 
             if all_oversold:
@@ -340,7 +349,12 @@ class EnhancedBacktestEngine:
             low = lows[i]
             rsi = data["rsi"].iloc[i]
             # ATR needs period+1 bars, include current bar
-            atr = self._calculate_atr(highs[max(0, i - atr_period):i + 1], lows[max(0, i - atr_period):i + 1], closes[max(0, i - atr_period):i + 1], atr_period)
+            atr = self._calculate_atr(
+                highs[max(0, i - atr_period) : i + 1],
+                lows[max(0, i - atr_period) : i + 1],
+                closes[max(0, i - atr_period) : i + 1],
+                atr_period,
+            )
 
             if pd.isna(rsi) or atr is None or atr <= 0:
                 continue
@@ -349,7 +363,13 @@ class EnhancedBacktestEngine:
             bullish_pats: list[CandlePattern] = []
             bearish_pats: list[CandlePattern] = []
             if self.use_patterns and i >= 3:
-                patterns = detect_patterns(opens[i - 3:i + 1], highs[i - 3:i + 1], lows[i - 3:i + 1], closes[i - 3:i + 1], lookback=2)
+                patterns = detect_patterns(
+                    opens[i - 3 : i + 1],
+                    highs[i - 3 : i + 1],
+                    lows[i - 3 : i + 1],
+                    closes[i - 3 : i + 1],
+                    lookback=2,
+                )
                 bullish_pats = [p for p in patterns if p.pattern_type == PatternType.BULLISH]
                 bearish_pats = [p for p in patterns if p.pattern_type == PatternType.BEARISH]
 
@@ -357,8 +377,8 @@ class EnhancedBacktestEngine:
             bullish_div = None
             bearish_div = None
             if self.use_divergence:
-                rsi_series = data["rsi"].iloc[max(0, i - 100):i].tolist()
-                close_series = closes[max(0, i - 100):i]
+                rsi_series = data["rsi"].iloc[max(0, i - 100) : i].tolist()
+                close_series = closes[max(0, i - 100) : i]
                 bullish_div = detect_bullish_divergence(close_series, rsi_series, lookback=5)
                 bearish_div = detect_bearish_divergence(close_series, rsi_series, lookback=5)
 
@@ -386,7 +406,9 @@ class EnhancedBacktestEngine:
                         peak_balance = balance
 
                     trade = Trade(
-                        entry_time=data.index[entry_idx] if isinstance(data.index[entry_idx], datetime) else datetime.now(),
+                        entry_time=data.index[entry_idx]
+                        if isinstance(data.index[entry_idx], datetime)
+                        else datetime.now(),
                         exit_time=timestamp,
                         side=position,
                         entry_price=entry_price,
@@ -434,7 +456,9 @@ class EnhancedBacktestEngine:
                     balance += pnl
 
                     trade = Trade(
-                        entry_time=data.index[entry_idx] if isinstance(data.index[entry_idx], datetime) else datetime.now(),
+                        entry_time=data.index[entry_idx]
+                        if isinstance(data.index[entry_idx], datetime)
+                        else datetime.now(),
                         exit_time=timestamp,
                         side=position,
                         entry_price=entry_price,
@@ -458,6 +482,18 @@ class EnhancedBacktestEngine:
 
             # Generate new signal if not in position
             if position is None:
+                # ADX filter: skip signal generation in trending markets
+                adx_window = 2 * 14 + 1  # 29 bars needed for ADX(14)
+                if i >= adx_window:
+                    adx_val = calculate_adx(
+                        highs[i - adx_window + 1 : i + 1],
+                        lows[i - adx_window + 1 : i + 1],
+                        closes[i - adx_window + 1 : i + 1],
+                        period=14,
+                    )
+                    if adx_val is not None and adx_val >= self.adx_threshold:
+                        continue
+
                 signal, confidence, pattern_names, div_type = self._generate_signal(
                     float(rsi), bullish_pats, bearish_pats, bullish_div, bearish_div
                 )
@@ -465,7 +501,11 @@ class EnhancedBacktestEngine:
                 # Only enter with sufficient confidence
                 if signal != SignalType.HOLD and confidence >= 0.4:
                     position = "buy" if signal == SignalType.BUY else "sell"
-                    entry_price = close
+                    pip_size = 0.01 if "JPY" in symbol else 0.0001
+                    spread_price = self.spread_pips * pip_size
+                    entry_price = (
+                        close + spread_price if position == "buy" else close - spread_price
+                    )
                     entry_idx = i
                     entry_confidence = confidence
                     entry_patterns = pattern_names
@@ -475,10 +515,10 @@ class EnhancedBacktestEngine:
                     # Set TP/SL based on ATR
                     if position == "buy":
                         tp_price = entry_price + (atr * self.reward_ratio)
-                        sl_price = entry_price - (atr * 2.0)
+                        sl_price = entry_price - (atr * self.sl_atr_multiplier)
                     else:
                         tp_price = entry_price - (atr * self.reward_ratio)
-                        sl_price = entry_price + (atr * 2.0)
+                        sl_price = entry_price + (atr * self.sl_atr_multiplier)
 
         # Calculate metrics
         wins = sum(1 for t in trades if t.pnl > 0)
@@ -501,13 +541,17 @@ class EnhancedBacktestEngine:
 
         avg_win = sum(t.pnl for t in trades if t.pnl > 0) / max(1, wins)
         avg_loss = sum(abs(t.pnl) for t in trades if t.pnl <= 0) / max(1, losses)
-        profit_factor = (wins * avg_win) / max(1, losses * avg_loss) if losses > 0 else float('inf')
+        profit_factor = (wins * avg_win) / max(1, losses * avg_loss) if losses > 0 else float("inf")
 
         # Sharpe-like ratio (simplified)
         returns = [t.pnl_pct for t in trades]
         avg_return = sum(returns) / len(returns) if returns else 0
-        std_return = (sum((r - avg_return) ** 2 for r in returns) / len(returns)) ** 0.5 if len(returns) > 1 else 0
-        sharpe = (avg_return * 252) / (std_return * (252 ** 0.5)) if std_return > 0 else 0
+        std_return = (
+            (sum((r - avg_return) ** 2 for r in returns) / len(returns)) ** 0.5
+            if len(returns) > 1
+            else 0
+        )
+        sharpe = (avg_return * 252) / (std_return * (252**0.5)) if std_return > 0 else 0
 
         start_date = data.index[max(lookback, atr_period + 1)]
         end_date = data.index[-1]

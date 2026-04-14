@@ -73,24 +73,55 @@ Signal output → signal_audit.jsonl + Telegram notification
 - **Async throughout**: CLI uses `asyncio.run()`, data fetchers and Telegram use async HTTP clients (httpx/aiohttp). TelegramNotifier falls back to background thread if no event loop.
 - **Graceful degradation**: missing news feed doesn't block scanning, missing OANDA quote skips spread check.
 
-### Production config (validated 360-day OOS backtest, 2026-04-03)
+### Production config (current live watchlist, 2026-04-14)
 
-- **Pairs**: GBP/USD (+1.45%, PF 1.54), NZD/USD (+0.62%, PF 1.24), AUD/JPY (+0.63%, PF 1.16)
-- **Entry variant**: V2 reversal breakout (wick through LL/HH + close reclaim)
-- **RSI thresholds**: 30/70 across all three timeframes (1h, 30m, 15m)
-- **Buffer**: 2.0 pips on breakout level
-- **Confirm bars**: 5 (window after RSI alignment to accept breakout)
-- **TP/SL**: 1.0 ATR / 3.0 ATR (high win-rate, ~74% WR on GBP/USD)
-- **ADX filter**: ADX(14) < 25 on 1h (skip trending markets)
+Promoted pairs actively scanned and allowed to fire Telegram signals (`config/settings.yaml`):
+
+| Pair | Confirmation profile | Source |
+|---|---|---|
+| EUR/GBP | V2_b0.5_c2 | `docs/reports/CONFIRMATION_BAKEOFF_FULL_REPORT_2026-03-31.md` |
+| GBP/CHF | V1_b0.5_c0 | same |
+| AUD/CAD | V1_b2_c0 | same |
+
+Shadow-run only (not in `config/settings.yaml`; do not alert, evaluate separately):
+
+| Pair | Candidate profile | Status |
+|---|---|---|
+| GBP/USD | V2_b1_c2 (compromise across 365d/180d) | not promoted — 365d and 180d disagree on winner and regime family |
+
+Rejected (explicit, do not re-add without new evidence): AUD/JPY, NZD/USD, NZD/JPY, EUR/CHF, EUR/CAD, USD/JPY, USD/CHF, GBP/CAD, AUD/NZD.
+
+Shared parameters across promoted set:
+- **RSI thresholds**: 30/70 on 1h, 30m, 15m (per `config/settings.yaml`)
+- **TP/SL**: ATR-based — TP = 1.5 × ATR(14), SL = 2.0 × ATR(14)
+- **ADX filter**: ADX(14) < 25 on 1h (mean-reversion only in ranging regime)
+- **Session filter**: 06–17 UTC, 12–21 UTC
+- **News lockout**: 3-star Forex Factory events; 60 min before / 30 min after
 - **Lot size**: 3.0
-- **News lockout**: 3-star Forex Factory events block trading
 - **Data source**: yfinance (live scanner), Dukascopy M1 (backtests)
+
+Entry-variant naming (used in confirmation profiles and report tables):
+- `V1` — breakout continuation; BUY breaks below LL, SELL breaks above HH
+- `V2` — reversal; wick through LL/HH + close reclaim
+- `b{N}` — buffer in pips; `c{N}` — confirmation lifetime in bars after RSI alignment
+
+### Promotion gate for new pairs
+
+Before a shadow-run pair is promoted into `config/settings.yaml`:
+
+1. On the shortest validation window tested (currently 180d Dukascopy): **≥ 30 trades**
+2. **Positive total PnL** on that window
+3. **Profit factor clearly > 1** (treat PF with N < 30 as unreliable regardless of value)
+4. **No regime flip across windows** — winning variant family (V1 vs V2) must be the same on 180d and 365d, and signs must agree
+
+Failing any gate → keep shadow-run or reject. Low trade count is the dominant failure mode in this dataset.
 
 ### Backtest data
 
 - **Dukascopy fetcher** (`src/data/dukascopy_fetcher.py`): Downloads M1 bi5 binary data, resamples to h1/m30/m15
-- **Optimization script** (`scripts/run_entry_optimization.py`): Grid search over variants, RSI, buffer, confirm bars, TP/SL, ADX
-- All 24 pairs screened over 360 days; only 3 profitable with current config
+- **Bake-off script** (`scripts/run_confirmation_bakeoff.py`): Sweeps variants × buffers × confirm-bars per pair; artifacts under `results/`
+- **Optimization script** (`scripts/run_entry_optimization.py`): Broader grid including RSI, TP/SL, ADX
+- Latest validation: see `docs/reports/WATCHLIST_EXPANSION_2026-04-14.md`
 
 ## Code Conventions
 

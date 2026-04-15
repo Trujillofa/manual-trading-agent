@@ -210,6 +210,11 @@ def run_config(
                 current_signal = "buy"
             elif all_overbought and high_val >= up_trigger and close < hh_prev and within_window:
                 current_signal = "sell"
+        elif variant == "V2R":
+            if all_oversold and close > up_trigger and within_window:
+                current_signal = "buy"
+            elif all_overbought and close < down_trigger and within_window:
+                current_signal = "sell"
 
         # Manage open position
         if position is not None:
@@ -495,7 +500,7 @@ def main() -> int:
     # Calculate total configs
     v0_configs = len(rsi_pairs) * len(confirm_bars_list) * len(tp_sl_pairs)
     vx_configs = len(rsi_pairs) * len(buffers) * len(confirm_bars_list) * len(tp_sl_pairs)
-    n_vx = sum(1 for v in variants if v in ("V1", "V2"))
+    n_vx = sum(1 for v in variants if v in ("V1", "V2", "V2R"))
     total_configs = (v0_configs if "V0" in variants else 0) + n_vx * vx_configs
     total_runs = total_configs * len(pairs)
     adx_threshold = args.adx_threshold

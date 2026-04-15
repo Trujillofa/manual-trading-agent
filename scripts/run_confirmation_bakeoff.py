@@ -234,6 +234,12 @@ def run_variant(
                 current_signal = "buy"
             elif all_overbought and high >= up_trigger and close < hh_prev and within_window:
                 current_signal = "sell"
+        elif variant == "V2R":
+            # Opposite-direction Structural Break Reversal: BUY breaks above HH, SELL breaks below LL
+            if all_oversold and close > up_trigger and within_window:
+                current_signal = "buy"
+            elif all_overbought and close < down_trigger and within_window:
+                current_signal = "sell"
         else:
             raise ValueError(f"Unknown variant: {variant}")
 

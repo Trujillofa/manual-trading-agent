@@ -34,9 +34,10 @@ from src.notifications.telegram import TelegramNotifier
 from src.strategy.multi_timeframe import MTFRSIStrategy
 
 # Pair-specific confirmation profiles from optimization bakeoff (2026-04-03).
-# Format: {"variant": "V1"|"V2", "buffer_pips": float, "confirm_bars": int}
+# Format: {"variant": "V1"|"V2"|"V2R", "buffer_pips": float, "confirm_bars": int}
 # V1 = continuation breakout (BUY below LL, SELL above HH)
 # V2 = reversal breakout (BUY wick through + close reclaim, SELL wick through + close reject)
+# V2R = reversal structural break (BUY above HH, SELL below LL)
 # buffer_pips = pip buffer on breakout threshold
 # confirm_bars = max bars after MTF alignment to accept breakout (0 = immediate only)
 CONFIRMATION_PROFILES: dict[str, ConfirmationProfile] = {
@@ -215,6 +216,12 @@ def _check_breakout_with_profile(
             )
             close_reject = close_price < hh
             return wick_through and close_reject
+    elif variant == "V2R":
+        # Opposite-direction Structural Break Reversal: BUY breaks above HH, SELL breaks below LL
+        if direction == "BUY" and hh is not None:
+            return is_breakout_high(close_price, hh, buffer_pct)
+        if direction == "SELL" and ll is not None:
+            return is_breakout_low(close_price, ll, buffer_pct)
     return False
 
 

@@ -9,7 +9,12 @@ from datetime import UTC, datetime
 from typing import Literal, cast
 
 from src.config import get_settings
-from src.indicators.high_low import highest_high, is_breakout_high, is_breakout_low, lowest_low
+from src.indicators.high_low import (
+    is_breakout_high,
+    is_breakout_low,
+    previous_rolling_highest_high,
+    previous_rolling_lowest_low,
+)
 from src.strategy.base import BaseStrategy
 from src.strategy.signals import Signal, SignalConfidence, SignalType
 
@@ -65,15 +70,17 @@ class MTFRSIStrategy(BaseStrategy):
         if hh_15m is None:
             highs_15m = indicators.get("highs_15m")
             if isinstance(highs_15m, list) and all(isinstance(x, int | float) for x in highs_15m):
-                hh_15m = highest_high(
-                    [float(x) for x in highs_15m], self.strategy_config.lookback_bars
+                highs_f = [float(x) for x in highs_15m]
+                hh_15m = previous_rolling_highest_high(
+                    highs_f, self.strategy_config.lookback_bars, len(highs_f) - 1
                 )
 
         if ll_15m is None:
             lows_15m = indicators.get("lows_15m")
             if isinstance(lows_15m, list) and all(isinstance(x, int | float) for x in lows_15m):
-                ll_15m = lowest_low(
-                    [float(x) for x in lows_15m], self.strategy_config.lookback_bars
+                lows_f = [float(x) for x in lows_15m]
+                ll_15m = previous_rolling_lowest_low(
+                    lows_f, self.strategy_config.lookback_bars, len(lows_f) - 1
                 )
 
         if any(v is None for v in (rsi_1h, rsi_30m, rsi_15m, hh_15m, ll_15m, close_15m)):

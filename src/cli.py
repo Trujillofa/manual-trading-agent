@@ -22,7 +22,12 @@ from src.indicators.candlestick import (
     PatternType,
     detect_patterns,
 )
-from src.indicators.high_low import highest_high, is_breakout_high, is_breakout_low, lowest_low
+from src.indicators.high_low import (
+    is_breakout_high,
+    is_breakout_low,
+    previous_rolling_highest_high,
+    previous_rolling_lowest_low,
+)
 from src.indicators.rsi import (
     calculate_rsi,
     calculate_rsi_series,
@@ -475,9 +480,11 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             rsi_30m = calculate_rsi(data_30m["close"].values.tolist()[-50:], rsi_period)
             rsi_15m_val = calculate_rsi(close_15m[-50:], rsi_period)
 
-            # 20-bar HH/LL from 15m
-            hh = highest_high(high_15m, lookback)
-            ll = lowest_low(low_15m, lookback)
+            # 20-bar HH/LL from 15m — prior-bar semantics so `close > hh`
+            # / `close < ll` can fire. Including the current bar makes
+            # close-based breakout impossible by OHLC construction.
+            hh = previous_rolling_highest_high(high_15m, lookback, len(high_15m) - 1)
+            ll = previous_rolling_lowest_low(low_15m, lookback, len(low_15m) - 1)
             close_price = close_15m[-1]
 
             # Calculate ATR for TP/SL

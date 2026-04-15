@@ -1,0 +1,1361 @@
+[FETCH] EUR/GBP (source=dukascopy, days=180)
+  Downloading 180d of M1 data from Dukascopy (this may take a while)...
+  [RUN] V0_b0_c0
+    trades=404 pnl=-1.14% pf=0.50
+  [RUN] V0_b0_c1
+    trades=99 pnl=-0.84% pf=0.50
+  [RUN] V0_b0_c2
+    trades=123 pnl=-0.99% pf=0.49
+  [RUN] V0_b0_c3
+    trades=146 pnl=-1.07% pf=0.50
+  [RUN] V0_b0_c4
+    trades=159 pnl=-1.20% pf=0.46
+  [RUN] V0_b0_c5
+    trades=170 pnl=-1.17% pf=0.48
+  [RUN] V0_b0.5_c0
+    trades=404 pnl=-1.14% pf=0.50
+  [RUN] V0_b0.5_c1
+    trades=99 pnl=-0.84% pf=0.50
+  [RUN] V0_b0.5_c2
+    trades=123 pnl=-0.99% pf=0.49
+  [RUN] V0_b0.5_c3
+    trades=146 pnl=-1.07% pf=0.50
+  [RUN] V0_b0.5_c4
+    trades=159 pnl=-1.20% pf=0.46
+  [RUN] V0_b0.5_c5
+    trades=170 pnl=-1.17% pf=0.48
+  [RUN] V0_b1_c0
+    trades=404 pnl=-1.14% pf=0.50
+  [RUN] V0_b1_c1
+    trades=99 pnl=-0.84% pf=0.50
+  [RUN] V0_b1_c2
+    trades=123 pnl=-0.99% pf=0.49
+  [RUN] V0_b1_c3
+    trades=146 pnl=-1.07% pf=0.50
+  [RUN] V0_b1_c4
+    trades=159 pnl=-1.20% pf=0.46
+  [RUN] V0_b1_c5
+    trades=170 pnl=-1.17% pf=0.48
+  [RUN] V0_b2_c0
+    trades=404 pnl=-1.14% pf=0.50
+  [RUN] V0_b2_c1
+    trades=99 pnl=-0.84% pf=0.50
+  [RUN] V0_b2_c2
+    trades=123 pnl=-0.99% pf=0.49
+  [RUN] V0_b2_c3
+    trades=146 pnl=-1.07% pf=0.50
+  [RUN] V0_b2_c4
+    trades=159 pnl=-1.20% pf=0.46
+  [RUN] V0_b2_c5
+    trades=170 pnl=-1.17% pf=0.48
+  [RUN] V1_b0_c0
+    trades=50 pnl=-0.37% pf=0.67
+  [RUN] V1_b0_c1
+    trades=40 pnl=-0.37% pf=0.60
+  [RUN] V1_b0_c2
+    trades=44 pnl=-0.34% pf=0.66
+  [RUN] V1_b0_c3
+    trades=46 pnl=-0.31% pf=0.70
+  [RUN] V1_b0_c4
+    trades=48 pnl=-0.37% pf=0.65
+  [RUN] V1_b0_c5
+    trades=49 pnl=-0.34% pf=0.68
+  [RUN] V1_b0.5_c0
+    trades=47 pnl=-0.31% pf=0.71
+  [RUN] V1_b0.5_c1
+    trades=39 pnl=-0.35% pf=0.61
+  [RUN] V1_b0.5_c2
+    trades=42 pnl=-0.31% pf=0.68
+  [RUN] V1_b0.5_c3
+    trades=44 pnl=-0.27% pf=0.72
+  [RUN] V1_b0.5_c4
+    trades=46 pnl=-0.34% pf=0.68
+  [RUN] V1_b0.5_c5
+    trades=47 pnl=-0.31% pf=0.71
+  [RUN] V1_b1_c0
+    trades=39 pnl=-0.14% pf=0.84
+  [RUN] V1_b1_c1
+    trades=34 pnl=-0.26% pf=0.68
+  [RUN] V1_b1_c2
+    trades=36 pnl=-0.20% pf=0.77
+  [RUN] V1_b1_c3
+    trades=37 pnl=-0.14% pf=0.84
+  [RUN] V1_b1_c4
+    trades=38 pnl=-0.17% pf=0.81
+  [RUN] V1_b1_c5
+    trades=39 pnl=-0.14% pf=0.84
+  [RUN] V1_b2_c0
+    trades=32 pnl=-0.09% pf=0.87
+  [RUN] V1_b2_c1
+    trades=27 pnl=-0.21% pf=0.66
+  [RUN] V1_b2_c2
+    trades=29 pnl=-0.14% pf=0.78
+  [RUN] V1_b2_c3
+    trades=30 pnl=-0.09% pf=0.87
+  [RUN] V1_b2_c4
+    trades=31 pnl=-0.12% pf=0.83
+  [RUN] V1_b2_c5
+    trades=32 pnl=-0.09% pf=0.87
+  [RUN] V2_b0_c0
+    trades=19 pnl=-0.35% pf=0.39
+  [RUN] V2_b0_c1
+    trades=12 pnl=-0.29% pf=0.31
+  [RUN] V2_b0_c2
+    trades=14 pnl=-0.34% pf=0.27
+  [RUN] V2_b0_c3
+    trades=17 pnl=-0.37% pf=0.31
+  [RUN] V2_b0_c4
+    trades=18 pnl=-0.31% pf=0.42
+  [RUN] V2_b0_c5
+    trades=19 pnl=-0.35% pf=0.39
+  [RUN] V2_b0.5_c0
+    trades=15 pnl=-0.21% pf=0.51
+  [RUN] V2_b0.5_c1
+    trades=9 pnl=-0.16% pf=0.45
+  [RUN] V2_b0.5_c2
+    trades=10 pnl=-0.20% pf=0.38
+  [RUN] V2_b0.5_c3
+    trades=13 pnl=-0.23% pf=0.41
+  [RUN] V2_b0.5_c4
+    trades=14 pnl=-0.17% pf=0.56
+  [RUN] V2_b0.5_c5
+    trades=14 pnl=-0.17% pf=0.56
+  [RUN] V2_b1_c0
+    trades=8 pnl=0.05% pf=1.31
+  [RUN] V2_b1_c1
+    trades=6 pnl=-0.04% pf=0.75
+  [RUN] V2_b1_c2
+    trades=6 pnl=-0.04% pf=0.75
+  [RUN] V2_b1_c3
+    trades=7 pnl=-0.01% pf=0.95
+  [RUN] V2_b1_c4
+    trades=8 pnl=0.05% pf=1.31
+  [RUN] V2_b1_c5
+    trades=8 pnl=0.05% pf=1.31
+  [RUN] V2_b2_c0
+    trades=5 pnl=-0.01% pf=0.95
+  [RUN] V2_b2_c1
+    trades=5 pnl=-0.01% pf=0.95
+  [RUN] V2_b2_c2
+    trades=5 pnl=-0.01% pf=0.95
+  [RUN] V2_b2_c3
+    trades=5 pnl=-0.01% pf=0.95
+  [RUN] V2_b2_c4
+    trades=5 pnl=-0.01% pf=0.95
+  [RUN] V2_b2_c5
+    trades=5 pnl=-0.01% pf=0.95
+  [RUN] V2R_b0_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c5
+    trades=0 pnl=0.00% pf=0.00
+[FETCH] GBP/CHF (source=dukascopy, days=180)
+  Downloading 180d of M1 data from Dukascopy (this may take a while)...
+  [RUN] V0_b0_c0
+    trades=276 pnl=-0.17% pf=0.89
+  [RUN] V0_b0_c1
+    trades=67 pnl=-0.42% pf=0.70
+  [RUN] V0_b0_c2
+    trades=86 pnl=-0.27% pf=0.82
+  [RUN] V0_b0_c3
+    trades=100 pnl=-0.27% pf=0.82
+  [RUN] V0_b0_c4
+    trades=110 pnl=-0.21% pf=0.86
+  [RUN] V0_b0_c5
+    trades=118 pnl=-0.21% pf=0.86
+  [RUN] V0_b0.5_c0
+    trades=276 pnl=-0.17% pf=0.89
+  [RUN] V0_b0.5_c1
+    trades=67 pnl=-0.42% pf=0.70
+  [RUN] V0_b0.5_c2
+    trades=86 pnl=-0.27% pf=0.82
+  [RUN] V0_b0.5_c3
+    trades=100 pnl=-0.27% pf=0.82
+  [RUN] V0_b0.5_c4
+    trades=110 pnl=-0.21% pf=0.86
+  [RUN] V0_b0.5_c5
+    trades=118 pnl=-0.21% pf=0.86
+  [RUN] V0_b1_c0
+    trades=276 pnl=-0.17% pf=0.89
+  [RUN] V0_b1_c1
+    trades=67 pnl=-0.42% pf=0.70
+  [RUN] V0_b1_c2
+    trades=86 pnl=-0.27% pf=0.82
+  [RUN] V0_b1_c3
+    trades=100 pnl=-0.27% pf=0.82
+  [RUN] V0_b1_c4
+    trades=110 pnl=-0.21% pf=0.86
+  [RUN] V0_b1_c5
+    trades=118 pnl=-0.21% pf=0.86
+  [RUN] V0_b2_c0
+    trades=276 pnl=-0.17% pf=0.89
+  [RUN] V0_b2_c1
+    trades=67 pnl=-0.42% pf=0.70
+  [RUN] V0_b2_c2
+    trades=86 pnl=-0.27% pf=0.82
+  [RUN] V0_b2_c3
+    trades=100 pnl=-0.27% pf=0.82
+  [RUN] V0_b2_c4
+    trades=110 pnl=-0.21% pf=0.86
+  [RUN] V0_b2_c5
+    trades=118 pnl=-0.21% pf=0.86
+  [RUN] V1_b0_c0
+    trades=33 pnl=-0.14% pf=0.88
+  [RUN] V1_b0_c1
+    trades=29 pnl=-0.34% pf=0.70
+  [RUN] V1_b0_c2
+    trades=30 pnl=-0.24% pf=0.79
+  [RUN] V1_b0_c3
+    trades=30 pnl=-0.24% pf=0.79
+  [RUN] V1_b0_c4
+    trades=32 pnl=-0.18% pf=0.84
+  [RUN] V1_b0_c5
+    trades=32 pnl=-0.18% pf=0.84
+  [RUN] V1_b0.5_c0
+    trades=31 pnl=-0.07% pf=0.93
+  [RUN] V1_b0.5_c1
+    trades=27 pnl=-0.27% pf=0.75
+  [RUN] V1_b0.5_c2
+    trades=28 pnl=-0.17% pf=0.84
+  [RUN] V1_b0.5_c3
+    trades=28 pnl=-0.17% pf=0.84
+  [RUN] V1_b0.5_c4
+    trades=30 pnl=-0.12% pf=0.89
+  [RUN] V1_b0.5_c5
+    trades=30 pnl=-0.12% pf=0.89
+  [RUN] V1_b1_c0
+    trades=29 pnl=-0.26% pf=0.76
+  [RUN] V1_b1_c1
+    trades=25 pnl=-0.46% pf=0.57
+  [RUN] V1_b1_c2
+    trades=26 pnl=-0.36% pf=0.66
+  [RUN] V1_b1_c3
+    trades=26 pnl=-0.36% pf=0.66
+  [RUN] V1_b1_c4
+    trades=28 pnl=-0.30% pf=0.72
+  [RUN] V1_b1_c5
+    trades=28 pnl=-0.30% pf=0.72
+  [RUN] V1_b2_c0
+    trades=29 pnl=-0.26% pf=0.76
+  [RUN] V1_b2_c1
+    trades=25 pnl=-0.46% pf=0.57
+  [RUN] V1_b2_c2
+    trades=26 pnl=-0.36% pf=0.66
+  [RUN] V1_b2_c3
+    trades=26 pnl=-0.36% pf=0.66
+  [RUN] V1_b2_c4
+    trades=28 pnl=-0.30% pf=0.72
+  [RUN] V1_b2_c5
+    trades=28 pnl=-0.30% pf=0.72
+  [RUN] V2_b0_c0
+    trades=9 pnl=0.14% pf=1.78
+  [RUN] V2_b0_c1
+    trades=6 pnl=0.06% pf=1.44
+  [RUN] V2_b0_c2
+    trades=7 pnl=0.01% pf=1.05
+  [RUN] V2_b0_c3
+    trades=8 pnl=0.13% pf=1.68
+  [RUN] V2_b0_c4
+    trades=8 pnl=0.13% pf=1.68
+  [RUN] V2_b0_c5
+    trades=8 pnl=0.13% pf=1.68
+  [RUN] V2_b0.5_c0
+    trades=8 pnl=0.13% pf=1.68
+  [RUN] V2_b0.5_c1
+    trades=6 pnl=0.06% pf=1.44
+  [RUN] V2_b0.5_c2
+    trades=7 pnl=0.01% pf=1.05
+  [RUN] V2_b0.5_c3
+    trades=8 pnl=0.13% pf=1.68
+  [RUN] V2_b0.5_c4
+    trades=8 pnl=0.13% pf=1.68
+  [RUN] V2_b0.5_c5
+    trades=8 pnl=0.13% pf=1.68
+  [RUN] V2_b1_c0
+    trades=4 pnl=-0.09% pf=0.25
+  [RUN] V2_b1_c1
+    trades=3 pnl=-0.04% pf=0.42
+  [RUN] V2_b1_c2
+    trades=4 pnl=-0.09% pf=0.25
+  [RUN] V2_b1_c3
+    trades=4 pnl=-0.09% pf=0.25
+  [RUN] V2_b1_c4
+    trades=4 pnl=-0.09% pf=0.25
+  [RUN] V2_b1_c5
+    trades=4 pnl=-0.09% pf=0.25
+  [RUN] V2_b2_c0
+    trades=3 pnl=-0.04% pf=0.42
+  [RUN] V2_b2_c1
+    trades=3 pnl=-0.04% pf=0.42
+  [RUN] V2_b2_c2
+    trades=3 pnl=-0.04% pf=0.42
+  [RUN] V2_b2_c3
+    trades=3 pnl=-0.04% pf=0.42
+  [RUN] V2_b2_c4
+    trades=3 pnl=-0.04% pf=0.42
+  [RUN] V2_b2_c5
+    trades=3 pnl=-0.04% pf=0.42
+  [RUN] V2R_b0_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c5
+    trades=0 pnl=0.00% pf=0.00
+[FETCH] AUD/CAD (source=dukascopy, days=180)
+  Downloading 180d of M1 data from Dukascopy (this may take a while)...
+  [RUN] V0_b0_c0
+    trades=193 pnl=0.89% pf=2.95
+  [RUN] V0_b0_c1
+    trades=26 pnl=0.56% pf=2.33
+  [RUN] V0_b0_c2
+    trades=31 pnl=0.56% pf=2.33
+  [RUN] V0_b0_c3
+    trades=36 pnl=0.56% pf=2.33
+  [RUN] V0_b0_c4
+    trades=41 pnl=0.54% pf=2.22
+  [RUN] V0_b0_c5
+    trades=45 pnl=0.54% pf=2.22
+  [RUN] V0_b0.5_c0
+    trades=193 pnl=0.89% pf=2.95
+  [RUN] V0_b0.5_c1
+    trades=26 pnl=0.56% pf=2.33
+  [RUN] V0_b0.5_c2
+    trades=31 pnl=0.56% pf=2.33
+  [RUN] V0_b0.5_c3
+    trades=36 pnl=0.56% pf=2.33
+  [RUN] V0_b0.5_c4
+    trades=41 pnl=0.54% pf=2.22
+  [RUN] V0_b0.5_c5
+    trades=45 pnl=0.54% pf=2.22
+  [RUN] V0_b1_c0
+    trades=193 pnl=0.89% pf=2.95
+  [RUN] V0_b1_c1
+    trades=26 pnl=0.56% pf=2.33
+  [RUN] V0_b1_c2
+    trades=31 pnl=0.56% pf=2.33
+  [RUN] V0_b1_c3
+    trades=36 pnl=0.56% pf=2.33
+  [RUN] V0_b1_c4
+    trades=41 pnl=0.54% pf=2.22
+  [RUN] V0_b1_c5
+    trades=45 pnl=0.54% pf=2.22
+  [RUN] V0_b2_c0
+    trades=193 pnl=0.89% pf=2.95
+  [RUN] V0_b2_c1
+    trades=26 pnl=0.56% pf=2.33
+  [RUN] V0_b2_c2
+    trades=31 pnl=0.56% pf=2.33
+  [RUN] V0_b2_c3
+    trades=36 pnl=0.56% pf=2.33
+  [RUN] V0_b2_c4
+    trades=41 pnl=0.54% pf=2.22
+  [RUN] V0_b2_c5
+    trades=45 pnl=0.54% pf=2.22
+  [RUN] V1_b0_c0
+    trades=17 pnl=0.69% pf=2.59
+  [RUN] V1_b0_c1
+    trades=12 pnl=0.45% pf=2.11
+  [RUN] V1_b0_c2
+    trades=12 pnl=0.45% pf=2.11
+  [RUN] V1_b0_c3
+    trades=12 pnl=0.45% pf=2.11
+  [RUN] V1_b0_c4
+    trades=13 pnl=0.43% pf=2.01
+  [RUN] V1_b0_c5
+    trades=13 pnl=0.43% pf=2.01
+  [RUN] V1_b0.5_c0
+    trades=17 pnl=0.69% pf=2.59
+  [RUN] V1_b0.5_c1
+    trades=12 pnl=0.45% pf=2.11
+  [RUN] V1_b0.5_c2
+    trades=12 pnl=0.45% pf=2.11
+  [RUN] V1_b0.5_c3
+    trades=12 pnl=0.45% pf=2.11
+  [RUN] V1_b0.5_c4
+    trades=13 pnl=0.43% pf=2.01
+  [RUN] V1_b0.5_c5
+    trades=13 pnl=0.43% pf=2.01
+  [RUN] V1_b1_c0
+    trades=16 pnl=0.81% pf=3.57
+  [RUN] V1_b1_c1
+    trades=11 pnl=0.57% pf=3.00
+  [RUN] V1_b1_c2
+    trades=11 pnl=0.57% pf=3.00
+  [RUN] V1_b1_c3
+    trades=11 pnl=0.57% pf=3.00
+  [RUN] V1_b1_c4
+    trades=12 pnl=0.55% pf=2.80
+  [RUN] V1_b1_c5
+    trades=12 pnl=0.55% pf=2.80
+  [RUN] V1_b2_c0
+    trades=14 pnl=0.75% pf=3.75
+  [RUN] V1_b2_c1
+    trades=11 pnl=0.60% pf=3.39
+  [RUN] V1_b2_c2
+    trades=11 pnl=0.60% pf=3.39
+  [RUN] V1_b2_c3
+    trades=11 pnl=0.60% pf=3.39
+  [RUN] V1_b2_c4
+    trades=12 pnl=0.58% pf=3.13
+  [RUN] V1_b2_c5
+    trades=12 pnl=0.58% pf=3.13
+  [RUN] V2_b0_c0
+    trades=5 pnl=0.33% pf=4.32
+  [RUN] V2_b0_c1
+    trades=3 pnl=0.06% pf=1.57
+  [RUN] V2_b0_c2
+    trades=3 pnl=0.06% pf=1.57
+  [RUN] V2_b0_c3
+    trades=3 pnl=0.06% pf=1.57
+  [RUN] V2_b0_c4
+    trades=3 pnl=0.06% pf=1.57
+  [RUN] V2_b0_c5
+    trades=3 pnl=0.06% pf=1.57
+  [RUN] V2_b0.5_c0
+    trades=3 pnl=0.25% pf=999.00
+  [RUN] V2_b0.5_c1
+    trades=2 pnl=0.16% pf=999.00
+  [RUN] V2_b0.5_c2
+    trades=2 pnl=0.16% pf=999.00
+  [RUN] V2_b0.5_c3
+    trades=2 pnl=0.16% pf=999.00
+  [RUN] V2_b0.5_c4
+    trades=2 pnl=0.16% pf=999.00
+  [RUN] V2_b0.5_c5
+    trades=2 pnl=0.16% pf=999.00
+  [RUN] V2_b1_c0
+    trades=3 pnl=0.25% pf=999.00
+  [RUN] V2_b1_c1
+    trades=2 pnl=0.16% pf=999.00
+  [RUN] V2_b1_c2
+    trades=2 pnl=0.16% pf=999.00
+  [RUN] V2_b1_c3
+    trades=2 pnl=0.16% pf=999.00
+  [RUN] V2_b1_c4
+    trades=2 pnl=0.16% pf=999.00
+  [RUN] V2_b1_c5
+    trades=2 pnl=0.16% pf=999.00
+  [RUN] V2_b2_c0
+    trades=1 pnl=0.04% pf=999.00
+  [RUN] V2_b2_c1
+    trades=1 pnl=0.04% pf=999.00
+  [RUN] V2_b2_c2
+    trades=1 pnl=0.04% pf=999.00
+  [RUN] V2_b2_c3
+    trades=1 pnl=0.04% pf=999.00
+  [RUN] V2_b2_c4
+    trades=1 pnl=0.04% pf=999.00
+  [RUN] V2_b2_c5
+    trades=1 pnl=0.04% pf=999.00
+  [RUN] V2R_b0_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c5
+    trades=0 pnl=0.00% pf=0.00
+[FETCH] GBP/USD (source=dukascopy, days=180)
+  Downloading 180d of M1 data from Dukascopy (this may take a while)...
+  [RUN] V0_b0_c0
+    trades=402 pnl=-0.41% pf=0.81
+  [RUN] V0_b0_c1
+    trades=71 pnl=0.15% pf=1.13
+  [RUN] V0_b0_c2
+    trades=91 pnl=0.08% pf=1.07
+  [RUN] V0_b0_c3
+    trades=109 pnl=0.06% pf=1.04
+  [RUN] V0_b0_c4
+    trades=123 pnl=0.10% pf=1.07
+  [RUN] V0_b0_c5
+    trades=138 pnl=-0.14% pf=0.92
+  [RUN] V0_b0.5_c0
+    trades=402 pnl=-0.41% pf=0.81
+  [RUN] V0_b0.5_c1
+    trades=71 pnl=0.15% pf=1.13
+  [RUN] V0_b0.5_c2
+    trades=91 pnl=0.08% pf=1.07
+  [RUN] V0_b0.5_c3
+    trades=109 pnl=0.06% pf=1.04
+  [RUN] V0_b0.5_c4
+    trades=123 pnl=0.10% pf=1.07
+  [RUN] V0_b0.5_c5
+    trades=138 pnl=-0.14% pf=0.92
+  [RUN] V0_b1_c0
+    trades=402 pnl=-0.41% pf=0.81
+  [RUN] V0_b1_c1
+    trades=71 pnl=0.15% pf=1.13
+  [RUN] V0_b1_c2
+    trades=91 pnl=0.08% pf=1.07
+  [RUN] V0_b1_c3
+    trades=109 pnl=0.06% pf=1.04
+  [RUN] V0_b1_c4
+    trades=123 pnl=0.10% pf=1.07
+  [RUN] V0_b1_c5
+    trades=138 pnl=-0.14% pf=0.92
+  [RUN] V0_b2_c0
+    trades=402 pnl=-0.41% pf=0.81
+  [RUN] V0_b2_c1
+    trades=71 pnl=0.15% pf=1.13
+  [RUN] V0_b2_c2
+    trades=91 pnl=0.08% pf=1.07
+  [RUN] V0_b2_c3
+    trades=109 pnl=0.06% pf=1.04
+  [RUN] V0_b2_c4
+    trades=123 pnl=0.10% pf=1.07
+  [RUN] V0_b2_c5
+    trades=138 pnl=-0.14% pf=0.92
+  [RUN] V1_b0_c0
+    trades=36 pnl=-0.04% pf=0.97
+  [RUN] V1_b0_c1
+    trades=25 pnl=0.06% pf=1.06
+  [RUN] V1_b0_c2
+    trades=25 pnl=0.06% pf=1.06
+  [RUN] V1_b0_c3
+    trades=27 pnl=0.03% pf=1.03
+  [RUN] V1_b0_c4
+    trades=28 pnl=0.14% pf=1.14
+  [RUN] V1_b0_c5
+    trades=28 pnl=0.14% pf=1.14
+  [RUN] V1_b0.5_c0
+    trades=36 pnl=-0.04% pf=0.97
+  [RUN] V1_b0.5_c1
+    trades=25 pnl=0.06% pf=1.06
+  [RUN] V1_b0.5_c2
+    trades=25 pnl=0.06% pf=1.06
+  [RUN] V1_b0.5_c3
+    trades=27 pnl=0.03% pf=1.03
+  [RUN] V1_b0.5_c4
+    trades=28 pnl=0.14% pf=1.14
+  [RUN] V1_b0.5_c5
+    trades=28 pnl=0.14% pf=1.14
+  [RUN] V1_b1_c0
+    trades=35 pnl=0.10% pf=1.09
+  [RUN] V1_b1_c1
+    trades=24 pnl=0.19% pf=1.25
+  [RUN] V1_b1_c2
+    trades=24 pnl=0.19% pf=1.25
+  [RUN] V1_b1_c3
+    trades=26 pnl=0.16% pf=1.19
+  [RUN] V1_b1_c4
+    trades=27 pnl=0.27% pf=1.32
+  [RUN] V1_b1_c5
+    trades=27 pnl=0.27% pf=1.32
+  [RUN] V1_b2_c0
+    trades=33 pnl=0.38% pf=1.44
+  [RUN] V1_b2_c1
+    trades=22 pnl=0.32% pf=1.50
+  [RUN] V1_b2_c2
+    trades=22 pnl=0.32% pf=1.50
+  [RUN] V1_b2_c3
+    trades=23 pnl=0.37% pf=1.58
+  [RUN] V1_b2_c4
+    trades=24 pnl=0.48% pf=1.75
+  [RUN] V1_b2_c5
+    trades=25 pnl=0.48% pf=1.75
+  [RUN] V2_b0_c0
+    trades=16 pnl=-0.45% pf=0.37
+  [RUN] V2_b0_c1
+    trades=6 pnl=-0.17% pf=0.42
+  [RUN] V2_b0_c2
+    trades=9 pnl=-0.28% pf=0.38
+  [RUN] V2_b0_c3
+    trades=9 pnl=-0.28% pf=0.38
+  [RUN] V2_b0_c4
+    trades=9 pnl=-0.28% pf=0.38
+  [RUN] V2_b0_c5
+    trades=11 pnl=-0.49% pf=0.26
+  [RUN] V2_b0.5_c0
+    trades=14 pnl=-0.44% pf=0.35
+  [RUN] V2_b0.5_c1
+    trades=5 pnl=-0.19% pf=0.36
+  [RUN] V2_b0.5_c2
+    trades=7 pnl=-0.28% pf=0.36
+  [RUN] V2_b0.5_c3
+    trades=7 pnl=-0.28% pf=0.36
+  [RUN] V2_b0.5_c4
+    trades=7 pnl=-0.28% pf=0.36
+  [RUN] V2_b0.5_c5
+    trades=9 pnl=-0.49% pf=0.24
+  [RUN] V2_b1_c0
+    trades=11 pnl=-0.18% pf=0.56
+  [RUN] V2_b1_c1
+    trades=4 pnl=-0.08% pf=0.58
+  [RUN] V2_b1_c2
+    trades=6 pnl=-0.16% pf=0.49
+  [RUN] V2_b1_c3
+    trades=6 pnl=-0.16% pf=0.49
+  [RUN] V2_b1_c4
+    trades=6 pnl=-0.16% pf=0.49
+  [RUN] V2_b1_c5
+    trades=7 pnl=-0.21% pf=0.43
+  [RUN] V2_b2_c0
+    trades=5 pnl=-0.32% pf=0.11
+  [RUN] V2_b2_c1
+    trades=2 pnl=-0.19% pf=0.00
+  [RUN] V2_b2_c2
+    trades=3 pnl=-0.32% pf=0.00
+  [RUN] V2_b2_c3
+    trades=3 pnl=-0.32% pf=0.00
+  [RUN] V2_b2_c4
+    trades=3 pnl=-0.32% pf=0.00
+  [RUN] V2_b2_c5
+    trades=3 pnl=-0.32% pf=0.00
+  [RUN] V2R_b0_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c5
+    trades=0 pnl=0.00% pf=0.00
+[FETCH] EUR/CAD (source=dukascopy, days=180)
+  Downloading 180d of M1 data from Dukascopy (this may take a while)...
+  [RUN] V0_b0_c0
+    trades=8 pnl=-0.44% pf=0.25
+  [RUN] V0_b0_c1
+    trades=6 pnl=-0.42% pf=0.22
+  [RUN] V0_b0_c2
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b0_c3
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b0_c4
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b0_c5
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b0.5_c0
+    trades=8 pnl=-0.44% pf=0.25
+  [RUN] V0_b0.5_c1
+    trades=6 pnl=-0.42% pf=0.22
+  [RUN] V0_b0.5_c2
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b0.5_c3
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b0.5_c4
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b0.5_c5
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b1_c0
+    trades=8 pnl=-0.44% pf=0.25
+  [RUN] V0_b1_c1
+    trades=6 pnl=-0.42% pf=0.22
+  [RUN] V0_b1_c2
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b1_c3
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b1_c4
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b1_c5
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b2_c0
+    trades=8 pnl=-0.44% pf=0.25
+  [RUN] V0_b2_c1
+    trades=6 pnl=-0.42% pf=0.22
+  [RUN] V0_b2_c2
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b2_c3
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b2_c4
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V0_b2_c5
+    trades=7 pnl=-0.48% pf=0.19
+  [RUN] V1_b0_c0
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b0_c1
+    trades=3 pnl=-0.11% pf=0.48
+  [RUN] V1_b0_c2
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b0_c3
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b0_c4
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b0_c5
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b0.5_c0
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b0.5_c1
+    trades=3 pnl=-0.11% pf=0.48
+  [RUN] V1_b0.5_c2
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b0.5_c3
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b0.5_c4
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b0.5_c5
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b1_c0
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b1_c1
+    trades=3 pnl=-0.11% pf=0.48
+  [RUN] V1_b1_c2
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b1_c3
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b1_c4
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b1_c5
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b2_c0
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b2_c1
+    trades=3 pnl=-0.11% pf=0.48
+  [RUN] V1_b2_c2
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b2_c3
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b2_c4
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V1_b2_c5
+    trades=4 pnl=-0.17% pf=0.38
+  [RUN] V2_b0_c0
+    trades=2 pnl=0.04% pf=1.64
+  [RUN] V2_b0_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2_b0_c2
+    trades=1 pnl=0.10% pf=999.00
+  [RUN] V2_b0_c3
+    trades=2 pnl=0.04% pf=1.64
+  [RUN] V2_b0_c4
+    trades=2 pnl=0.04% pf=1.64
+  [RUN] V2_b0_c5
+    trades=2 pnl=0.04% pf=1.64
+  [RUN] V2_b0.5_c0
+    trades=2 pnl=0.04% pf=1.64
+  [RUN] V2_b0.5_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2_b0.5_c2
+    trades=1 pnl=0.10% pf=999.00
+  [RUN] V2_b0.5_c3
+    trades=2 pnl=0.04% pf=1.64
+  [RUN] V2_b0.5_c4
+    trades=2 pnl=0.04% pf=1.64
+  [RUN] V2_b0.5_c5
+    trades=2 pnl=0.04% pf=1.64
+  [RUN] V2_b1_c0
+    trades=1 pnl=0.10% pf=999.00
+  [RUN] V2_b1_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2_b1_c2
+    trades=1 pnl=0.10% pf=999.00
+  [RUN] V2_b1_c3
+    trades=1 pnl=0.10% pf=999.00
+  [RUN] V2_b1_c4
+    trades=1 pnl=0.10% pf=999.00
+  [RUN] V2_b1_c5
+    trades=1 pnl=0.10% pf=999.00
+  [RUN] V2_b2_c0
+    trades=1 pnl=0.10% pf=999.00
+  [RUN] V2_b2_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2_b2_c2
+    trades=1 pnl=0.10% pf=999.00
+  [RUN] V2_b2_c3
+    trades=1 pnl=0.10% pf=999.00
+  [RUN] V2_b2_c4
+    trades=1 pnl=0.10% pf=999.00
+  [RUN] V2_b2_c5
+    trades=1 pnl=0.10% pf=999.00
+  [RUN] V2R_b0_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c5
+    trades=0 pnl=0.00% pf=0.00
+[FETCH] AUD/JPY (source=dukascopy, days=180)
+  Downloading 180d of M1 data from Dukascopy (this may take a while)...
+  [RUN] V0_b0_c0
+    trades=480 pnl=-2.00% pf=0.58
+  [RUN] V0_b0_c1
+    trades=110 pnl=-1.15% pf=0.63
+  [RUN] V0_b0_c2
+    trades=141 pnl=-1.53% pf=0.56
+  [RUN] V0_b0_c3
+    trades=173 pnl=-1.65% pf=0.58
+  [RUN] V0_b0_c4
+    trades=192 pnl=-1.56% pf=0.61
+  [RUN] V0_b0_c5
+    trades=206 pnl=-1.56% pf=0.61
+  [RUN] V0_b0.5_c0
+    trades=480 pnl=-2.00% pf=0.58
+  [RUN] V0_b0.5_c1
+    trades=110 pnl=-1.15% pf=0.63
+  [RUN] V0_b0.5_c2
+    trades=141 pnl=-1.53% pf=0.56
+  [RUN] V0_b0.5_c3
+    trades=173 pnl=-1.65% pf=0.58
+  [RUN] V0_b0.5_c4
+    trades=192 pnl=-1.56% pf=0.61
+  [RUN] V0_b0.5_c5
+    trades=206 pnl=-1.56% pf=0.61
+  [RUN] V0_b1_c0
+    trades=480 pnl=-2.00% pf=0.58
+  [RUN] V0_b1_c1
+    trades=110 pnl=-1.15% pf=0.63
+  [RUN] V0_b1_c2
+    trades=141 pnl=-1.53% pf=0.56
+  [RUN] V0_b1_c3
+    trades=173 pnl=-1.65% pf=0.58
+  [RUN] V0_b1_c4
+    trades=192 pnl=-1.56% pf=0.61
+  [RUN] V0_b1_c5
+    trades=206 pnl=-1.56% pf=0.61
+  [RUN] V0_b2_c0
+    trades=480 pnl=-2.00% pf=0.58
+  [RUN] V0_b2_c1
+    trades=110 pnl=-1.15% pf=0.63
+  [RUN] V0_b2_c2
+    trades=141 pnl=-1.53% pf=0.56
+  [RUN] V0_b2_c3
+    trades=173 pnl=-1.65% pf=0.58
+  [RUN] V0_b2_c4
+    trades=192 pnl=-1.56% pf=0.61
+  [RUN] V0_b2_c5
+    trades=206 pnl=-1.56% pf=0.61
+  [RUN] V1_b0_c0
+    trades=59 pnl=-1.56% pf=0.57
+  [RUN] V1_b0_c1
+    trades=44 pnl=-1.18% pf=0.56
+  [RUN] V1_b0_c2
+    trades=46 pnl=-1.29% pf=0.54
+  [RUN] V1_b0_c3
+    trades=50 pnl=-1.30% pf=0.56
+  [RUN] V1_b0_c4
+    trades=54 pnl=-1.30% pf=0.59
+  [RUN] V1_b0_c5
+    trades=54 pnl=-1.30% pf=0.59
+  [RUN] V1_b0.5_c0
+    trades=57 pnl=-1.38% pf=0.60
+  [RUN] V1_b0.5_c1
+    trades=42 pnl=-1.01% pf=0.60
+  [RUN] V1_b0.5_c2
+    trades=44 pnl=-1.12% pf=0.57
+  [RUN] V1_b0.5_c3
+    trades=48 pnl=-1.13% pf=0.60
+  [RUN] V1_b0.5_c4
+    trades=52 pnl=-1.13% pf=0.62
+  [RUN] V1_b0.5_c5
+    trades=52 pnl=-1.13% pf=0.62
+  [RUN] V1_b1_c0
+    trades=55 pnl=-1.22% pf=0.63
+  [RUN] V1_b1_c1
+    trades=41 pnl=-0.91% pf=0.62
+  [RUN] V1_b1_c2
+    trades=43 pnl=-1.02% pf=0.60
+  [RUN] V1_b1_c3
+    trades=46 pnl=-0.96% pf=0.63
+  [RUN] V1_b1_c4
+    trades=50 pnl=-0.96% pf=0.66
+  [RUN] V1_b1_c5
+    trades=50 pnl=-0.96% pf=0.66
+  [RUN] V1_b2_c0
+    trades=52 pnl=-0.86% pf=0.71
+  [RUN] V1_b2_c1
+    trades=39 pnl=-0.60% pf=0.72
+  [RUN] V1_b2_c2
+    trades=40 pnl=-0.66% pf=0.70
+  [RUN] V1_b2_c3
+    trades=43 pnl=-0.61% pf=0.74
+  [RUN] V1_b2_c4
+    trades=47 pnl=-0.60% pf=0.76
+  [RUN] V1_b2_c5
+    trades=47 pnl=-0.60% pf=0.76
+  [RUN] V2_b0_c0
+    trades=22 pnl=0.08% pf=1.10
+  [RUN] V2_b0_c1
+    trades=11 pnl=0.14% pf=1.43
+  [RUN] V2_b0_c2
+    trades=15 pnl=-0.27% pf=0.63
+  [RUN] V2_b0_c3
+    trades=16 pnl=-0.22% pf=0.70
+  [RUN] V2_b0_c4
+    trades=19 pnl=-0.20% pf=0.76
+  [RUN] V2_b0_c5
+    trades=20 pnl=-0.12% pf=0.86
+  [RUN] V2_b0.5_c0
+    trades=18 pnl=0.12% pf=1.16
+  [RUN] V2_b0.5_c1
+    trades=8 pnl=0.23% pf=2.30
+  [RUN] V2_b0.5_c2
+    trades=11 pnl=-0.03% pf=0.94
+  [RUN] V2_b0.5_c3
+    trades=13 pnl=-0.14% pf=0.77
+  [RUN] V2_b0.5_c4
+    trades=15 pnl=-0.17% pf=0.76
+  [RUN] V2_b0.5_c5
+    trades=16 pnl=-0.09% pf=0.88
+  [RUN] V2_b1_c0
+    trades=15 pnl=-0.01% pf=0.98
+  [RUN] V2_b1_c1
+    trades=7 pnl=0.15% pf=1.86
+  [RUN] V2_b1_c2
+    trades=9 pnl=-0.03% pf=0.93
+  [RUN] V2_b1_c3
+    trades=11 pnl=-0.14% pf=0.74
+  [RUN] V2_b1_c4
+    trades=13 pnl=-0.17% pf=0.73
+  [RUN] V2_b1_c5
+    trades=14 pnl=-0.09% pf=0.86
+  [RUN] V2_b2_c0
+    trades=9 pnl=0.10% pf=1.30
+  [RUN] V2_b2_c1
+    trades=5 pnl=0.33% pf=999.00
+  [RUN] V2_b2_c2
+    trades=6 pnl=0.29% pf=7.66
+  [RUN] V2_b2_c3
+    trades=7 pnl=0.13% pf=1.64
+  [RUN] V2_b2_c4
+    trades=9 pnl=0.10% pf=1.30
+  [RUN] V2_b2_c5
+    trades=9 pnl=0.10% pf=1.30
+  [RUN] V2R_b0_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c5
+    trades=0 pnl=0.00% pf=0.00
+[FETCH] EUR/CHF (source=dukascopy, days=180)
+  Downloading 180d of M1 data from Dukascopy (this may take a while)...
+  [RUN] V0_b0_c0
+    trades=260 pnl=-1.12% pf=0.53
+  [RUN] V0_b0_c1
+    trades=82 pnl=-0.99% pf=0.46
+  [RUN] V0_b0_c2
+    trades=99 pnl=-1.34% pf=0.39
+  [RUN] V0_b0_c3
+    trades=114 pnl=-1.21% pf=0.46
+  [RUN] V0_b0_c4
+    trades=122 pnl=-1.21% pf=0.48
+  [RUN] V0_b0_c5
+    trades=128 pnl=-1.11% pf=0.53
+  [RUN] V0_b0.5_c0
+    trades=260 pnl=-1.12% pf=0.53
+  [RUN] V0_b0.5_c1
+    trades=82 pnl=-0.99% pf=0.46
+  [RUN] V0_b0.5_c2
+    trades=99 pnl=-1.34% pf=0.39
+  [RUN] V0_b0.5_c3
+    trades=114 pnl=-1.21% pf=0.46
+  [RUN] V0_b0.5_c4
+    trades=122 pnl=-1.21% pf=0.48
+  [RUN] V0_b0.5_c5
+    trades=128 pnl=-1.11% pf=0.53
+  [RUN] V0_b1_c0
+    trades=260 pnl=-1.12% pf=0.53
+  [RUN] V0_b1_c1
+    trades=82 pnl=-0.99% pf=0.46
+  [RUN] V0_b1_c2
+    trades=99 pnl=-1.34% pf=0.39
+  [RUN] V0_b1_c3
+    trades=114 pnl=-1.21% pf=0.46
+  [RUN] V0_b1_c4
+    trades=122 pnl=-1.21% pf=0.48
+  [RUN] V0_b1_c5
+    trades=128 pnl=-1.11% pf=0.53
+  [RUN] V0_b2_c0
+    trades=260 pnl=-1.12% pf=0.53
+  [RUN] V0_b2_c1
+    trades=82 pnl=-0.99% pf=0.46
+  [RUN] V0_b2_c2
+    trades=99 pnl=-1.34% pf=0.39
+  [RUN] V0_b2_c3
+    trades=114 pnl=-1.21% pf=0.46
+  [RUN] V0_b2_c4
+    trades=122 pnl=-1.21% pf=0.48
+  [RUN] V0_b2_c5
+    trades=128 pnl=-1.11% pf=0.53
+  [RUN] V1_b0_c0
+    trades=49 pnl=-0.98% pf=0.40
+  [RUN] V1_b0_c1
+    trades=45 pnl=-1.06% pf=0.33
+  [RUN] V1_b0_c2
+    trades=45 pnl=-1.06% pf=0.33
+  [RUN] V1_b0_c3
+    trades=47 pnl=-1.11% pf=0.32
+  [RUN] V1_b0_c4
+    trades=48 pnl=-1.08% pf=0.34
+  [RUN] V1_b0_c5
+    trades=49 pnl=-0.98% pf=0.40
+  [RUN] V1_b0.5_c0
+    trades=47 pnl=-0.91% pf=0.42
+  [RUN] V1_b0.5_c1
+    trades=44 pnl=-1.02% pf=0.34
+  [RUN] V1_b0.5_c2
+    trades=44 pnl=-1.02% pf=0.34
+  [RUN] V1_b0.5_c3
+    trades=45 pnl=-1.04% pf=0.33
+  [RUN] V1_b0.5_c4
+    trades=46 pnl=-1.01% pf=0.35
+  [RUN] V1_b0.5_c5
+    trades=47 pnl=-0.91% pf=0.42
+  [RUN] V1_b1_c0
+    trades=40 pnl=-0.63% pf=0.50
+  [RUN] V1_b1_c1
+    trades=37 pnl=-0.77% pf=0.39
+  [RUN] V1_b1_c2
+    trades=37 pnl=-0.77% pf=0.39
+  [RUN] V1_b1_c3
+    trades=37 pnl=-0.77% pf=0.39
+  [RUN] V1_b1_c4
+    trades=39 pnl=-0.73% pf=0.42
+  [RUN] V1_b1_c5
+    trades=40 pnl=-0.63% pf=0.50
+  [RUN] V1_b2_c0
+    trades=35 pnl=-0.51% pf=0.52
+  [RUN] V1_b2_c1
+    trades=32 pnl=-0.65% pf=0.39
+  [RUN] V1_b2_c2
+    trades=32 pnl=-0.65% pf=0.39
+  [RUN] V1_b2_c3
+    trades=32 pnl=-0.65% pf=0.39
+  [RUN] V1_b2_c4
+    trades=34 pnl=-0.61% pf=0.43
+  [RUN] V1_b2_c5
+    trades=35 pnl=-0.51% pf=0.52
+  [RUN] V2_b0_c0
+    trades=15 pnl=-0.45% pf=0.22
+  [RUN] V2_b0_c1
+    trades=10 pnl=-0.40% pf=0.15
+  [RUN] V2_b0_c2
+    trades=12 pnl=-0.46% pf=0.14
+  [RUN] V2_b0_c3
+    trades=12 pnl=-0.46% pf=0.14
+  [RUN] V2_b0_c4
+    trades=14 pnl=-0.45% pf=0.21
+  [RUN] V2_b0_c5
+    trades=15 pnl=-0.45% pf=0.22
+  [RUN] V2_b0.5_c0
+    trades=8 pnl=-0.45% pf=0.01
+  [RUN] V2_b0.5_c1
+    trades=4 pnl=-0.33% pf=0.00
+  [RUN] V2_b0.5_c2
+    trades=6 pnl=-0.40% pf=0.00
+  [RUN] V2_b0.5_c3
+    trades=7 pnl=-0.46% pf=0.00
+  [RUN] V2_b0.5_c4
+    trades=7 pnl=-0.46% pf=0.00
+  [RUN] V2_b0.5_c5
+    trades=8 pnl=-0.45% pf=0.01
+  [RUN] V2_b1_c0
+    trades=5 pnl=-0.28% pf=0.00
+  [RUN] V2_b1_c1
+    trades=3 pnl=-0.22% pf=0.00
+  [RUN] V2_b1_c2
+    trades=4 pnl=-0.26% pf=0.00
+  [RUN] V2_b1_c3
+    trades=4 pnl=-0.26% pf=0.00
+  [RUN] V2_b1_c4
+    trades=4 pnl=-0.26% pf=0.00
+  [RUN] V2_b1_c5
+    trades=4 pnl=-0.26% pf=0.00
+  [RUN] V2_b2_c0
+    trades=3 pnl=-0.10% pf=0.00
+  [RUN] V2_b2_c1
+    trades=1 pnl=-0.03% pf=0.00
+  [RUN] V2_b2_c2
+    trades=2 pnl=-0.08% pf=0.00
+  [RUN] V2_b2_c3
+    trades=2 pnl=-0.08% pf=0.00
+  [RUN] V2_b2_c4
+    trades=2 pnl=-0.08% pf=0.00
+  [RUN] V2_b2_c5
+    trades=2 pnl=-0.08% pf=0.00
+  [RUN] V2R_b0_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b0.5_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b1_c5
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c0
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c1
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c2
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c3
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c4
+    trades=0 pnl=0.00% pf=0.00
+  [RUN] V2R_b2_c5
+    trades=0 pnl=0.00% pf=0.00
+
+Saved CSV: results/confirmation_bakeoff_20260415_043937.csv
+Saved MD:  results/confirmation_bakeoff_20260415_043937.md

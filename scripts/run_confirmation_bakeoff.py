@@ -431,7 +431,7 @@ def main() -> int:
         "--strict",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Enable data quality gate (>5% weekday zero bars raises error). Use --no-strict for diagnostic runs.",
+        help="Enable data quality gate (>5%% weekday zero bars raises error). Use --no-strict for diagnostic runs.",
     )
     args = parser.parse_args()
 

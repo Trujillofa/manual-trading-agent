@@ -27,17 +27,20 @@ class TradingConfig:
         ]
     )
     minors: list[str] = field(default_factory=list)
+    shadow: list[str] = field(default_factory=list)
     lot_size: float = 3.0
 
     def __post_init__(self) -> None:
         if self.mode not in {"paper", "live"}:
             raise ValueError(f"trading.mode must be 'paper' or 'live', got: {self.mode}")
-        if not self.majors:
-            raise ValueError("trading.majors must contain at least one symbol")
+        if not self.majors and not self.shadow:
+            raise ValueError("trading.majors and trading.shadow cannot both be empty")
         if not all(_is_non_empty_string(symbol) for symbol in self.majors):
             raise ValueError("trading.majors must contain only non-empty strings")
         if not all(_is_non_empty_string(symbol) for symbol in self.minors):
             raise ValueError("trading.minors must contain only non-empty strings")
+        if not all(_is_non_empty_string(symbol) for symbol in self.shadow):
+            raise ValueError("trading.shadow must contain only non-empty strings")
         if self.lot_size <= 0:
             raise ValueError("trading.lot_size must be greater than 0")
 
@@ -229,6 +232,7 @@ class Settings:
             "mode": trading_data.get("mode", "paper"),
             "majors": trading_data.get("majors", pairs_data.get("majors", [])),
             "minors": trading_data.get("minors", pairs_data.get("minors", [])),
+            "shadow": trading_data.get("shadow", pairs_data.get("shadow", [])),
             "lot_size": trading_data.get("lot_size", 3.0),
         }
 

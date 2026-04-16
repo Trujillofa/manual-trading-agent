@@ -1,12 +1,12 @@
 trading:
   mode: "paper"
   pairs:
-    majors:
+    majors: []
+    minors: []
+    shadow:
       - EUR/GBP
       - GBP/CHF
       - AUD/CAD
-    minors: []
-    exotics: []
   lot_size: 3
 
 timeframes:

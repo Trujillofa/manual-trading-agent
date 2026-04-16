@@ -47,8 +47,8 @@ from src.strategy.multi_timeframe import MTFRSIStrategy
 # confirm_bars = max bars after MTF alignment to accept breakout (0 = immediate only)
 CONFIRMATION_PROFILES: dict[str, ConfirmationProfile] = {
     "EUR/GBP": {"variant": "V2", "buffer_pips": 0.5, "confirm_bars": 2},
-    "GBP/CHF": {"variant": "V1", "buffer_pips": 0.5, "confirm_bars": 2},
-    "AUD/CAD": {"variant": "V1", "buffer_pips": 2.0, "confirm_bars": 2},
+    "GBP/CHF": {"variant": "V1", "buffer_pips": 0.5, "confirm_bars": 0},
+    "AUD/CAD": {"variant": "V1", "buffer_pips": 2.0, "confirm_bars": 0},
 }
 
 # Default profile for pairs without a specific one
@@ -131,6 +131,14 @@ class NearCandidate(TypedDict):
     bullish_div: float | None
     bearish_div: float | None
     price: float
+
+
+class ScanTelemetrySummary(TypedDict):
+    scans: int
+    mtf_alignments: int
+    aligned_pending_breakout: int
+    entries: int
+    blockers: dict[str, int]
 
 
 def _get_static_spread_quote(pair: str, pip_size: float) -> SpreadQuote | None:
@@ -238,8 +246,20 @@ def _parse_pairs(raw_pairs: str | None) -> list[str] | None:
     return pairs or None
 
 
+def _logs_dir() -> Path:
+    configured = os.getenv("MANUAL_TRADING_AGENT_LOG_DIR")
+    if configured:
+        return Path(configured)
+
+    app_root = Path("/app")
+    if app_root.exists() and os.access(app_root, os.W_OK):
+        return app_root / "logs"
+
+    return Path.cwd() / "logs"
+
+
 def _near_setup_state_path() -> Path:
-    return Path("/app/logs/near_setup_state.json")
+    return _logs_dir() / "near_setup_state.json"
 
 
 def _load_json_mapping(path: Path) -> dict[str, Any]:
@@ -264,7 +284,7 @@ def _save_near_setup_state(state: dict[str, NearStateRecord]) -> None:
 
 
 def _alignment_state_path() -> Path:
-    return Path("/app/logs/alignment_state.json")
+    return _logs_dir() / "alignment_state.json"
 
 
 def _load_alignment_state() -> dict[str, AlignmentStateRecord]:
@@ -279,7 +299,7 @@ def _save_alignment_state(state: dict[str, AlignmentStateRecord]) -> None:
 
 
 def _cooldown_state_path() -> Path:
-    return Path("/app/logs/cooldown_state.json")
+    return _logs_dir() / "cooldown_state.json"
 
 
 def _load_cooldown_state() -> dict[str, CooldownStateRecord]:
@@ -294,7 +314,7 @@ def _save_cooldown_state(state: dict[str, CooldownStateRecord]) -> None:
 
 
 def _audit_log_path() -> Path:
-    return Path("/app/logs/signal_audit.jsonl")
+    return _logs_dir() / "signal_audit.jsonl"
 
 
 def _append_audit_log(payload: dict[str, object]) -> None:
@@ -302,6 +322,102 @@ def _append_audit_log(payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(payload) + "\n")
+
+
+def _build_scan_telemetry_payload(
+    *,
+    ts: str,
+    scan_run_id: str,
+    pair: str,
+    state: str,
+    direction: str | None,
+    aligned: bool,
+    breakout_pending: bool,
+    entry_triggered: bool,
+    bars_aligned: int | None,
+    confirm_bars: int | None,
+    within_confirm_window: bool | None,
+    spread_pips: float | None,
+    max_spread_pips: float | None,
+    spread_source: str | None,
+    adx_1h: float | None,
+    is_ranging: bool | None,
+    rsi_1h: float | None,
+    rsi_30m: float | None,
+    rsi_15m: float | None,
+    no_trade_reasons: list[str],
+    is_shadow: bool = False,
+) -> dict[str, object]:
+    reason_text = " | ".join(no_trade_reasons).lower()
+    blockers = {
+        "adx_trending": "trending market" in reason_text,
+        "spread_unavailable_or_too_wide": "spread unavailable/too wide" in reason_text,
+        "session": "outside allowed session" in reason_text,
+        "news": "blocked by high-impact news" in reason_text,
+        "cooldown": "cooldown active" in reason_text,
+        "confirmation_expired": "confirmation window expired" in reason_text,
+        "breakout_unconfirmed": "breakout" in reason_text and "not confirmed" in reason_text,
+        "data_unavailable": state == "data_unavailable",
+    }
+    return {
+        "ts": ts,
+        "kind": "scan_telemetry",
+        "scan_run_id": scan_run_id,
+        "pair": pair,
+        "state": state,
+        "direction": direction,
+        "is_shadow": is_shadow,
+        "counts": {
+            "scan": 1,
+            "mtf_alignment": int(aligned),
+            "aligned_pending_breakout": int(state == "aligned_pending_breakout"),
+            "entry": int(entry_triggered),
+        },
+        "blockers": blockers,
+        "context": {
+            "bars_aligned": bars_aligned,
+            "confirm_bars": confirm_bars,
+            "within_confirm_window": within_confirm_window,
+            "breakout_pending": breakout_pending,
+            "spread_pips": spread_pips,
+            "max_spread_pips": max_spread_pips,
+            "spread_source": spread_source,
+            "adx_1h": adx_1h,
+            "is_ranging": is_ranging,
+            "rsi_1h": rsi_1h,
+            "rsi_30m": rsi_30m,
+            "rsi_15m": rsi_15m,
+        },
+        "reasons": no_trade_reasons,
+    }
+
+
+def _aggregate_scan_telemetry(records: list[dict[str, object]]) -> dict[str, ScanTelemetrySummary]:
+    per_pair: dict[str, ScanTelemetrySummary] = {}
+    for rec in records:
+        pair = str(rec.get("pair", "unknown"))
+        counts = cast(dict[str, object], rec.get("counts", {}))
+        blockers = cast(dict[str, object], rec.get("blockers", {}))
+        summary = per_pair.setdefault(
+            pair,
+            {
+                "scans": 0,
+                "mtf_alignments": 0,
+                "aligned_pending_breakout": 0,
+                "entries": 0,
+                "blockers": {},
+            },
+        )
+        summary["scans"] += int(cast(int, counts.get("scan", 0)))
+        summary["mtf_alignments"] += int(cast(int, counts.get("mtf_alignment", 0)))
+        summary["aligned_pending_breakout"] += int(
+            cast(int, counts.get("aligned_pending_breakout", 0))
+        )
+        summary["entries"] += int(cast(int, counts.get("entry", 0)))
+        for blocker, active in blockers.items():
+            if active:
+                summary["blockers"][blocker] = summary["blockers"].get(blocker, 0) + 1
+    return per_pair
 
 
 def _mtf_distance_to_buy(rsi_1h: float, rsi_30m: float, rsi_15m: float, threshold: float) -> float:
@@ -442,7 +558,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
 
     majors = list(getattr(settings.trading, "majors", []))
     minors = list(getattr(settings.trading, "minors", []))
-    selected_pairs = pairs or (majors + minors)
+    shadow = list(getattr(settings.trading, "shadow", []))
+    shadow_set = set(shadow)
+    selected_pairs = pairs or (majors + minors + shadow)
 
     rsi_overbought = settings.strategy.rsi_overbought
     rsi_oversold = settings.strategy.rsi_oversold
@@ -456,9 +574,28 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     alignment_state = _load_alignment_state()
     now_ts = int(time.time())
     now_utc = datetime.now(UTC)
+    scan_run_id = now_utc.isoformat()
     confirmed_pairs: set[str] = set()
 
     for pair in selected_pairs:
+        is_shadow = pair in shadow_set
+        telemetry_state = "data_unavailable"
+        telemetry_direction: str | None = None
+        telemetry_reasons: list[str] = []
+        telemetry_aligned = False
+        telemetry_breakout_pending = False
+        telemetry_entry_triggered = False
+        bars_aligned: int | None = None
+        confirm_bars: int | None = None
+        within_confirm_window: bool | None = None
+        spread_pips: float | None = None
+        max_spread_for_pair: float | None = None
+        spread_source: str | None = None
+        adx_1h: float | None = None
+        is_ranging: bool | None = None
+        rsi_1h: float | None = None
+        rsi_30m: float | None = None
+        rsi_15m_val: float | None = None
         try:
             # Fetch multi-timeframe data
             symbol = pair.replace("/", "")
@@ -467,6 +604,31 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             data_15m = fetcher.fetch(symbol, period="2d", interval="15m")
 
             if data_1h.empty or data_30m.empty or data_15m.empty:
+                telemetry_reasons = ["timeframe data unavailable"]
+                _append_audit_log(
+                    _build_scan_telemetry_payload(
+                        ts=now_utc.isoformat(),
+                        scan_run_id=scan_run_id,
+                        pair=pair,
+                        state=telemetry_state,
+                        direction=telemetry_direction,
+                        aligned=telemetry_aligned,
+                        breakout_pending=telemetry_breakout_pending,
+                        entry_triggered=telemetry_entry_triggered,
+                        bars_aligned=bars_aligned,
+                        confirm_bars=confirm_bars,
+                        within_confirm_window=within_confirm_window,
+                        spread_pips=spread_pips,
+                        max_spread_pips=max_spread_for_pair,
+                        spread_source=spread_source,
+                        adx_1h=adx_1h,
+                        is_ranging=is_ranging,
+                        rsi_1h=rsi_1h,
+                        rsi_30m=rsi_30m,
+                        rsi_15m=rsi_15m_val,
+                        no_trade_reasons=telemetry_reasons,
+                    )
+                )
                 continue
 
             # Extract price data from 15m (primary timeframe)
@@ -537,14 +699,15 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             if quote is None:
                 quote = _get_static_spread_quote(pair, pip_size)
 
-            spread_pips = None
             spread_ok = True
             pair_spread_limits = getattr(settings.strategy, "spread_limits_pips", {}) or {}
             max_spread_for_pair = float(
                 pair_spread_limits.get(pair, settings.strategy.max_spread_pips)
             )
             if quote and isinstance(quote.get("spread"), float):
-                spread_pips = float(quote["spread"]) / pip_size
+                spread_value = cast(float, quote.get("spread"))
+                spread_pips = float(spread_value) / pip_size
+                spread_source = str(quote.get("source", "live"))
                 spread_ok = spread_pips <= max_spread_for_pair
             elif settings.strategy.spread_filter_enabled:
                 spread_ok = False
@@ -603,6 +766,31 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
 
             # Check MTF RSI alignment
             if rsi_1h is None or rsi_30m is None or rsi_15m_val is None:
+                telemetry_reasons = ["rsi unavailable"]
+                _append_audit_log(
+                    _build_scan_telemetry_payload(
+                        ts=now_utc.isoformat(),
+                        scan_run_id=scan_run_id,
+                        pair=pair,
+                        state=telemetry_state,
+                        direction=telemetry_direction,
+                        aligned=telemetry_aligned,
+                        breakout_pending=telemetry_breakout_pending,
+                        entry_triggered=telemetry_entry_triggered,
+                        bars_aligned=bars_aligned,
+                        confirm_bars=confirm_bars,
+                        within_confirm_window=within_confirm_window,
+                        spread_pips=spread_pips,
+                        max_spread_pips=max_spread_for_pair,
+                        spread_source=spread_source,
+                        adx_1h=adx_1h,
+                        is_ranging=is_ranging,
+                        rsi_1h=rsi_1h,
+                        rsi_30m=rsi_30m,
+                        rsi_15m=rsi_15m_val,
+                        no_trade_reasons=telemetry_reasons,
+                    )
+                )
                 continue
 
             all_oversold = (
@@ -649,6 +837,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 micro_context = _fetch_micro_context(fetcher, symbol, rsi_period)
 
             aligned = bool(all_oversold or all_overbought)
+            telemetry_aligned = aligned
 
             # Track alignment age for confirm_bars window
             confirm_bars = profile["confirm_bars"]
@@ -775,6 +964,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 if cooldown_active:
                     no_trade_reasons.append("cooldown active")
                 if no_trade_reasons:
+                    telemetry_state = "blocked"
+                    telemetry_direction = signal_direction
+                    telemetry_reasons = list(no_trade_reasons)
                     print(f"  🚫 NO TRADE: {', '.join(no_trade_reasons)}")
                     _append_audit_log(
                         {
@@ -793,6 +985,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     signal_direction = None
 
             if not signal_direction and breakout_pending:
+                telemetry_state = "aligned_pending_breakout"
+                telemetry_direction = near_direction
                 rsi_5m = micro_context.get("rsi_5m")
                 rsi_1m = micro_context.get("rsi_1m")
                 print(f"  ⏳ ALIGNED / BREAKOUT PENDING: {near_direction}")
@@ -817,6 +1011,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     }
                 )
             elif not signal_direction and (near_distance <= 4.0 or remaining == 1):
+                telemetry_state = "watch"
+                telemetry_direction = near_direction
                 rsi_5m = micro_context.get("rsi_5m")
                 rsi_1m = micro_context.get("rsi_1m")
                 print(
@@ -843,6 +1039,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 )
 
             if signal_direction:
+                telemetry_state = "entry"
+                telemetry_direction = signal_direction
+                telemetry_entry_triggered = True
                 print(f"  ⚠️ MTF SIGNAL: {signal_direction} (confidence: {signal_confidence:.0%})")
                 print(f"     Reasons: {', '.join(signal_reasons)}")
 
@@ -885,8 +1084,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     print(f"     RSI 1m: {micro_context['rsi_1m']:.1f}")
                 print(f"     Execution: {exec_note}")
 
-                # Send Telegram notification
-                if notifier and hh and ll:
+                # Send Telegram notification (skip for shadow pairs)
+                is_shadow = pair in shadow_set
+                if notifier and hh and ll and not is_shadow:
                     confirmed_pairs.add(pair)
                     entry_fp = f"entry|{signal_direction}|{round(float(rsi_1h), 1)}|{round(float(rsi_30m), 1)}|{round(float(rsi_15m_val), 1)}"
                     prev = near_state.get(pair)
@@ -927,11 +1127,69 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             "rsi_15m": float(rsi_15m_val),
                             "breakout_buy": breakout_buy,
                             "breakout_sell": breakout_sell,
+                            "shadow": is_shadow,
                         }
                     )
 
+            if telemetry_state == "data_unavailable" and not telemetry_reasons:
+                telemetry_state = "neutral"
+                telemetry_direction = (
+                    near_direction if near_distance <= 4.0 or remaining == 1 else None
+                )
+
+            _append_audit_log(
+                _build_scan_telemetry_payload(
+                    ts=now_utc.isoformat(),
+                    scan_run_id=scan_run_id,
+                    pair=pair,
+                    state=telemetry_state,
+                    direction=telemetry_direction,
+                    aligned=telemetry_aligned,
+                    breakout_pending=breakout_pending,
+                    entry_triggered=telemetry_entry_triggered,
+                    bars_aligned=bars_aligned,
+                    confirm_bars=confirm_bars,
+                    within_confirm_window=within_confirm_window,
+                    spread_pips=spread_pips,
+                    max_spread_pips=max_spread_for_pair,
+                    spread_source=spread_source,
+                    adx_1h=adx_1h,
+                    is_ranging=is_ranging,
+                    rsi_1h=rsi_1h,
+                    rsi_30m=rsi_30m,
+                    rsi_15m=rsi_15m_val,
+                    no_trade_reasons=telemetry_reasons,
+                    is_shadow=is_shadow,
+                )
+            )
+
         except Exception as exc:
             print(f"  Error: {exc}")
+            _append_audit_log(
+                _build_scan_telemetry_payload(
+                    ts=now_utc.isoformat(),
+                    scan_run_id=scan_run_id,
+                    pair=pair,
+                    state="data_unavailable",
+                    direction=telemetry_direction,
+                    aligned=telemetry_aligned,
+                    breakout_pending=telemetry_breakout_pending,
+                    entry_triggered=telemetry_entry_triggered,
+                    bars_aligned=bars_aligned,
+                    confirm_bars=confirm_bars,
+                    within_confirm_window=within_confirm_window,
+                    spread_pips=spread_pips,
+                    max_spread_pips=max_spread_for_pair,
+                    spread_source=spread_source,
+                    adx_1h=adx_1h,
+                    is_ranging=is_ranging,
+                    rsi_1h=rsi_1h,
+                    rsi_30m=rsi_30m,
+                    rsi_15m=rsi_15m_val,
+                    no_trade_reasons=[f"scan exception: {exc}"],
+                    is_shadow=is_shadow,
+                )
+            )
 
     # Always persist alignment state (independent of notifier)
     _save_alignment_state(alignment_state)
@@ -1257,10 +1515,11 @@ async def run_dashboard(days: int) -> None:
         return
 
     cutoff = datetime.now(UTC) - timedelta(days=days)
-    entries: list[dict] = []
-    blocked: list[dict] = []
-    aligned: list[dict] = []
-    watched: list[dict] = []
+    entries: list[dict[str, object]] = []
+    blocked: list[dict[str, object]] = []
+    aligned: list[dict[str, object]] = []
+    watched: list[dict[str, object]] = []
+    telemetry: list[dict[str, object]] = []
 
     with audit_path.open(encoding="utf-8") as fh:
         for line in fh:
@@ -1277,6 +1536,9 @@ async def run_dashboard(days: int) -> None:
             except (ValueError, TypeError):
                 continue
             if ts < cutoff:
+                continue
+            if rec.get("kind") == "scan_telemetry":
+                telemetry.append(cast(dict[str, object], rec))
                 continue
             state = rec.get("state", "")
             if state == "entry":
@@ -1297,6 +1559,29 @@ async def run_dashboard(days: int) -> None:
     print(f"Watch list:       {len(watched)}")
     print()
 
+    if telemetry:
+        print("--- SCAN TELEMETRY ---")
+        telemetry_summary = _aggregate_scan_telemetry(telemetry)
+        print(
+            f"{'Pair':<10} {'Scans':>5} {'Align':>5} {'Pending':>7} {'Entries':>7} {'Top blocker':>28}"
+        )
+        print("-" * 72)
+        for pair, summary in sorted(
+            telemetry_summary.items(),
+            key=lambda item: (-item[1]["mtf_alignments"], item[0]),
+        )[:15]:
+            blocker_label = "-"
+            if summary["blockers"]:
+                blocker_label, blocker_count = max(
+                    summary["blockers"].items(),
+                    key=lambda item: item[1],
+                )
+                blocker_label = f"{blocker_label} ({blocker_count})"
+            print(
+                f"{pair:<10} {summary['scans']:>5} {summary['mtf_alignments']:>5} {summary['aligned_pending_breakout']:>7} {summary['entries']:>7} {blocker_label:>28}"
+            )
+        print()
+
     # Entry signals detail
     if entries:
         print("--- ENTRY SIGNALS ---")
@@ -1305,16 +1590,25 @@ async def run_dashboard(days: int) -> None:
         )
         print("-" * 95)
         for e in entries:
+            ts_display = str(e.get("ts", ""))[:19]
+            pair_name = str(e.get("pair", ""))
+            direction_name = str(e.get("direction", ""))
+            entry_value = float(cast(float, e.get("entry", 0.0)))
+            tp_value = float(cast(float, e.get("tp", 0.0)))
+            sl_value = float(cast(float, e.get("sl", 0.0)))
+            rsi_1h_value = float(cast(float, e.get("rsi_1h", 0.0)))
+            rsi_30m_value = float(cast(float, e.get("rsi_30m", 0.0)))
+            rsi_15m_value = float(cast(float, e.get("rsi_15m", 0.0)))
             print(
-                f"{e.get('ts', '')[:19]:<22} {e.get('pair', ''):<10} {e.get('direction', ''):<5} "
-                f"{e.get('entry', 0):>10.5f} {e.get('tp', 0):>10.5f} {e.get('sl', 0):>10.5f} "
-                f"{e.get('rsi_1h', 0):>7.1f} {e.get('rsi_30m', 0):>8.1f} {e.get('rsi_15m', 0):>8.1f}"
+                f"{ts_display:<22} {pair_name:<10} {direction_name:<5} "
+                f"{entry_value:>10.5f} {tp_value:>10.5f} {sl_value:>10.5f} "
+                f"{rsi_1h_value:>7.1f} {rsi_30m_value:>8.1f} {rsi_15m_value:>8.1f}"
             )
 
         # Paper P&L estimation using current price
         print("\n--- PAPER P&L (mark-to-market) ---")
         fetcher = DataFetcher()
-        pairs_seen = {e.get("pair") for e in entries}
+        pairs_seen = {str(e.get("pair", "")) for e in entries}
         current_prices: dict[str, float] = {}
         for pair in pairs_seen:
             if not pair:
@@ -1333,17 +1627,18 @@ async def run_dashboard(days: int) -> None:
         )
         print("-" * 82)
         for e in entries:
-            pair = e.get("pair", "")
-            direction = e.get("direction", "")
-            entry_px = float(e.get("entry", 0))
-            tp_px = float(e.get("tp", 0))
-            sl_px = float(e.get("sl", 0))
+            pair = str(e.get("pair", ""))
+            direction = str(e.get("direction", ""))
+            entry_px = float(cast(float, e.get("entry", 0.0)))
+            tp_px = float(cast(float, e.get("tp", 0.0)))
+            sl_px = float(cast(float, e.get("sl", 0.0)))
             pip_size = 0.01 if "JPY" in pair else 0.0001
             current = current_prices.get(pair)
+            ts_display = str(e.get("ts", ""))[:19]
 
             if current is None:
                 print(
-                    f"{e.get('ts', '')[:19]:<22} {pair:<10} {direction:<5} {entry_px:>10.5f} {'N/A':>10} {'N/A':>10} {'no data':>10}"
+                    f"{ts_display:<22} {pair:<10} {direction:<5} {entry_px:>10.5f} {'N/A':>10} {'N/A':>10} {'no data':>10}"
                 )
                 continue
 
@@ -1359,7 +1654,7 @@ async def run_dashboard(days: int) -> None:
             status = "TP HIT" if hit_tp else ("SL HIT" if hit_sl else "OPEN")
             total_paper_pnl += pnl_pips
             print(
-                f"{e.get('ts', '')[:19]:<22} {pair:<10} {direction:<5} "
+                f"{ts_display:<22} {pair:<10} {direction:<5} "
                 f"{entry_px:>10.5f} {current:>10.5f} {pnl_pips:>+10.1f} {status:>10}"
             )
         print(f"\nTotal paper P&L: {total_paper_pnl:+.1f} pips")
@@ -1371,7 +1666,8 @@ async def run_dashboard(days: int) -> None:
         print("\n--- BLOCK REASONS ---")
         reason_counts: dict[str, int] = {}
         for b in blocked:
-            for reason in b.get("reasons", []):
+            reasons = cast(list[str], b.get("reasons", []))
+            for reason in reasons:
                 reason_counts[reason] = reason_counts.get(reason, 0) + 1
         for reason, count in sorted(reason_counts.items(), key=lambda x: -x[1])[:15]:
             print(f"  {count:>4}x  {reason}")
@@ -1381,9 +1677,18 @@ async def run_dashboard(days: int) -> None:
         print("\n--- MOST ACTIVE PAIRS (aligned pending breakout) ---")
         pair_counts: dict[str, int] = {}
         for a in aligned:
-            p = a.get("pair", "unknown")
+            p = str(a.get("pair", "unknown"))
             pair_counts[p] = pair_counts.get(p, 0) + 1
         for pair, count in sorted(pair_counts.items(), key=lambda x: -x[1])[:10]:
+            print(f"  {count:>4}x  {pair}")
+
+    if watched:
+        print("\n--- MOST WATCHED PAIRS ---")
+        watch_counts: dict[str, int] = {}
+        for w in watched:
+            p = str(w.get("pair", "unknown"))
+            watch_counts[p] = watch_counts.get(p, 0) + 1
+        for pair, count in sorted(watch_counts.items(), key=lambda x: -x[1])[:10]:
             print(f"  {count:>4}x  {pair}")
 
     print()

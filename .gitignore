@@ -34,7 +34,7 @@ Thumbs.db
 # Logs and runtime state
 *.log
 logs/
-data/
+/data/
 
 # Backtest results
 results/

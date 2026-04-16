@@ -63,7 +63,7 @@ def _fetch_dukascopy_mtf(pair: str, days: int) -> dict[str, pd.DataFrame]:
     start = end - timedelta(days=days)
 
     print(f"  Downloading {days}d of M1 data from Dukascopy (this may take a while)...")
-    raw = get_multi_timeframe_data_dukascopy(
+    raw, _fetch_summary = get_multi_timeframe_data_dukascopy(
         symbol,
         start,
         end,

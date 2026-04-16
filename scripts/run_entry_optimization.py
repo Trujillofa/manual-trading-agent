@@ -80,7 +80,7 @@ def _adx_at_bar(data_1h: pd.DataFrame, ts: pd.Timestamp, period: int = 14) -> fl
     subset = data_1h.loc[:ts]
     if len(subset) < period * 2 + 1:
         return None
-    tail = subset.iloc[-(period * 3):]  # enough history for smoothing
+    tail = subset.iloc[-(period * 3) :]  # enough history for smoothing
     return calculate_adx(
         tail["high"].tolist(),
         tail["low"].tolist(),
@@ -96,7 +96,9 @@ def latest_rsi_at_or_before(df: pd.DataFrame, ts: pd.Timestamp, period: int = 14
     return calculate_rsi(subset["close"].tolist()[-50:], period)
 
 
-def calc_atr(highs: list[float], lows: list[float], closes: list[float], idx: int, period: int = 14) -> float | None:
+def calc_atr(
+    highs: list[float], lows: list[float], closes: list[float], idx: int, period: int = 14
+) -> float | None:
     if idx < period:
         return None
     trs = []
@@ -127,9 +129,15 @@ def run_config(
     adx_label = f"_adx{adx_threshold:g}" if adx_threshold > 0 else ""
     label = f"{variant}_ob{rsi_ob:g}_os{rsi_os:g}_b{buffer_pips:g}_c{confirm_bars}_tp{tp_mult:g}_sl{sl_mult:g}{adx_label}"
     result = ConfigResult(
-        pair=pair, config_label=label, variant=variant,
-        rsi_ob=rsi_ob, rsi_os=rsi_os, buffer_pips=buffer_pips,
-        confirm_bars=confirm_bars, tp_mult=tp_mult, sl_mult=sl_mult,
+        pair=pair,
+        config_label=label,
+        variant=variant,
+        rsi_ob=rsi_ob,
+        rsi_os=rsi_os,
+        buffer_pips=buffer_pips,
+        confirm_bars=confirm_bars,
+        tp_mult=tp_mult,
+        sl_mult=sl_mult,
     )
 
     balance = 10000.0
@@ -159,7 +167,7 @@ def run_config(
         high_val = highs[i]
         low_val = lows[i]
 
-        rsi_15 = calculate_rsi(closes[max(0, i - 50): i + 1], 14)
+        rsi_15 = calculate_rsi(closes[max(0, i - 50) : i + 1], 14)
         rsi_30 = latest_rsi_at_or_before(data_30m, ts, 14)
         rsi_1h = latest_rsi_at_or_before(data_1h, ts, 14)
         if rsi_15 is None or rsi_30 is None or rsi_1h is None:
@@ -241,7 +249,11 @@ def run_config(
                 timeout_count += 1
 
             if exit_price is not None:
-                pnl_pct = (exit_price - entry_price) / entry_price if position == "buy" else (entry_price - exit_price) / entry_price
+                pnl_pct = (
+                    (exit_price - entry_price) / entry_price
+                    if position == "buy"
+                    else (entry_price - exit_price) / entry_price
+                )
                 pnl = balance * pnl_pct
                 balance += pnl
                 trade_pnls.append(pnl)
@@ -250,12 +262,21 @@ def run_config(
                 dd_pct = ((peak - balance) / peak) * 100 if peak > 0 else 0.0
                 max_dd_pct = max(max_dd_pct, dd_pct)
 
-                result.trades_list.append(TradeRecord(
-                    pair=pair, direction=position, entry_price=entry_price,
-                    exit_price=exit_price, pnl=pnl, pnl_pct=pnl_pct * 100,
-                    exit_reason=exit_reason, bars_held=i - entry_idx,
-                    rsi_1h=entry_rsi[0], rsi_30m=entry_rsi[1], rsi_15m=entry_rsi[2],
-                ))
+                result.trades_list.append(
+                    TradeRecord(
+                        pair=pair,
+                        direction=position,
+                        entry_price=entry_price,
+                        exit_price=exit_price,
+                        pnl=pnl,
+                        pnl_pct=pnl_pct * 100,
+                        exit_reason=exit_reason,
+                        bars_held=i - entry_idx,
+                        rsi_1h=entry_rsi[0],
+                        rsi_30m=entry_rsi[1],
+                        rsi_15m=entry_rsi[2],
+                    )
+                )
                 position = None
 
         # ADX trend filter: skip mean-reversion signals in trending markets
@@ -290,7 +311,9 @@ def run_config(
     result.win_rate = wins / len(trade_pnls) if trade_pnls else 0.0
     result.total_pnl = sum(trade_pnls)
     result.total_pnl_pct = ((balance - 10000.0) / 10000.0) * 100
-    result.profit_factor = gross_win / gross_loss if gross_loss > 0 else (999.0 if gross_win > 0 else 0.0)
+    result.profit_factor = (
+        gross_win / gross_loss if gross_loss > 0 else (999.0 if gross_win > 0 else 0.0)
+    )
     result.avg_win = gross_win / wins if wins else 0.0
     result.avg_loss = gross_loss / losses if losses else 0.0
     result.max_drawdown_pct = max_dd_pct
@@ -337,22 +360,55 @@ def write_outputs(results: list[ConfigResult], output_dir: Path) -> tuple[Path, 
 
     with csv_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            "pair", "config", "variant", "rsi_ob", "rsi_os", "buffer_pips",
-            "confirm_bars", "tp_mult", "sl_mult", "trades", "wins", "losses",
-            "timeouts", "win_rate", "total_pnl_pct", "profit_factor",
-            "avg_win", "avg_loss", "max_drawdown_pct", "avg_bars_held",
-        ])
+        writer.writerow(
+            [
+                "pair",
+                "config",
+                "variant",
+                "rsi_ob",
+                "rsi_os",
+                "buffer_pips",
+                "confirm_bars",
+                "tp_mult",
+                "sl_mult",
+                "trades",
+                "wins",
+                "losses",
+                "timeouts",
+                "win_rate",
+                "total_pnl_pct",
+                "profit_factor",
+                "avg_win",
+                "avg_loss",
+                "max_drawdown_pct",
+                "avg_bars_held",
+            ]
+        )
         for r in results:
-            writer.writerow([
-                r.pair, r.config_label, r.variant, r.rsi_ob, r.rsi_os,
-                r.buffer_pips, r.confirm_bars, r.tp_mult, r.sl_mult,
-                r.trades, r.wins, r.losses, r.timeouts,
-                f"{r.win_rate:.4f}", f"{r.total_pnl_pct:.2f}",
-                f"{r.profit_factor:.2f}", f"{r.avg_win:.2f}",
-                f"{r.avg_loss:.2f}", f"{r.max_drawdown_pct:.2f}",
-                f"{r.avg_bars_held:.1f}",
-            ])
+            writer.writerow(
+                [
+                    r.pair,
+                    r.config_label,
+                    r.variant,
+                    r.rsi_ob,
+                    r.rsi_os,
+                    r.buffer_pips,
+                    r.confirm_bars,
+                    r.tp_mult,
+                    r.sl_mult,
+                    r.trades,
+                    r.wins,
+                    r.losses,
+                    r.timeouts,
+                    f"{r.win_rate:.4f}",
+                    f"{r.total_pnl_pct:.2f}",
+                    f"{r.profit_factor:.2f}",
+                    f"{r.avg_win:.2f}",
+                    f"{r.avg_loss:.2f}",
+                    f"{r.max_drawdown_pct:.2f}",
+                    f"{r.avg_bars_held:.1f}",
+                ]
+            )
 
     # Aggregate across pairs for each config
     config_agg: dict[str, list[ConfigResult]] = {}
@@ -372,18 +428,20 @@ def write_outputs(results: list[ConfigResult], output_dir: Path) -> tuple[Path, 
         wr = total_wins / total_trades if total_trades else 0.0
         pairs_profitable = sum(1 for r in config_results if r.total_pnl_pct > 0)
 
-        agg_rows.append({
-            "config": label,
-            "variant": config_results[0].variant,
-            "total_trades": total_trades,
-            "win_rate": wr,
-            "avg_pnl_pct": avg_pnl_pct,
-            "profit_factor": pf,
-            "max_dd": max_dd,
-            "timeouts": total_timeouts,
-            "pairs_profitable": pairs_profitable,
-            "pairs_tested": len(config_results),
-        })
+        agg_rows.append(
+            {
+                "config": label,
+                "variant": config_results[0].variant,
+                "total_trades": total_trades,
+                "win_rate": wr,
+                "avg_pnl_pct": avg_pnl_pct,
+                "profit_factor": pf,
+                "max_dd": max_dd,
+                "timeouts": total_timeouts,
+                "pairs_profitable": pairs_profitable,
+                "pairs_tested": len(config_results),
+            }
+        )
 
     # Sort by avg PnL % descending
     agg_rows.sort(key=lambda r: (r["avg_pnl_pct"], r["profit_factor"]), reverse=True)
@@ -406,13 +464,15 @@ def write_outputs(results: list[ConfigResult], output_dir: Path) -> tuple[Path, 
         )
 
     # Bottom 10 (worst)
-    lines.extend([
-        "",
-        "## Bottom 10 Configurations",
-        "",
-        "| Config | Trades | Win Rate | Avg PnL % | PF | Max DD % |",
-        "|---|---:|---:|---:|---:|---:|",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Bottom 10 Configurations",
+            "",
+            "| Config | Trades | Win Rate | Avg PnL % | PF | Max DD % |",
+            "|---|---:|---:|---:|---:|---:|",
+        ]
+    )
     for row in agg_rows[-10:]:
         lines.append(
             f"| `{row['config']}` | {row['total_trades']} | "
@@ -439,12 +499,14 @@ def write_outputs(results: list[ConfigResult], output_dir: Path) -> tuple[Path, 
     # Configs with zero trades
     zero_trade = [r for r in agg_rows if r["total_trades"] == 0]
     if zero_trade:
-        lines.extend([
-            f"## Configs with Zero Trades: {len(zero_trade)}",
-            "",
-            "These configurations are too restrictive to generate any entries.",
-            "",
-        ])
+        lines.extend(
+            [
+                f"## Configs with Zero Trades: {len(zero_trade)}",
+                "",
+                "These configurations are too restrictive to generate any entries.",
+                "",
+            ]
+        )
 
     md_path.write_text("\n".join(lines), encoding="utf-8")
     return csv_path, md_path
@@ -457,29 +519,43 @@ def main() -> int:
         default="EUR/USD,GBP/USD,USD/JPY,AUD/USD,EUR/GBP,EUR/JPY,GBP/JPY,GBP/CHF,EUR/AUD,EUR/CAD,AUD/NZD,NZD/USD",
         help="Comma-separated pairs",
     )
-    parser.add_argument("--days", type=int, default=58, help="Days of history (yfinance limit ~60d for intraday)")
     parser.add_argument(
-        "--variants", default="V0,V1,V2",
+        "--days", type=int, default=58, help="Days of history (yfinance limit ~60d for intraday)"
+    )
+    parser.add_argument(
+        "--variants",
+        default="V0,V1,V2",
         help="Comma-separated variants",
     )
     parser.add_argument(
-        "--rsi-thresholds", default="25/75,30/70,35/65",
+        "--rsi-thresholds",
+        default="25/75,30/70,35/65",
         help="Comma-separated OS/OB pairs (e.g., 30/70,35/65)",
     )
     parser.add_argument(
-        "--buffers", default="0.0,0.5,1.0,2.0",
+        "--buffers",
+        default="0.0,0.5,1.0,2.0",
         help="Comma-separated buffer pips (only used for V1/V2)",
     )
     parser.add_argument(
-        "--confirm-bars", default="0,2,3,5",
+        "--confirm-bars",
+        default="0,2,3,5",
         help="Comma-separated confirm bar values",
     )
     parser.add_argument(
-        "--tp-sl-ratios", default="1.5:2.0,1.0:1.0,2.0:1.0,1.0:3.0,2.0:2.0,3.0:2.0",
+        "--tp-sl-ratios",
+        default="1.5:2.0,1.0:1.0,2.0:1.0,1.0:3.0,2.0:2.0,3.0:2.0",
         help="Comma-separated TP:SL ATR multiplier pairs",
     )
-    parser.add_argument("--adx-threshold", type=float, default=0.0, help="ADX threshold (0=disabled, 25=recommended)")
-    parser.add_argument("--source", default="yfinance", choices=["yfinance", "dukascopy"], help="Data source")
+    parser.add_argument(
+        "--adx-threshold",
+        type=float,
+        default=0.0,
+        help="ADX threshold (0=disabled, 25=recommended)",
+    )
+    parser.add_argument(
+        "--source", default="yfinance", choices=["yfinance", "dukascopy"], help="Data source"
+    )
     parser.add_argument("--output-dir", default="results")
     parser.add_argument("--max-hold", type=int, default=16, help="Max bars to hold (15m)")
     args = parser.parse_args()
@@ -528,8 +604,10 @@ def main() -> int:
                 end_date = datetime.now(UTC)
                 start_date = end_date - timedelta(days=args.days)
                 print(f"  Fetching {args.days}d via Dukascopy ({pair})...")
-                mtf = get_multi_timeframe_data_dukascopy(
-                    pair, start_date, end_date,
+                mtf, _fetch_summary = get_multi_timeframe_data_dukascopy(
+                    pair,
+                    start_date,
+                    end_date,
                     timeframes=["h1", "m30", "m15"],
                 )
                 # Remap keys to match yfinance format
@@ -558,7 +636,9 @@ def main() -> int:
         return 1
 
     print(f"\nFetched data for {len(pair_data)}/{len(pairs)} pairs")
-    print(f"Running {total_configs} configs x {len(pair_data)} pairs = {total_configs * len(pair_data)} backtests\n")
+    print(
+        f"Running {total_configs} configs x {len(pair_data)} pairs = {total_configs * len(pair_data)} backtests\n"
+    )
 
     results: list[ConfigResult] = []
     run_count = 0
@@ -575,10 +655,17 @@ def main() -> int:
                     for cb in confirm_bars_list:
                         for tp_mult, sl_mult in tp_sl_pairs:
                             r = run_config(
-                                pair, mtf["1h"], mtf["30m"], mtf["15m"],
-                                variant=variant, rsi_ob=rsi_ob, rsi_os=rsi_os,
-                                buffer_pips=buffer_pips, confirm_bars=cb,
-                                tp_mult=tp_mult, sl_mult=sl_mult,
+                                pair,
+                                mtf["1h"],
+                                mtf["30m"],
+                                mtf["15m"],
+                                variant=variant,
+                                rsi_ob=rsi_ob,
+                                rsi_os=rsi_os,
+                                buffer_pips=buffer_pips,
+                                confirm_bars=cb,
+                                tp_mult=tp_mult,
+                                sl_mult=sl_mult,
                                 max_hold_bars=args.max_hold,
                                 adx_threshold=adx_threshold,
                             )
@@ -589,7 +676,9 @@ def main() -> int:
         total_elapsed = time.time() - t0
         rate = run_count / total_elapsed if total_elapsed > 0 else 0
         remaining = (total_configs * len(pair_data) - run_count) / rate if rate > 0 else 0
-        print(f"  {pair} done in {elapsed:.1f}s ({run_count} runs, ~{remaining / 60:.0f}m remaining)")
+        print(
+            f"  {pair} done in {elapsed:.1f}s ({run_count} runs, ~{remaining / 60:.0f}m remaining)"
+        )
 
     total_time = time.time() - t0
     print(f"\nCompleted {run_count} backtests in {total_time:.0f}s ({total_time / 60:.1f}m)")

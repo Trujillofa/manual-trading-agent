@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -56,18 +57,27 @@ DEFAULT_SPREAD_PIPS: dict[str, float] = {
 ADX_TREND_THRESHOLD = 25.0
 
 
-def _fetch_dukascopy_mtf(pair: str, days: int) -> dict[str, pd.DataFrame]:
-    """Fetch multi-timeframe data from Dukascopy and format for bakeoff."""
+def _fetch_dukascopy_mtf(
+    pair: str, days: int, strict: bool = True
+) -> tuple[dict[str, pd.DataFrame], dict]:
+    """Fetch multi-timeframe data from Dukascopy and format for bakeoff.
+
+    Returns:
+        Tuple of (mtf_data_dict, fetch_summary_dict)
+    """
+    from src.data.dukascopy_fetcher import FetchSummary
+
     symbol = pair.replace("/", "")
     end = datetime.now(UTC)
     start = end - timedelta(days=days)
 
     print(f"  Downloading {days}d of M1 data from Dukascopy (this may take a while)...")
-    raw, _fetch_summary = get_multi_timeframe_data_dukascopy(
+    raw, fetch_summary = get_multi_timeframe_data_dukascopy(
         symbol,
         start,
         end,
         timeframes=["h1", "m30", "m15"],
+        strict=strict,
     )
 
     result: dict[str, pd.DataFrame] = {}
@@ -82,7 +92,8 @@ def _fetch_dukascopy_mtf(pair: str, days: int) -> dict[str, pd.DataFrame]:
         df = df.sort_index()
         result[bk_key] = df
 
-    return result
+    summary_dict = fetch_summary.to_dict() if isinstance(fetch_summary, FetchSummary) else {}
+    return result, summary_dict
 
 
 @dataclass
@@ -312,14 +323,25 @@ def run_variant(
     )
 
 
-def write_outputs(results: list[VariantResult], output_dir: Path) -> tuple[Path, Path]:
+def write_outputs(
+    results: list[VariantResult], output_dir: Path, fetch_summaries: dict[str, dict] | None = None
+) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     csv_path = output_dir / f"confirmation_bakeoff_{stamp}.csv"
     md_path = output_dir / f"confirmation_bakeoff_{stamp}.md"
+    fetch_summaries = fetch_summaries or {}
 
+    # Write CSV with fetch summary header
     with csv_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
+        # Fetch summary header block
+        if fetch_summaries:
+            writer.writerow(["# FETCH_SUMMARIES"])
+            for pair, summary in fetch_summaries.items():
+                writer.writerow([f"# {pair}", json.dumps(summary)])
+            writer.writerow([])
+        # Main data
         writer.writerow(
             [
                 "pair",
@@ -359,6 +381,15 @@ def write_outputs(results: list[VariantResult], output_dir: Path) -> tuple[Path,
         by_pair.setdefault(r.pair, []).append(r)
 
     lines = ["# Confirmation Bake-off Results", ""]
+    # Fetch summary header block
+    if fetch_summaries:
+        lines.append("## Fetch Metadata")
+        lines.append("")
+        for pair, summary in fetch_summaries.items():
+            zero_rate = summary.get("weekday_zero_bar_rate", 0)
+            total_bars = summary.get("total_bars", 0)
+            lines.append(f"- **{pair}**: {total_bars} bars, {zero_rate:.1%} weekday zero-bar rate")
+        lines.append("")
     for pair, pair_results in by_pair.items():
         lines.append(f"## {pair}")
         lines.append("")
@@ -396,6 +427,12 @@ def main() -> int:
         help="Data source (default: twelvedata)",
     )
     parser.add_argument("--days", type=int, default=60, help="Days of history (default: 60)")
+    parser.add_argument(
+        "--strict",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable data quality gate (>5% weekday zero bars raises error). Use --no-strict for diagnostic runs.",
+    )
     args = parser.parse_args()
 
     pairs = [p.strip() for p in args.pairs.split(",") if p.strip()]
@@ -411,10 +448,12 @@ def main() -> int:
     end_str = end_date.strftime("%Y-%m-%d")
 
     results: list[VariantResult] = []
+    fetch_summaries: dict[str, dict] = {}
     for pair in pairs:
-        print(f"[FETCH] {pair} (source={args.source}, days={args.days})")
+        print(f"[FETCH] {pair} (source={args.source}, days={args.days}, strict={args.strict})")
         if use_dukascopy:
-            mtf = _fetch_dukascopy_mtf(pair, args.days)
+            mtf, fetch_summary = _fetch_dukascopy_mtf(pair, args.days, strict=args.strict)
+            fetch_summaries[pair] = fetch_summary
         else:
             mtf = fetcher.fetch_multi_timeframe(pair, start=start_str, end=end_str)
         if any(tf not in mtf or mtf[tf].empty for tf in ["1h", "30m", "15m"]):
@@ -444,7 +483,7 @@ def main() -> int:
         print("No results produced")
         return 1
 
-    csv_path, md_path = write_outputs(results, Path(args.output_dir))
+    csv_path, md_path = write_outputs(results, Path(args.output_dir), fetch_summaries)
     print(f"\nSaved CSV: {csv_path}")
     print(f"Saved MD:  {md_path}")
     return 0

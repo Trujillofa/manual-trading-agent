@@ -58,9 +58,16 @@ ADX_TREND_THRESHOLD = 25.0
 
 
 def _fetch_dukascopy_mtf(
-    pair: str, days: int, strict: bool = True
+    pair: str,
+    days: int,
+    strict: bool = True,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
 ) -> tuple[dict[str, pd.DataFrame], dict]:
     """Fetch multi-timeframe data from Dukascopy and format for bakeoff.
+
+    If start_date/end_date are provided, they override --days for deterministic
+    window pinning. Otherwise falls back to now() - days.
 
     Returns:
         Tuple of (mtf_data_dict, fetch_summary_dict)
@@ -68,10 +75,15 @@ def _fetch_dukascopy_mtf(
     from src.data.dukascopy_fetcher import FetchSummary
 
     symbol = pair.replace("/", "")
-    end = datetime.now(UTC)
-    start = end - timedelta(days=days)
+    if start_date is not None and end_date is not None:
+        start = start_date
+        end = end_date
+    else:
+        end = datetime.now(UTC)
+        start = end - timedelta(days=days)
 
-    print(f"  Downloading {days}d of M1 data from Dukascopy (this may take a while)...")
+    actual_days = (end - start).days
+    print(f"  Downloading {actual_days}d of M1 data from Dukascopy (this may take a while)...")
     raw, fetch_summary = get_multi_timeframe_data_dukascopy(
         symbol,
         start,
@@ -428,6 +440,18 @@ def main() -> int:
     )
     parser.add_argument("--days", type=int, default=60, help="Days of history (default: 60)")
     parser.add_argument(
+        "--start-date",
+        type=str,
+        default=None,
+        help="Pin window start (YYYY-MM-DD). Overrides --days when used with --end-date.",
+    )
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        default=None,
+        help="Pin window end (YYYY-MM-DD). Overrides --days when used with --start-date.",
+    )
+    parser.add_argument(
         "--strict",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -442,17 +466,31 @@ def main() -> int:
     use_dukascopy = args.source == "dukascopy"
     fetcher = DataFetcher() if not use_dukascopy else None
 
-    end_date = datetime.now(UTC)
-    start_date = end_date - timedelta(days=args.days)
+    # Pinned dates take precedence over --days
+    pinned_start: datetime | None = None
+    pinned_end: datetime | None = None
+    if args.start_date and args.end_date:
+        pinned_start = datetime.strptime(args.start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+        pinned_end = datetime.strptime(args.end_date, "%Y-%m-%d").replace(tzinfo=UTC)
+        print(f"[CONFIG] Pinned window: {args.start_date} to {args.end_date}")
+    elif args.start_date or args.end_date:
+        parser.error("--start-date and --end-date must be used together")
+
+    end_date = pinned_end or datetime.now(UTC)
+    start_date = pinned_start or (end_date - timedelta(days=args.days))
     start_str = start_date.strftime("%Y-%m-%d")
     end_str = end_date.strftime("%Y-%m-%d")
 
     results: list[VariantResult] = []
     fetch_summaries: dict[str, dict] = {}
     for pair in pairs:
-        print(f"[FETCH] {pair} (source={args.source}, days={args.days}, strict={args.strict})")
+        window_label = f"{start_str} to {end_str}" if pinned_start else f"days={args.days}"
+        print(f"[FETCH] {pair} (source={args.source}, {window_label}, strict={args.strict})")
         if use_dukascopy:
-            mtf, fetch_summary = _fetch_dukascopy_mtf(pair, args.days, strict=args.strict)
+            mtf, fetch_summary = _fetch_dukascopy_mtf(
+                pair, args.days, strict=args.strict,
+                start_date=pinned_start, end_date=pinned_end,
+            )
             fetch_summaries[pair] = fetch_summary
         else:
             mtf = fetcher.fetch_multi_timeframe(pair, start=start_str, end=end_str)

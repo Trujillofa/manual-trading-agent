@@ -73,25 +73,25 @@ Signal output → signal_audit.jsonl + Telegram notification
 - **Async throughout**: CLI uses `asyncio.run()`, data fetchers and Telegram use async HTTP clients (httpx/aiohttp). TelegramNotifier falls back to background thread if no event loop.
 - **Graceful degradation**: missing news feed doesn't block scanning, missing OANDA quote skips spread check.
 
-### Production config (current live watchlist, 2026-04-14)
+### Production config (current state, 2026-04-18)
 
-Promoted pairs actively scanned and allowed to fire Telegram signals (`config/settings.yaml`):
+**No promoted pairs.** All three former promoted pairs demoted to shadow-only
+(2026-04-17, commit f20e7d3) after discovering Dukascopy fetch variance
+invalidated the April 14 promotion artifacts. Shadow pairs emit audit records
+(`is_shadow: true`) but skip Telegram notifications.
 
-| Pair | Confirmation profile | Source |
-|---|---|---|
-| EUR/GBP | V2_b0.5_c2 | `docs/reports/CONFIRMATION_BAKEOFF_FULL_REPORT_2026-03-31.md` |
-| GBP/CHF | V1_b0.5_c0 | same |
-| AUD/CAD | V1_b2_c0 | same |
+Shadow-run (audit-only, in `trading.pairs.shadow` in `config/settings.yaml`):
 
-Shadow-run only (not in `config/settings.yaml`; do not alert, evaluate separately):
+| Pair | Confirmation profile | Original source | Demotion reason |
+|---|---|---|---|
+| EUR/GBP | V2_b0.5_c2 | March 31 bakeoff | April 14 artifact under-fetched ~24%; PF < 1 on clean data |
+| GBP/CHF | V1_b0.5_c0 | same | April 14 artifact under-fetched ~22%; PF < 1 on clean data |
+| AUD/CAD | V1_b2_c0 | same | V0 sign flip across runs (418→193 trades); PF < 1 on clean data |
 
-| Pair | Candidate profile | Status |
-|---|---|---|
-| GBP/USD | V2_b1_c2 (compromise across 365d/180d) | not promoted — 365d and 180d disagree on winner and regime family |
+Not in watchlist (do not add without clean-data full-variant sweep + promotion gate):
+GBP/USD, AUD/JPY, NZD/USD, NZD/JPY, EUR/CHF, EUR/CAD, USD/JPY, USD/CHF, GBP/CAD, AUD/NZD.
 
-Rejected (explicit, do not re-add without new evidence): AUD/JPY, NZD/USD, NZD/JPY, EUR/CHF, EUR/CAD, USD/JPY, USD/CHF, GBP/CAD, AUD/NZD.
-
-Shared parameters across promoted set:
+Shared parameters:
 - **RSI thresholds**: 30/70 on 1h, 30m, 15m (per `config/settings.yaml`)
 - **TP/SL**: ATR-based — TP = 1.5 × ATR(14), SL = 2.0 × ATR(14)
 - **ADX filter**: ADX(14) < 25 on 1h (mean-reversion only in ranging regime)

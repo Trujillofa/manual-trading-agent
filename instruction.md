@@ -1,14 +1,31 @@
-Manual trading agent 
+# Manual Trading Agent — Operating Instructions
 
-lets setup one more forex agent assistant for manual trading. 
+**IMPORTANT: Read CLAUDE.md before making ANY changes to config or code.**
 
-RULES
+CLAUDE.md is the authoritative source for:
+- Which pairs are promoted, shadow-only, or rejected
+- Confirmation profiles per pair
+- TP/SL, spread limits, session hours, ADX thresholds
+- Promotion gate criteria
 
-1. include all forex majors and minors 
-2. check RSI 14 must be more than 70 or less than 30 in three different timestamps, 1h, 30m, and 15m 
-3. use highest high and lowest low as entry references and to check tendencys 
-4. lot is 3 
-5. another important aspect is the news, always check any 3 star news that could impact the strategy 
-5. TP is around 500 USD and SL almost 1800 usd, the principle behind this is that the accuracy of this strategy must be almost 100% 
-6. lets complete this strategy, inlcude research, backtesting and implementation 
-7. lets use /home/emilio/ctrader-trading-agent/  and /home/emilio/crypto-trading-agent/     as references 
+## Config change policy
+
+1. **NEVER edit `config/settings.yaml` without reading CLAUDE.md first**
+2. **NEVER add pairs to `majors:` or `minors:` unless they pass the promotion gate in CLAUDE.md**
+3. **NEVER widen spread limits, relax ADX thresholds, or change session hours without backtesting evidence**
+4. If CLAUDE.md and `config/settings.yaml` disagree, CLAUDE.md wins — restore config to match
+5. If asked to "match documentation", the documentation is CLAUDE.md, not this file
+
+## Current state (updated 2026-04-20)
+
+All pairs are **shadow-only** (audit records, no Telegram alerts).
+No pairs have passed the promotion gate. See CLAUDE.md for details.
+
+## Original brief (historical, superseded by CLAUDE.md)
+
+Multi-timeframe RSI forex scanner:
+- RSI 14 alignment across 1h/30m/15m (< 30 or > 70)
+- Highest high / lowest low as entry references
+- News lockout on 3-star Forex Factory events
+- ATR-based TP/SL (currently TP = 1.5x ATR, SL = 2.0x ATR)
+- Lot size: 3

@@ -18,8 +18,11 @@ CLAUDE.md is the authoritative source for:
 
 ## Current state (updated 2026-04-20)
 
-All pairs are **shadow-only** (audit records, no Telegram alerts).
-No pairs have passed the promotion gate. See CLAUDE.md for details.
+- **AUD/CAD**: promoted (live Telegram alerts), V0_b0_c0, TP=1.0×ATR, SL=3.0×ATR
+- **GBP/CHF**: shadow-only (audit records, no alerts), V2_b0_c0
+- **EUR/GBP**: rejected — removed entirely
+
+See CLAUDE.md for full details and promotion gate criteria.
 
 ## Original brief (historical, superseded by CLAUDE.md)
 

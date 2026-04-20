@@ -2,11 +2,10 @@ trading:
   mode: "paper"
   pairs:
     majors: []
-    minors: []
-    shadow:
-      - EUR/GBP
-      - GBP/CHF
+    minors:
       - AUD/CAD
+    shadow:
+      - GBP/CHF
   lot_size: 3
 
 timeframes:
@@ -28,21 +27,17 @@ strategy:
   spread_filter_enabled: true
   max_spread_pips: 2.0
   spread_limits_pips:
-    EUR/GBP: 1.5
     GBP/CHF: 2.5
     AUD/CAD: 2.5
   pair_priorities:
-    EUR/GBP: 100
-    USD/JPY: 80
-    GBP/USD: 60
+    AUD/CAD: 100
     GBP/CHF: 60
-    EUR/USD: 40
 
 risk:
-  # TP/SL is ATR-based: TP=1.5×ATR, SL=2×ATR (unified across cli, backtest, bakeoff)
+  # TP/SL is ATR-based: TP=1.0×ATR, SL=3.0×ATR (optimized 2026-04-20 sweep)
   # Legacy fixed-dollar values kept for reference only
-  tp_atr_multiplier: 1.5
-  sl_atr_multiplier: 2.0
+  tp_atr_multiplier: 1.0
+  sl_atr_multiplier: 3.0
   tp_usd_legacy: 300
   sl_usd_legacy: 900
   max_daily_loss_usd: 1500

@@ -64,6 +64,7 @@ Validation gates:
     ↓
 Signal output → signal_audit.jsonl + Telegram notification
     TP = 1.0 × ATR(14), SL = 3.0 × ATR(14)
+    V0 (RSI-only): fires on alignment alone, no breakout gate
 ```
 
 ### Key design decisions
@@ -73,27 +74,33 @@ Signal output → signal_audit.jsonl + Telegram notification
 - **Async throughout**: CLI uses `asyncio.run()`, data fetchers and Telegram use async HTTP clients (httpx/aiohttp). TelegramNotifier falls back to background thread if no event loop.
 - **Graceful degradation**: missing news feed doesn't block scanning, missing OANDA quote skips spread check.
 
-### Production config (current state, 2026-04-18)
+### Production config (current state, 2026-04-20)
 
-**No promoted pairs.** All three former promoted pairs demoted to shadow-only
-(2026-04-17, commit f20e7d3) after discovering Dukascopy fetch variance
-invalidated the April 14 promotion artifacts. Shadow pairs emit audit records
-(`is_shadow: true`) but skip Telegram notifications.
+**One promoted pair.** AUD/CAD promoted after 180d clean-data sweep (2026-04-20)
+passed all promotion gates. EUR/GBP rejected (negative PnL in every config tested).
+GBP/CHF remains shadow pending 365d sweep for trade count.
 
-Shadow-run (audit-only, in `trading.pairs.shadow` in `config/settings.yaml`):
+Promoted (live Telegram alerts, in `trading.pairs.minors`):
 
-| Pair | Confirmation profile | Original source | Demotion reason |
+| Pair | Confirmation profile | Trades (180d) | PnL % | PF | Promotion date |
+|---|---|---|---|---|---|
+| AUD/CAD | V0_b0_c0 | 119 | +1.99% | 1.63 | 2026-04-20 |
+
+Shadow-run (audit-only, in `trading.pairs.shadow`):
+
+| Pair | Confirmation profile | Status | Next action |
 |---|---|---|---|
-| EUR/GBP | V2_b0.5_c2 | March 31 bakeoff | April 14 artifact under-fetched ~24%; PF < 1 on clean data |
-| GBP/CHF | V1_b0.5_c0 | same | April 14 artifact under-fetched ~22%; PF < 1 on clean data |
-| AUD/CAD | V1_b2_c0 | same | V0 sign flip across runs (418→193 trades); PF < 1 on clean data |
+| GBP/CHF | V2_b0_c0 | shadow | 365d sweep needed (N=24, below 30-trade gate) |
 
-Not in watchlist (do not add without clean-data full-variant sweep + promotion gate):
+Rejected (do not add):
+EUR/GBP — negative PnL in all 48 configs tested (best: -0.30%, PF 0.66). 2026-04-20 sweep.
+
+Not in watchlist (require clean-data full-variant sweep + promotion gate):
 GBP/USD, AUD/JPY, NZD/USD, NZD/JPY, EUR/CHF, EUR/CAD, USD/JPY, USD/CHF, GBP/CAD, AUD/NZD.
 
 Shared parameters:
 - **RSI thresholds**: 30/70 on 1h, 30m, 15m (per `config/settings.yaml`)
-- **TP/SL**: ATR-based — TP = 1.5 × ATR(14), SL = 2.0 × ATR(14)
+- **TP/SL**: ATR-based — TP = 1.0 × ATR(14), SL = 3.0 × ATR(14)
 - **ADX filter**: ADX(14) < 25 on 1h (mean-reversion only in ranging regime)
 - **Session filter**: 06–17 UTC, 12–21 UTC
 - **News lockout**: 3-star Forex Factory events; 60 min before / 30 min after
@@ -101,6 +108,7 @@ Shared parameters:
 - **Data source**: yfinance (live scanner), Dukascopy M1 (backtests)
 
 Entry-variant naming (used in confirmation profiles and report tables):
+- `V0` — RSI-only; fires on MTF alignment alone, no breakout gate
 - `V1` — breakout continuation; BUY breaks below LL, SELL breaks above HH
 - `V2` — reversal; wick through LL/HH + close reclaim
 - `b{N}` — buffer in pips; `c{N}` — confirmation lifetime in bars after RSI alignment

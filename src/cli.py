@@ -40,15 +40,15 @@ from src.strategy.multi_timeframe import MTFRSIStrategy
 
 # Pair-specific confirmation profiles from optimization bakeoff (2026-04-03).
 # Format: {"variant": "V1"|"V2"|"V2R", "buffer_pips": float, "confirm_bars": int}
+# V0 = RSI-only (no breakout gate, fires on MTF alignment alone)
 # V1 = continuation breakout (BUY below LL, SELL above HH)
 # V2 = reversal breakout (BUY wick through + close reclaim, SELL wick through + close reject)
 # V2R = reversal structural break (BUY above HH, SELL below LL)
 # buffer_pips = pip buffer on breakout threshold
 # confirm_bars = max bars after MTF alignment to accept breakout (0 = immediate only)
 CONFIRMATION_PROFILES: dict[str, ConfirmationProfile] = {
-    "EUR/GBP": {"variant": "V2", "buffer_pips": 0.5, "confirm_bars": 2},
-    "GBP/CHF": {"variant": "V1", "buffer_pips": 0.5, "confirm_bars": 0},
-    "AUD/CAD": {"variant": "V1", "buffer_pips": 2.0, "confirm_bars": 0},
+    "AUD/CAD": {"variant": "V0", "buffer_pips": 0.0, "confirm_bars": 0},
+    "GBP/CHF": {"variant": "V2", "buffer_pips": 0.0, "confirm_bars": 0},
 }
 
 # Default profile for pairs without a specific one
@@ -205,7 +205,10 @@ def _check_breakout_with_profile(
     variant = profile["variant"]
     buffer_pct = (buffer_pips * pip_size) / close_price if close_price else 0.0
 
-    if variant == "V1":
+    if variant == "V0":
+        # RSI-only: no breakout gate required
+        return True
+    elif variant == "V1":
         # Continuation: BUY breaks below LL, SELL breaks above HH
         if direction == "BUY" and ll is not None:
             return is_breakout_low(close_price, ll, buffer_pct)

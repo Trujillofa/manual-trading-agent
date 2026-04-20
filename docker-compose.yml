@@ -17,7 +17,8 @@ services:
     # Run scan every 15 minutes + poll Telegram commands continuously
     entrypoint: ["/bin/sh", "-c", "python -u -m src.cli telegram-poll >> /app/logs/telegram.log 2>&1 & while true; do echo '===' $(date) '===' >> /app/logs/scan.log; python -u -m src.cli scan >> /app/logs/scan.log 2>&1; sleep 900; done"]
     healthcheck:
-      test: ["CMD", "test", "-f", "/app/logs/scan.log"]
+      test: ["CMD", "python", "-m", "src.cli", "healthcheck"]
       interval: 5m
       timeout: 10s
       retries: 3
+      start_period: 1m

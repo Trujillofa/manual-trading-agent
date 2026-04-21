@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import subprocess
@@ -15,6 +16,7 @@ from src.news.news_checker import NewsChecker
 
 OFFSET_PATH = Path("/app/logs/telegram_update_offset.json")
 SCAN_LOG_PATH = Path("/app/logs/scan.log")
+HEARTBEAT_PATH = Path("/app/logs/telegram_heartbeat.json")
 logger = logging.getLogger(__name__)
 
 
@@ -37,6 +39,16 @@ class TelegramCommandHandler:
     def _save_offset(self) -> None:
         OFFSET_PATH.parent.mkdir(parents=True, exist_ok=True)
         OFFSET_PATH.write_text(json.dumps({"offset": self.offset}), encoding="utf-8")
+
+    def _write_heartbeat(self, status: str, error: str | None = None) -> None:
+        HEARTBEAT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        payload: dict[str, str] = {
+            "status": status,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+        if error:
+            payload["error"] = error
+        HEARTBEAT_PATH.write_text(json.dumps(payload), encoding="utf-8")
 
     async def get_updates(self) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -250,10 +262,14 @@ class TelegramCommandHandler:
             await self.send_message("Unknown command. Try /help")
 
     async def run_forever(self) -> None:
+        self._write_heartbeat("starting")
         while True:
             try:
                 updates = await self.get_updates()
+                self._write_heartbeat("ok")
                 for update in updates:
                     await self.handle_update(update)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.exception("Telegram polling loop failed")
+                self._write_heartbeat("error", str(exc))
+                await asyncio.sleep(5)

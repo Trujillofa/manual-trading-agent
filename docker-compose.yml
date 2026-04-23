@@ -1,23 +1,104 @@
 services:
   manual-trading-agent:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: manual-trading-agent
     restart: unless-stopped
-    volumes:
-      - ./config:/app/config:ro
-      - ./logs:/app/logs
-      - ./results:/app/results
     env_file:
       - .env
+    # Environment variables expected in .env:
+    #   OANDA_API_KEY=...
+    #   OANDA_ACCOUNT_ID=...
+    #   OANDA_ENVIRONMENT=practice  # or live
+    #   TELEGRAM_BOT_TOKEN=...
+    #   TELEGRAM_CHAT_ID=...
     environment:
       - TZ=America/Bogota
-      - CTRADER_SPREAD_URL=${CTRADER_SPREAD_URL:-http://host.docker.internal:28081}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+      - ./results:/app/results
+    ports:
+      - "9090:9090"  # Prometheus metrics (optional, for future use)
     # Run scan every 15 minutes + poll Telegram commands continuously
-    entrypoint: ["/bin/sh", "-c", "python -u -m src.cli telegram-poll >> /app/logs/telegram.log 2>&1 & while true; do echo '===' $(date) '===' >> /app/logs/scan.log; python -u -m src.cli scan >> /app/logs/scan.log 2>&1; sleep 900; done"]
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "python -u -m src.cli telegram-poll >> /app/logs/telegram.log 2>&1 & while true; do echo '===' $(date) '===' >> /app/logs/scan.log; python -u -m src.cli scan >> /app/logs/scan.log 2>&1; sleep 900; done",
+      ]
     healthcheck:
-      test: ["CMD", "test", "-f", "/app/logs/scan.log"]
-      interval: 5m
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:9090/metrics', timeout=5)",
+        ]
+      interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # ---------------------------------------------------------------------------
+  # OPTIONAL: Prometheus — uncomment to enable metrics scraping
+  # Scrapes the agent's /metrics endpoint on port 9090.
+  # ---------------------------------------------------------------------------
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: manual-trading-prometheus
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #     - prometheus_data:/prometheus
+  #   ports:
+  #     - "9091:9090"
+  #   command:
+  #     - "--config.file=/etc/prometheus/prometheus.yml"
+  #     - "--storage.tsdb.retention.time=30d"
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "20m"
+  #       max-file: "5"
+
+  # ---------------------------------------------------------------------------
+  # OPTIONAL: Grafana — uncomment to enable dashboards
+  # Requires Prometheus to be enabled above.
+  # Default login: admin / admin (change via GF_SECURITY_ADMIN_PASSWORD in .env)
+  # ---------------------------------------------------------------------------
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: manual-trading-grafana
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - prometheus
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+  #     - GF_USERS_ALLOW_SIGN_UP=false
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #     - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+  #     - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+  #   ports:
+  #     - "3000:3000"
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "20m"
+  #       max-file: "5"
+
+# ---------------------------------------------------------------------------
+# Named volumes — uncomment if Prometheus/Grafana are enabled above
+# ---------------------------------------------------------------------------
+# volumes:
+#   prometheus_data:
+#   grafana_data:

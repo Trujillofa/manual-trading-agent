@@ -1,26 +1,38 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS base
 
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for caching
+# Copy project files
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir -e ".[dev]"
-
-# Copy source code
 COPY src/ ./src/
 COPY config/ ./config/
+COPY .env.example ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir .
+
+# Create logs directory
+RUN mkdir -p /app/logs
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Expose metrics port (for future Prometheus integration)
+EXPOSE 9090
+
+# Run the agent
+CMD ["python", "-m", "src.cli", "run"]
+
+# --- Test stage (not included in production image) ---
+FROM base AS test
+
 COPY tests/ ./tests/
-COPY scripts/ ./scripts/
-COPY docs/ ./docs/
+RUN pip install --no-cache-dir ".[dev]"
 
-# Create logs/results directories
-RUN mkdir -p /app/logs /app/results
-
-# Default command
-ENTRYPOINT ["python", "-m", "src.cli"]
-CMD ["--help"]
+CMD ["pytest", "tests/", "-v", "--tb=short"]

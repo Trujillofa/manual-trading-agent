@@ -34,12 +34,12 @@ strategy:
     GBP/CHF: 60
 
 risk:
-  # TP/SL is ATR-based: TP=1.0×ATR, SL=3.0×ATR (optimized 2026-04-20 sweep)
-  # Legacy fixed-dollar values kept for reference only
+  # TP/SL: fixed-dollar values per AGENTS.md (~$500 TP, ~$1800 SL)
+  # ATR-based multipliers kept for reference (tp_atr_multiplier: 1.0, sl_atr_multiplier: 3.0)
   tp_atr_multiplier: 1.0
   sl_atr_multiplier: 3.0
-  tp_usd_legacy: 300
-  sl_usd_legacy: 900
+  tp_usd_legacy: 500
+  sl_usd_legacy: 1800
   max_daily_loss_usd: 1500
   max_concurrent_positions: 1
 

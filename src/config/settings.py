@@ -73,6 +73,8 @@ class StrategyConfig:
     spread_filter_enabled: bool = False
     max_spread_pips: float = 2.0
     spread_limits_pips: dict[str, float] = field(default_factory=dict)
+    sma_period: int = 50
+    sma_alignment_enabled: bool = True
     pair_priorities: dict[str, int] = field(
         default_factory=lambda: {
             "EUR/GBP": 100,
@@ -96,6 +98,8 @@ class StrategyConfig:
             raise ValueError("strategy.cooldown_minutes must be >= 0")
         if self.max_spread_pips < 0:
             raise ValueError("strategy.max_spread_pips must be >= 0")
+        if self.sma_period <= 0:
+            raise ValueError("strategy.sma_period must be greater than 0")
         for pair, limit in self.spread_limits_pips.items():
             if not _is_non_empty_string(pair):
                 raise ValueError("strategy.spread_limits_pips keys must be non-empty strings")

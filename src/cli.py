@@ -34,6 +34,7 @@ from src.indicators.rsi import (
     detect_bearish_divergence,
     detect_bullish_divergence,
 )
+from src.indicators.sma import calculate_sma
 from src.news.news_checker import NewsChecker
 from src.notifications.telegram import TelegramNotifier
 from src.strategy.multi_timeframe import MTFRSIStrategy
@@ -641,9 +642,21 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             open_15m = data_15m["open"].values.tolist() if "open" in data_15m else close_15m
 
             # Calculate RSI for each timeframe
-            rsi_1h = calculate_rsi(data_1h["close"].values.tolist()[-50:], rsi_period)
-            rsi_30m = calculate_rsi(data_30m["close"].values.tolist()[-50:], rsi_period)
+            close_1h_list = data_1h["close"].values.tolist()
+            close_30m_list = data_30m["close"].values.tolist()
+            rsi_1h = calculate_rsi(close_1h_list[-50:], rsi_period)
+            rsi_30m = calculate_rsi(close_30m_list[-50:], rsi_period)
             rsi_15m_val = calculate_rsi(close_15m[-50:], rsi_period)
+
+            # Calculate SMA for each timeframe (used for trend-alignment gate)
+            close_1h_list = data_1h["close"].values.tolist()
+            close_30m_list = data_30m["close"].values.tolist()
+            sma_period = int(settings.strategy.sma_period)
+            sma_1h = calculate_sma(close_1h_list, sma_period)
+            sma_30m = calculate_sma(close_30m_list, sma_period)
+            sma_15m = calculate_sma(close_15m, sma_period)
+            close_1h_last = close_1h_list[-1] if close_1h_list else None
+            close_30m_last = close_30m_list[-1] if close_30m_list else None
 
             # 20-bar HH/LL from 15m — prior-bar semantics so `close > hh`
             # / `close < ll` can fire. Including the current bar makes
@@ -739,6 +752,21 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             print(f"  RSI 1h: {rsi_1h:.1f}" if rsi_1h else "  RSI 1h: N/A")
             print(f"  RSI 30m: {rsi_30m:.1f}" if rsi_30m else "  RSI 30m: N/A")
             print(f"  RSI 15m: {rsi_15m_val:.1f}" if rsi_15m_val else "  RSI 15m: N/A")
+            if sma_1h is not None and close_1h_last is not None:
+                pos_1h = "above" if close_1h_last > sma_1h else "below"
+                print(f"  SMA({sma_period}) 1h: {sma_1h:.5f} (price {pos_1h})")
+            else:
+                print(f"  SMA({sma_period}) 1h: N/A")
+            if sma_30m is not None and close_30m_last is not None:
+                pos_30m = "above" if close_30m_last > sma_30m else "below"
+                print(f"  SMA({sma_period}) 30m: {sma_30m:.5f} (price {pos_30m})")
+            else:
+                print(f"  SMA({sma_period}) 30m: N/A")
+            if sma_15m is not None:
+                pos_15m = "above" if close_price > sma_15m else "below"
+                print(f"  SMA({sma_period}) 15m: {sma_15m:.5f} (price {pos_15m})")
+            else:
+                print(f"  SMA({sma_period}) 15m: N/A")
             print(f"  20-bar HH: {hh:.5f}" if hh else "  20-bar HH: N/A")
             print(f"  20-bar LL: {ll:.5f}" if ll else "  20-bar LL: N/A")
             print(f"  Confirmation profile: {_profile_label(profile)}")
@@ -966,6 +994,43 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     )
                 if cooldown_active:
                     no_trade_reasons.append("cooldown active")
+                # SMA alignment gate: all 3 TFs must agree with signal direction
+                if settings.strategy.sma_alignment_enabled:
+                    sma_values_available = (
+                        sma_1h is not None
+                        and sma_30m is not None
+                        and sma_15m is not None
+                        and close_1h_last is not None
+                        and close_30m_last is not None
+                    )
+                    if sma_values_available:
+                        assert sma_1h is not None
+                        assert sma_30m is not None
+                        assert sma_15m is not None
+                        assert close_1h_last is not None
+                        assert close_30m_last is not None
+                        sma_1h_value = float(sma_1h)
+                        sma_30m_value = float(sma_30m)
+                        sma_15m_value = float(sma_15m)
+                        close_1h_last_value = float(close_1h_last)
+                        close_30m_last_value = float(close_30m_last)
+                        if signal_direction == "BUY":
+                            sma_aligned = (
+                                close_1h_last_value < sma_1h_value
+                                and close_30m_last_value < sma_30m_value
+                                and close_price < sma_15m_value
+                            )
+                        else:
+                            sma_aligned = (
+                                close_1h_last_value > sma_1h_value
+                                and close_30m_last_value > sma_30m_value
+                                and close_price > sma_15m_value
+                            )
+                        if not sma_aligned:
+                            side_label = "below" if signal_direction == "BUY" else "above"
+                            no_trade_reasons.append(
+                                f"SMA({sma_period}) misaligned (price not {side_label} on all TFs)"
+                            )
                 if no_trade_reasons:
                     telemetry_state = "blocked"
                     telemetry_direction = signal_direction

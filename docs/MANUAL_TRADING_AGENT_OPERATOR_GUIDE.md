@@ -199,3 +199,44 @@ See:
 - `docs/reports/CONFIRMATION_BAKEOFF_FULL_REPORT_2026-03-31.md`
 
 These documents are the source of truth for why current promoted pair profiles were chosen.
+
+## Infrastructure & Repositories
+
+### Local (`/home/yderf/`)
+
+| Repo | Path | Branch | Commit |
+|---|---|---|---|
+| manual-trading-agent | /home/yderf/manual-trading-agent | main | 18bd2b9 |
+| ctrader-trading-agent | /home/yderf/ctrader-trading-agent | main | 0348802 |
+| depositotrujillo.co | /home/yderf/depositotrujillo.co | main | 3008c56 |
+| hermes-agent | /home/yderf/hermes-agent | main | b7e71fb7 |
+| mt5-trading-agent | /home/yderf/mt5-trading-agent | docs/mt5-implementation-plan | (active branch) |
+
+### Hetzner (SSH: `crypto-agent` via Tailscale 100.103.209.50)
+
+| Repo | Path | Branch | Commit |
+|---|---|---|---|
+| crypto-agent | /opt/crypto-agent | main | b327366 |
+| ctrader-trading-agent | /opt/ctrader-trading-agent | main | 386f0e5 |
+| manual-trading-agent | /home/emilio/manual-trading-agent | main | f432b48 |
+
+### GitHub (Trujillofa)
+
+Repos: manual-trading-agent, crypto-trading-agent, ctrader-trading-agent, depotru_database, depositotrujillo.co, Algorithmic_Trading_Machine_Learning, algorithmic-trading-python-master, Trujillo-s, finnhub-python, skills-introduction-to-github
+
+### Branch inventory
+
+| Repo | Local branches | Remote branches |
+|---|---|---|
+| manual-trading-agent | main, feat/deployment-and-tp-sl-fix | main, feat/deployment-and-tp-sl-fix, hetzner-merge, copilot/analyze-test-coverage |
+| ctrader-trading-agent | main, stable, fix/backtest-same-bar-bias, fix/session-reporting | main, stable |
+| mt5-trading-agent | docs/mt5-implementation-plan | main, docs/mt5-implementation-plan |
+
+### Operating notes
+
+- No git worktrees exist anywhere; all repos use single-checkout clones.
+- manual-trading-agent has 3 copies (local, Hetzner, GitHub), so commits may diverge.
+- ctrader-trading-agent has 2 copies (local, Hetzner), so commits may diverge.
+- crypto-agent exists only on Hetzner; there is no local copy.
+- SSH to Hetzner uses `ssh crypto-agent` (Tailscale IP) or `ssh crypto-agent-public` (public IP 46.225.119.221), both using key `~/.ssh/hetzner_deploy`.
+- GitHub auth uses the Trujillofa account over HTTPS.

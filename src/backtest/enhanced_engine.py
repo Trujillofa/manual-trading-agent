@@ -102,6 +102,8 @@ class EnhancedBacktestEngine:
         use_mtf_alignment: bool = True,  # Require MTF RSI alignment
         rsi_overbought: float = 70.0,
         rsi_oversold: float = 30.0,
+        use_sma_alignment: bool = True,
+        sma_period: int = 50,
     ) -> None:
         self.initial_balance = initial_balance
         self.risk_per_trade = risk_per_trade
@@ -115,6 +117,8 @@ class EnhancedBacktestEngine:
         self.use_mtf_alignment = use_mtf_alignment
         self.rsi_overbought = rsi_overbought
         self.rsi_oversold = rsi_oversold
+        self.use_sma_alignment = use_sma_alignment
+        self.sma_period = sma_period
 
     def _calculate_atr(
         self, highs: list[float], lows: list[float], closes: list[float], period: int = 14
@@ -311,6 +315,12 @@ class EnhancedBacktestEngine:
         data["rsi"] = self._calculate_rsi_column(data, 14)
         data["hh"] = rolling_highest_highs(data["high"].tolist(), lookback)
         data["ll"] = rolling_lowest_lows(data["low"].tolist(), lookback)
+        # SMA: rolling mean with min_periods=sma_period so early bars are NaN
+        data["sma"] = (
+            data["close"]
+            .rolling(window=self.sma_period, min_periods=self.sma_period)
+            .mean()
+        )
 
         # Prepare data lists
         opens = data["open"].tolist() if "open" in data.columns else data["close"].tolist()
@@ -480,6 +490,8 @@ class EnhancedBacktestEngine:
                     entry_idx = i
                     continue
 
+            sma_val = data["sma"].iloc[i]
+
             # Generate new signal if not in position
             if position is None:
                 # ADX filter: skip signal generation in trending markets
@@ -497,6 +509,18 @@ class EnhancedBacktestEngine:
                 signal, confidence, pattern_names, div_type = self._generate_signal(
                     float(rsi), bullish_pats, bearish_pats, bullish_div, bearish_div
                 )
+
+                # SMA alignment gate: BUY requires price < SMA, SELL requires price > SMA
+                if (
+                    signal != SignalType.HOLD
+                    and self.use_sma_alignment
+                    and not pd.isna(sma_val)
+                    and (
+                        (signal == SignalType.BUY and close >= sma_val)
+                        or (signal == SignalType.SELL and close <= sma_val)
+                    )
+                ):
+                    signal = SignalType.HOLD
 
                 # Only enter with sufficient confidence
                 if signal != SignalType.HOLD and confidence >= 0.4:

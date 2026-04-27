@@ -1,11 +1,14 @@
 trading:
   mode: "paper"
   pairs:
-    majors: []
+    majors:
+      - USD/JPY
+      - GBP/JPY
+      - NZD/JPY
     minors:
       - AUD/CAD
-    shadow:
       - GBP/CHF
+    shadow: []
   lot_size: 3
 
 timeframes:
@@ -31,9 +34,28 @@ strategy:
   spread_limits_pips:
     GBP/CHF: 2.5
     AUD/CAD: 2.5
+    USD/JPY: 2.0
+    GBP/JPY: 3.0
+    NZD/JPY: 3.0
   pair_priorities:
-    AUD/CAD: 100
-    GBP/CHF: 60
+    GBP/CHF: 100
+    NZD/JPY: 90
+    GBP/JPY: 85
+    AUD/CAD: 80
+    USD/JPY: 75
+  pair_overrides:
+    NZD/JPY:
+      sma_period: 20
+      tp_atr_multiplier: 2.5
+      sl_atr_multiplier: 2.5
+    GBP/JPY:
+      sma_period: 20
+      tp_atr_multiplier: 1.5
+      sl_atr_multiplier: 2.5
+    USD/JPY:
+      sma_period: 40
+      tp_atr_multiplier: 2.0
+      sl_atr_multiplier: 2.5
 
 risk:
   # TP/SL: fixed-dollar values per AGENTS.md (~$500 TP, ~$1800 SL)

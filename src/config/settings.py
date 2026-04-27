@@ -61,6 +61,26 @@ class TimeframesConfig:
 
 
 @dataclass
+class PairOverride:
+    """Per-pair parameter overrides that take precedence over global defaults."""
+
+    sma_period: int | None = None
+    tp_atr_multiplier: float | None = None
+    sl_atr_multiplier: float | None = None
+    adx_threshold: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.sma_period is not None and self.sma_period <= 0:
+            raise ValueError("pair_override sma_period must be greater than 0")
+        if self.tp_atr_multiplier is not None and self.tp_atr_multiplier <= 0:
+            raise ValueError("pair_override tp_atr_multiplier must be greater than 0")
+        if self.sl_atr_multiplier is not None and self.sl_atr_multiplier <= 0:
+            raise ValueError("pair_override sl_atr_multiplier must be greater than 0")
+        if self.adx_threshold is not None and self.adx_threshold < 0:
+            raise ValueError("pair_override adx_threshold must be >= 0")
+
+
+@dataclass
 class StrategyConfig:
     rsi_period: int = 14
     rsi_overbought: float = 70.0
@@ -84,6 +104,7 @@ class StrategyConfig:
             "EUR/USD": 40,
         }
     )
+    pair_overrides: dict[str, PairOverride] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.rsi_period <= 0:
@@ -282,10 +303,23 @@ class Settings:
             "scan_results": telegram_data.get("scan_results", True),
         }
 
+        # Build pair_overrides from strategy config
+        raw_overrides = strategy_data.get("pair_overrides", {})
+        pair_overrides_parsed: dict[str, PairOverride] = {}
+        if isinstance(raw_overrides, dict):
+            for pair_key, override_data in raw_overrides.items():
+                if isinstance(override_data, dict):
+                    pair_overrides_parsed[pair_key] = PairOverride(**override_data)
+
+        strategy_payload = {
+            k: v for k, v in strategy_data.items() if k != "pair_overrides"
+        }
+        strategy_payload["pair_overrides"] = pair_overrides_parsed
+
         return cls(
             trading=TradingConfig(**trading_payload),
             timeframes=TimeframesConfig(**timeframes_data),
-            strategy=StrategyConfig(**strategy_data),
+            strategy=StrategyConfig(**strategy_payload),
             risk=RiskConfig(**risk_data),
             news=NewsConfig(**news_data),
             data=DataConfig(**data_payload),

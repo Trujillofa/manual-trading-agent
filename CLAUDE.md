@@ -74,29 +74,25 @@ Signal output → signal_audit.jsonl + Telegram notification
 - **Async throughout**: CLI uses `asyncio.run()`, data fetchers and Telegram use async HTTP clients (httpx/aiohttp). TelegramNotifier falls back to background thread if no event loop.
 - **Graceful degradation**: missing news feed doesn't block scanning, missing OANDA quote skips spread check.
 
-### Production config (current state, 2026-04-20)
+### Production config (current state, 2026-04-27)
 
-**One promoted pair.** AUD/CAD promoted after 180d clean-data sweep (2026-04-20)
-passed all promotion gates. EUR/GBP rejected (negative PnL in every config tested).
-GBP/CHF remains shadow pending 365d sweep for trade count.
+**Five promoted pairs.** Per-pair SMA/TP/SL optimization via `strategy.pair_overrides` in config.
 
-Promoted (live Telegram alerts, in `trading.pairs.minors`):
+Promoted (live Telegram alerts):
 
-| Pair | Confirmation profile | Trades (180d) | PnL % | PF | Promotion date |
-|---|---|---|---|---|---|
-| AUD/CAD | V0_b0_c0 | 119 | +1.99% | 1.63 | 2026-04-20 |
-
-Shadow-run (audit-only, in `trading.pairs.shadow`):
-
-| Pair | Confirmation profile | Status | Next action |
-|---|---|---|---|
-| GBP/CHF | V2_b0_c0 | shadow | 365d sweep needed (N=24, below 30-trade gate) |
+| Pair | Config | SMA | TP/SL (ATR) | Trades (2y) | PnL % | PF | WR | Promotion date |
+|---|---|---|---|---|---|---|---|---|
+| GBP/CHF | default | 50 | 1.0/3.0 | 290 | +88% | 1.30 | 64% | 2026-04-27 |
+| NZD/JPY | override | 20 | 2.5/2.5 | 269 | +126% | 1.29 | 52% | 2026-04-27 |
+| GBP/JPY | override | 20 | 1.5/2.5 | 319 | +97% | 1.27 | 64% | 2026-04-27 |
+| USD/JPY | override | 40 | 2.0/2.5 | 300 | +46% | 1.13 | 54% | 2026-04-27 |
+| AUD/CAD | default | 50 | 1.0/3.0 | 264 | +13% | 1.05 | 58% | 2026-04-20 |
 
 Rejected (do not add):
 EUR/GBP — negative PnL in all 48 configs tested (best: -0.30%, PF 0.66). 2026-04-20 sweep.
 
-Not in watchlist (require clean-data full-variant sweep + promotion gate):
-GBP/USD, AUD/JPY, NZD/USD, NZD/JPY, EUR/CHF, EUR/CAD, USD/JPY, USD/CHF, GBP/CAD, AUD/NZD.
+Not in watchlist (require MTF validation before promotion):
+EUR/USD, GBP/USD, USD/CHF, USD/CAD, AUD/USD, NZD/USD, EUR/JPY, AUD/JPY.
 
 Shared parameters:
 - **RSI thresholds**: 30/70 on 1h, 30m, 15m (per `config/settings.yaml`)

@@ -32,6 +32,7 @@ from src.data.dukascopy_fetcher import get_multi_timeframe_data_dukascopy
 from src.indicators.adx import calculate_adx
 from src.indicators.high_low import previous_rolling_highest_high, previous_rolling_lowest_low
 from src.indicators.rsi import calculate_rsi
+from src.indicators.sma import calculate_sma
 
 
 @dataclass
@@ -110,6 +111,17 @@ def calc_atr(
     return sum(trs) / period if trs else None
 
 
+def _sma_series(df: pd.DataFrame, period: int) -> pd.Series:
+    """Pre-compute SMA series aligned to df.index for fast lookup."""
+    return df["close"].rolling(window=period, min_periods=period).mean()
+
+
+def _sma_at_or_before(sma_series: pd.Series, ts: pd.Timestamp) -> float | None:
+    """O(log n) lookup — asof returns latest non-NaN value at or before ts."""
+    val = sma_series.asof(ts)
+    return None if pd.isna(val) else float(val)
+
+
 def run_config(
     pair: str,
     data_1h: pd.DataFrame,
@@ -125,6 +137,7 @@ def run_config(
     max_hold_bars: int = 16,
     lookback: int = 20,
     adx_threshold: float = 0.0,
+    sma_period: int = 0,
 ) -> ConfigResult:
     adx_label = f"_adx{adx_threshold:g}" if adx_threshold > 0 else ""
     label = f"{variant}_ob{rsi_ob:g}_os{rsi_os:g}_b{buffer_pips:g}_c{confirm_bars}_tp{tp_mult:g}_sl{sl_mult:g}{adx_label}"
@@ -160,6 +173,20 @@ def run_config(
     closes = data_15m["close"].tolist()
 
     pip_size = 0.01 if "JPY" in pair else 0.0001
+
+    # Pre-compute SMA series and close series for O(log n) asof lookups
+    sma_1h_series: pd.Series | None = None
+    sma_30m_series: pd.Series | None = None
+    close_1h_series: pd.Series | None = None
+    close_30m_series: pd.Series | None = None
+    sma_15m_list: list[float | None] = []
+    if sma_period > 0:
+        sma_1h_series = _sma_series(data_1h, sma_period)
+        sma_30m_series = _sma_series(data_30m, sma_period)
+        sma_15m_series = data_15m["close"].rolling(window=sma_period, min_periods=sma_period).mean()
+        sma_15m_list = [None if pd.isna(v) else float(v) for v in sma_15m_series]
+        close_1h_series = data_1h["close"]
+        close_30m_series = data_30m["close"]
 
     for i in range(lookback + 20, len(data_15m)):
         ts = data_15m.index[i]
@@ -284,6 +311,28 @@ def run_config(
             adx_1h = _adx_at_bar(data_1h, ts)
             if adx_1h is not None and adx_1h >= adx_threshold:
                 current_signal = None
+
+        # SMA alignment gate: price must be on the reversal side of SMA on all 3 TFs
+        if current_signal is not None and sma_period > 0:
+            assert sma_1h_series is not None
+            assert sma_30m_series is not None
+            s1h = _sma_at_or_before(sma_1h_series, ts)
+            s30m = _sma_at_or_before(sma_30m_series, ts)
+            s15m = sma_15m_list[i] if i < len(sma_15m_list) else None
+            if s1h is not None and s30m is not None and s15m is not None:
+                assert close_1h_series is not None
+                assert close_30m_series is not None
+                c1h = close_1h_series.asof(ts)
+                c30m = close_30m_series.asof(ts)
+                close_1h = None if pd.isna(c1h) else float(c1h)
+                close_30m = None if pd.isna(c30m) else float(c30m)
+                if close_1h is not None and close_30m is not None:
+                    if current_signal == "buy":
+                        if not (close_1h < s1h and close_30m < s30m and close < s15m):
+                            current_signal = None
+                    else:
+                        if not (close_1h > s1h and close_30m > s30m and close > s15m):
+                            current_signal = None
 
         # Open new trade
         if position is None and current_signal is not None:
@@ -558,6 +607,7 @@ def main() -> int:
     )
     parser.add_argument("--output-dir", default="results")
     parser.add_argument("--max-hold", type=int, default=16, help="Max bars to hold (15m)")
+    parser.add_argument("--sma-period", type=int, default=50, help="SMA period for alignment gate (0=disabled)")
     args = parser.parse_args()
 
     pairs = [p.strip() for p in args.pairs.split(",") if p.strip()]
@@ -580,6 +630,7 @@ def main() -> int:
     total_configs = (v0_configs if "V0" in variants else 0) + n_vx * vx_configs
     total_runs = total_configs * len(pairs)
     adx_threshold = args.adx_threshold
+    sma_period = args.sma_period
 
     print("=== Entry Configuration Optimizer ===")
     print(f"Source: {args.source}")
@@ -590,6 +641,7 @@ def main() -> int:
     print(f"Confirm bars: {confirm_bars_list}")
     print(f"TP/SL ratios: {tp_sl_pairs}")
     print(f"ADX threshold: {adx_threshold} {'(disabled)' if adx_threshold == 0 else ''}")
+    print(f"SMA period: {sma_period} {'(disabled)' if sma_period == 0 else ''}")
     print(f"Total configs per pair: {total_configs}")
     print(f"Total runs: {total_runs}")
     print(f"Days: {args.days}")
@@ -668,6 +720,7 @@ def main() -> int:
                                 sl_mult=sl_mult,
                                 max_hold_bars=args.max_hold,
                                 adx_threshold=adx_threshold,
+                                sma_period=sma_period,
                             )
                             results.append(r)
                             run_count += 1

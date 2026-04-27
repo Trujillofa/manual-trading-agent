@@ -50,6 +50,9 @@ from src.strategy.multi_timeframe import MTFRSIStrategy
 CONFIRMATION_PROFILES: dict[str, ConfirmationProfile] = {
     "AUD/CAD": {"variant": "V0", "buffer_pips": 0.0, "confirm_bars": 0},
     "GBP/CHF": {"variant": "V2", "buffer_pips": 0.0, "confirm_bars": 0},
+    "NZD/JPY": {"variant": "V0", "buffer_pips": 0.0, "confirm_bars": 0},
+    "GBP/JPY": {"variant": "V0", "buffer_pips": 0.0, "confirm_bars": 0},
+    "USD/JPY": {"variant": "V0", "buffer_pips": 0.0, "confirm_bars": 0},
 }
 
 # Default profile for pairs without a specific one

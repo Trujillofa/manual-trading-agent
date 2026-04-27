@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Literal
+from typing import Literal, cast
 
 import pandas as pd
 
@@ -99,7 +99,7 @@ class EnhancedBacktestEngine:
         max_hold_bars: int = 96,  # Max 24 hours at 15m bars
         use_patterns: bool = True,
         use_divergence: bool = True,
-        use_mtf_alignment: bool = True,  # Require MTF RSI alignment
+        use_mtf_alignment: bool = False,  # Disabled by default: single-TF data in backtest
         rsi_overbought: float = 70.0,
         rsi_oversold: float = 30.0,
         use_sma_alignment: bool = True,
@@ -147,7 +147,14 @@ class EnhancedBacktestEngine:
             rsi = calculate_rsi(values.tolist(), period)
             return float(rsi) if rsi is not None else float("nan")
 
-        return data["close"].rolling(window=window, min_periods=window).apply(_window_rsi)
+        return cast(
+            pd.Series,
+            data["close"].rolling(window=window, min_periods=window).apply(_window_rsi),
+        )
+
+    def _index_to_datetime(self, value: object) -> datetime:
+        """Normalize a dataframe index value into a datetime."""
+        return value if isinstance(value, datetime) else datetime.now()
 
     def _check_tp_sl_hit(
         self,
@@ -316,11 +323,7 @@ class EnhancedBacktestEngine:
         data["hh"] = rolling_highest_highs(data["high"].tolist(), lookback)
         data["ll"] = rolling_lowest_lows(data["low"].tolist(), lookback)
         # SMA: rolling mean with min_periods=sma_period so early bars are NaN
-        data["sma"] = (
-            data["close"]
-            .rolling(window=self.sma_period, min_periods=self.sma_period)
-            .mean()
-        )
+        data["sma"] = data["close"].rolling(window=self.sma_period, min_periods=self.sma_period).mean()
 
         # Prepare data lists
         opens = data["open"].tolist() if "open" in data.columns else data["close"].tolist()
@@ -416,10 +419,8 @@ class EnhancedBacktestEngine:
                         peak_balance = balance
 
                     trade = Trade(
-                        entry_time=data.index[entry_idx]
-                        if isinstance(data.index[entry_idx], datetime)
-                        else datetime.now(),
-                        exit_time=timestamp,
+                        entry_time=self._index_to_datetime(data.index[entry_idx]),
+                        exit_time=self._index_to_datetime(timestamp),
                         side=position,
                         entry_price=entry_price,
                         exit_price=tp_price if result == "tp" else sl_price,
@@ -466,10 +467,8 @@ class EnhancedBacktestEngine:
                     balance += pnl
 
                     trade = Trade(
-                        entry_time=data.index[entry_idx]
-                        if isinstance(data.index[entry_idx], datetime)
-                        else datetime.now(),
-                        exit_time=timestamp,
+                        entry_time=self._index_to_datetime(data.index[entry_idx]),
+                        exit_time=self._index_to_datetime(timestamp),
                         side=position,
                         entry_price=entry_price,
                         exit_price=close,

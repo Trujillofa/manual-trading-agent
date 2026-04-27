@@ -61,6 +61,8 @@ DEFAULT_CONFIRMATION_PROFILE: ConfirmationProfile = {
 
 # ADX threshold: only take mean-reversion signals when ADX < this value (ranging market)
 ADX_TREND_THRESHOLD = 25.0
+SCAN_HEALTH_MAX_AGE_SECONDS = 30 * 60
+TELEGRAM_HEARTBEAT_MAX_AGE_SECONDS = 5 * 60
 
 # Conservative fallback spreads (pips) when no live source is available.
 DEFAULT_SPREAD_PIPS: dict[str, float] = {
@@ -332,6 +334,14 @@ def _audit_log_path() -> Path:
     return _logs_dir() / "signal_audit.jsonl"
 
 
+def _scan_log_path() -> Path:
+    return Path("/app/logs/scan.log")
+
+
+def _telegram_heartbeat_path() -> Path:
+    return Path("/app/logs/telegram_heartbeat.json")
+
+
 def _append_audit_log(payload: dict[str, object]) -> None:
     path = _audit_log_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -433,6 +443,33 @@ def _aggregate_scan_telemetry(records: list[dict[str, object]]) -> dict[str, Sca
             if active:
                 summary["blockers"][blocker] = summary["blockers"].get(blocker, 0) + 1
     return per_pair
+
+
+def _path_age_seconds(path: Path, now_utc: datetime) -> float | None:
+    if not path.exists():
+        return None
+    modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+    return max((now_utc - modified_at).total_seconds(), 0.0)
+
+
+def _healthcheck_status(now_utc: datetime | None = None) -> tuple[bool, str]:
+    settings = get_settings()
+    current_time = now_utc or datetime.now(UTC)
+
+    scan_age = _path_age_seconds(_scan_log_path(), current_time)
+    if scan_age is None:
+        return False, "scan log missing"
+    if scan_age > SCAN_HEALTH_MAX_AGE_SECONDS:
+        return False, f"scan log stale ({scan_age:.0f}s old)"
+
+    if settings.telegram.enabled and settings.telegram.is_configured:
+        telegram_age = _path_age_seconds(_telegram_heartbeat_path(), current_time)
+        if telegram_age is None:
+            return False, "telegram heartbeat missing"
+        if telegram_age > TELEGRAM_HEARTBEAT_MAX_AGE_SECONDS:
+            return False, f"telegram heartbeat stale ({telegram_age:.0f}s old)"
+
+    return True, "ok"
 
 
 def _mtf_distance_to_buy(rsi_1h: float, rsi_30m: float, rsi_15m: float, threshold: float) -> float:
@@ -544,6 +581,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("telegram-poll", help="Poll Telegram commands (e.g. /watchlist)")
+    subparsers.add_parser("healthcheck", help="Check scanner and Telegram runtime health")
 
     dash_parser = subparsers.add_parser("dashboard", help="Signal dashboard and paper P&L")
     dash_parser.add_argument("--days", type=int, default=30, help="Days of history to show")
@@ -1598,6 +1636,13 @@ async def run_telegram_poll() -> None:
     await handler.run_forever()
 
 
+async def run_healthcheck() -> None:
+    ok, message = _healthcheck_status()
+    print(message)
+    if not ok:
+        raise SystemExit(1)
+
+
 async def run_dashboard(days: int) -> None:
     """Show signal dashboard: entries, block reasons, paper P&L tracking."""
     audit_path = _audit_log_path()
@@ -1806,6 +1851,7 @@ def main() -> int:
             use_divergence=not args.no_divergence,
         ),
         "telegram-poll": run_telegram_poll,
+        "healthcheck": run_healthcheck,
         "dashboard": lambda: run_dashboard(args.days),
     }
 

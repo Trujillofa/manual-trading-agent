@@ -12,6 +12,14 @@ def _is_non_empty_string(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def _resolve_env_placeholder(value: str | None) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return value
+    if value.startswith("${") and value.endswith("}"):
+        return os.environ.get(value[2:-1])
+    return value
+
+
 @dataclass
 class TradingConfig:
     mode: Literal["paper", "live"] = "paper"
@@ -191,16 +199,17 @@ class TelegramConfig:
     scan_results: bool = True
 
     def __post_init__(self) -> None:
-        if self.bot_token and self.bot_token.startswith("${"):
-            env_key = self.bot_token[2:-1]
-            self.bot_token = os.environ.get(env_key)
-        if self.chat_id and self.chat_id.startswith("${"):
-            env_key = self.chat_id[2:-1]
-            self.chat_id = os.environ.get(env_key)
+        self.bot_token = _resolve_env_placeholder(self.bot_token)
+        self.chat_id = _resolve_env_placeholder(self.chat_id)
+
+        if not _is_non_empty_string(self.bot_token):
+            self.bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        if not _is_non_empty_string(self.chat_id):
+            self.chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
     @property
     def is_configured(self) -> bool:
-        return self.bot_token is not None and self.chat_id is not None
+        return _is_non_empty_string(self.bot_token) and _is_non_empty_string(self.chat_id)
 
 
 @dataclass
@@ -281,15 +290,15 @@ class Settings:
                 raise ValueError(f"'{section_name}' must be a YAML object")
 
         # Build DataConfig with nested OandaConfig
-        data_payload = {
-            "provider": data_data.get("provider", "yfinance"),
-            "warmup_candles": data_data.get("warmup_candles", 200),
-            "oanda": OandaConfig(
+        data_config = DataConfig(
+            provider=data_data.get("provider", "yfinance"),
+            warmup_candles=data_data.get("warmup_candles", 200),
+            oanda=OandaConfig(
                 api_key=oanda_data.get("api_key"),
                 account_id=oanda_data.get("account_id"),
                 practice=oanda_data.get("practice", True),
             ),
-        }
+        )
 
         telegram_payload: dict[str, Any] = {
             "bot_token": telegram_data.get("bot_token"),
@@ -322,7 +331,7 @@ class Settings:
             strategy=StrategyConfig(**strategy_payload),
             risk=RiskConfig(**risk_data),
             news=NewsConfig(**news_data),
-            data=DataConfig(**data_payload),
+            data=data_config,
             telegram=TelegramConfig(**telegram_payload),
         )
 

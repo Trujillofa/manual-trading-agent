@@ -654,8 +654,12 @@ def main() -> int:
     print(f"Days: {args.days}")
     print()
 
-    # Fetch data for all pairs first
-    pair_data: dict[str, dict[str, pd.DataFrame]] = {}
+    results: list[ConfigResult] = []
+    run_count = 0
+    pairs_fetched = 0
+    t0 = time.time()
+
+    # Fetch and backtest one pair at a time to keep peak memory low
     for pair in pairs:
         print(f"[FETCH] {pair}")
         try:
@@ -669,7 +673,6 @@ def main() -> int:
                     end_date,
                     timeframes=["h1", "m30", "m15"],
                 )
-                # Remap keys to match yfinance format
                 mtf_remapped: dict[str, pd.DataFrame] = {}
                 key_map = {"h1": "1h", "m30": "30m", "m15": "15m"}
                 for k, v in mtf.items():
@@ -685,25 +688,11 @@ def main() -> int:
                 continue
             bars_15m = len(mtf["15m"])
             print(f"  OK: {bars_15m} bars on 15m ({bars_15m * 15 / 60 / 24:.0f} days)")
-            pair_data[pair] = mtf
+            pairs_fetched += 1
         except Exception as e:
             print(f"  ERROR: {e}")
             continue
 
-    if not pair_data:
-        print("No data fetched, aborting")
-        return 1
-
-    print(f"\nFetched data for {len(pair_data)}/{len(pairs)} pairs")
-    print(
-        f"Running {total_configs} configs x {len(pair_data)} pairs = {total_configs * len(pair_data)} backtests\n"
-    )
-
-    results: list[ConfigResult] = []
-    run_count = 0
-    t0 = time.time()
-
-    for pair, mtf in pair_data.items():
         print(f"[BACKTEST] {pair}")
         pair_t0 = time.time()
 
@@ -735,10 +724,12 @@ def main() -> int:
         elapsed = time.time() - pair_t0
         total_elapsed = time.time() - t0
         rate = run_count / total_elapsed if total_elapsed > 0 else 0
-        remaining = (total_configs * len(pair_data) - run_count) / rate if rate > 0 else 0
+        remaining = (total_configs * (len(pairs) - run_count // max(total_configs, 1))) / rate if rate > 0 else 0
         print(
             f"  {pair} done in {elapsed:.1f}s ({run_count} runs, ~{remaining / 60:.0f}m remaining)"
         )
+        # Free pair data immediately to keep peak memory low
+        del mtf
 
     total_time = time.time() - t0
     print(f"\nCompleted {run_count} backtests in {total_time:.0f}s ({total_time / 60:.1f}m)")

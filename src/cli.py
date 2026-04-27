@@ -142,6 +142,17 @@ class ScanTelemetrySummary(TypedDict):
     blockers: dict[str, int]
 
 
+def _get_pair_param(pair: str, param: str, default: float | int) -> float | int:
+    """Look up a per-pair override from config, falling back to the global default."""
+    settings = get_settings()
+    override = settings.strategy.pair_overrides.get(pair)
+    if override is not None:
+        value = getattr(override, param, None)
+        if value is not None:
+            return value
+    return default
+
+
 def _get_static_spread_quote(pair: str, pip_size: float) -> SpreadQuote | None:
     pips = DEFAULT_SPREAD_PIPS.get(pair.upper()) or DEFAULT_SPREAD_PIPS.get(pair)
     if pips is None:
@@ -651,7 +662,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             # Calculate SMA for each timeframe (used for trend-alignment gate)
             close_1h_list = data_1h["close"].values.tolist()
             close_30m_list = data_30m["close"].values.tolist()
-            sma_period = int(settings.strategy.sma_period)
+            sma_period = int(_get_pair_param(pair, "sma_period", settings.strategy.sma_period))
             sma_1h = calculate_sma(close_1h_list, sma_period)
             sma_30m = calculate_sma(close_30m_list, sma_period)
             sma_15m = calculate_sma(close_15m, sma_period)
@@ -1113,9 +1124,13 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 print(f"  ⚠️ MTF SIGNAL: {signal_direction} (confidence: {signal_confidence:.0%})")
                 print(f"     Reasons: {', '.join(signal_reasons)}")
 
-                # Calculate TP/SL (TP=1.5×ATR, SL=2×ATR — unified with bakeoff/enhanced_engine)
-                tp_mult = 1.5
-                sl_mult = 2.0
+                # Calculate TP/SL using per-pair overrides (fallback to global defaults)
+                tp_mult = float(
+                    _get_pair_param(pair, "tp_atr_multiplier", settings.risk.tp_atr_multiplier)
+                )
+                sl_mult = float(
+                    _get_pair_param(pair, "sl_atr_multiplier", settings.risk.sl_atr_multiplier)
+                )
                 if atr and atr > 0:
                     if signal_direction == "SELL":
                         entry = close_price
@@ -1521,11 +1536,19 @@ async def run_enhanced_backtest(
             print("  Error: No data available")
             return
 
+        settings = get_settings()
         engine = EnhancedBacktestEngine(
             initial_balance=10000.0,
             risk_per_trade=0.02,
             use_patterns=use_patterns,
             use_divergence=use_divergence,
+            sma_period=int(_get_pair_param(pair, "sma_period", settings.strategy.sma_period)),
+            reward_ratio=float(
+                _get_pair_param(pair, "tp_atr_multiplier", settings.risk.tp_atr_multiplier)
+            ),
+            sl_atr_multiplier=float(
+                _get_pair_param(pair, "sl_atr_multiplier", settings.risk.sl_atr_multiplier)
+            ),
         )
 
         result = engine.run(pair, data, verbose=False)

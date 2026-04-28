@@ -1,29 +1,23 @@
 {
-	"permissions": {
-		"allow": [
-			"Bash(ssh:*)",
-			"Bash(rsync:*)",
-			"Bash(python:*)",
-			"Bash(source .venv/bin/activate)",
-			"Bash(pytest tests/ -v --tb=short)",
-			"Bash(python3 -m pytest tests/ -v --tb=short)",
-			"Bash(python3 -m pytest tests/ -v --tb=short --ignore=tests/test_news_checker.py)",
-			"Bash(scp root@trujillo-server.tail65d80f.ts.net:/home/emilio/manual-trading-agent/docs/reports/CONFIRMATION_BAKEOFF_FULL_REPORT_2026-03-31.md /home/yderf/manual-trading-agent/docs/reports/)",
-			"Bash(scp root@trujillo-server.tail65d80f.ts.net:/home/emilio/manual-trading-agent/docs/MANUAL_TRADING_AGENT_OPERATOR_GUIDE.md /home/yderf/manual-trading-agent/docs/)",
-			"Bash(python3:*)",
-			"Bash(.venv/bin/python -m pytest tests/test_high_low.py -v)",
-			"Bash(cp src/cli.py /tmp/cli.py.full)",
-			"Bash(git checkout *)",
-			"Bash(git add *)",
-			"Bash(cp /tmp/cli.py.full src/cli.py)",
-			"Bash(git commit -m ' *)",
-			"Bash(git stash *)",
-			"Bash(awk '/^## GBP\\\\/USD/,/^## /{if \\(/^## / && !/GBP\\\\/USD/\\) exit; print}' results/confirmation_bakeoff_20260415_043937.md)",
-			"Bash(awk '/^\\\\[FETCH\\\\] GBP\\\\/USD/,/^\\\\[FETCH\\\\]/{print}' results/v2r_screen_180.log)",
-			"Bash(ls -la results/confirmation_bakeoff_2026041*17*.*)",
-			"Bash(git push *)",
-			"Bash(tailscale status *)",
-			"Bash(wc -l /home/yderf/manual-trading-agent/src/**/*.py /home/yderf/manual-trading-agent/src/*.py)"
-		]
-	}
+  "permissions": {
+    "allow": [
+      "Bash(ssh:*)",
+      "Bash(rsync:*)",
+      "Bash(python:*)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(pytest tests/ -v --tb=short)",
+      "Bash(python3 -m pytest tests/ -v --tb=short)",
+      "Bash(python3 -m pytest tests/ -v --tb=short --ignore=tests/test_news_checker.py)",
+      "Bash(scp root@trujillo-server.tail65d80f.ts.net:/home/emilio/manual-trading-agent/docs/reports/CONFIRMATION_BAKEOFF_FULL_REPORT_2026-03-31.md /home/yderf/manual-trading-agent/docs/reports/)",
+      "Bash(scp root@trujillo-server.tail65d80f.ts.net:/home/emilio/manual-trading-agent/docs/MANUAL_TRADING_AGENT_OPERATOR_GUIDE.md /home/yderf/manual-trading-agent/docs/)",
+      "Bash(python3:*)",
+      "Bash(awk '{print $1,$2,$3,$11,\"elapsed=\"$10}')",
+      "Bash(kill 92115 113974)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(git stash *)"
+    ]
+  }
 }

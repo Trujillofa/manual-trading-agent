@@ -614,7 +614,6 @@ def main() -> int:
     )
     parser.add_argument("--output-dir", default="results")
     parser.add_argument("--max-hold", type=int, default=16, help="Max bars to hold (15m)")
-    parser.add_argument("--sma-period", type=int, default=50, help="SMA period for alignment gate (0=disabled)")
     args = parser.parse_args()
 
     pairs = [p.strip() for p in args.pairs.split(",") if p.strip()]

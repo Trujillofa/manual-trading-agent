@@ -132,6 +132,40 @@ class TelegramNotifier:
         except Exception as exc:
             logger.error("Telegram notification failed (%s): %s", context, exc)
 
+    async def send_trade_outcome(
+        self,
+        pair: str,
+        direction: str,
+        entry: float,
+        tp: float,
+        sl: float,
+        outcome: str,
+        tp_pips: float,
+        sl_pips: float,
+        bars_held: int,
+    ) -> None:
+        """Send TP hit or SL hit notification."""
+        if outcome == "tp":
+            emoji = "✅"
+            label = "TP Hit"
+            exit_price = tp
+            result = f"+{tp_pips:.1f} pips"
+        else:
+            emoji = "❌"
+            label = "SL Hit"
+            exit_price = sl
+            result = f"-{sl_pips:.1f} pips"
+
+        message = (
+            f"{emoji} *{label}* — {direction}\n\n"
+            f"Pair: `{pair}`\n"
+            f"Entry: `{entry:.5f}`\n"
+            f"Exit: `{exit_price:.5f}`\n"
+            f"Result: `{result}`\n"
+            f"Bars held: `{bars_held}`"
+        )
+        _ = await self.send(message)
+
     async def send_signal(
         self,
         pair: str,
@@ -147,6 +181,9 @@ class TelegramNotifier:
         sl: float | None = None,
         patterns: list[CandlePattern] | None = None,
         divergence: Divergence | None = None,
+        adx: float | None = None,
+        plus_di: float | None = None,
+        minus_di: float | None = None,
     ) -> None:
         """Send signal alert with enhanced pattern/divergence info."""
         emoji = "🟢" if direction == "BUY" else "🔴"
@@ -172,6 +209,15 @@ class TelegramNotifier:
             elif typed_divergence.divergence_type == DivergenceType.BEARISH:
                 div_text += f"\n📉 Bearish Divergence (strength: {typed_divergence.strength:.2f})"
 
+        # Build ADX/DI context line — warn when directional bias opposes signal
+        adx_text = ""
+        if adx is not None and plus_di is not None and minus_di is not None:
+            opposing = (direction == "BUY" and minus_di > plus_di * 2) or (
+                direction == "SELL" and plus_di > minus_di * 2
+            )
+            warn = " ⚠️" if opposing else ""
+            adx_text = f"\nADX: `{adx:.1f}` | +DI: `{plus_di:.1f}` | -DI: `{minus_di:.1f}`{warn}"
+
         # Build message with entry/TP/SL if provided
         if entry is not None and tp is not None and sl is not None:
             pip_mult = 100 if "JPY" in pair else 10000
@@ -185,7 +231,8 @@ class TelegramNotifier:
                 f"TP: `{tp:.5f}` ({tp_pips:.1f} pips)\n"
                 f"SL: `{sl:.5f}` ({sl_pips:.1f} pips)\n\n"
                 f"RSI(14):\n"
-                f"  15m: `{rsi_15m:.1f}`\n\n"
+                f"  15m: `{rsi_15m:.1f}`"
+                f"{adx_text}\n\n"
                 f"20-bar Range:\n"
                 f"  High: `{hh:.5f}`\n"
                 f"  Low: `{ll:.5f}`"
@@ -200,7 +247,8 @@ class TelegramNotifier:
                 f"RSI(14):\n"
                 f"  1h: `{rsi_1h:.1f}`\n"
                 f"  30m: `{rsi_30m:.1f}`\n"
-                f"  15m: `{rsi_15m:.1f}`\n\n"
+                f"  15m: `{rsi_15m:.1f}`"
+                f"{adx_text}\n\n"
                 f"20-bar Range:\n"
                 f"  High: `{hh:.5f}`\n"
                 f"  Low: `{ll:.5f}`"

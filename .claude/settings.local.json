@@ -8,15 +8,14 @@
       "Bash(pytest tests/ -v --tb=short)",
       "Bash(python3 -m pytest tests/ -v --tb=short)",
       "Bash(python3 -m pytest tests/ -v --tb=short --ignore=tests/test_news_checker.py)",
-      "Bash(scp root@trujillo-server.tail65d80f.ts.net:/home/emilio/manual-trading-agent/docs/reports/CONFIRMATION_BAKEOFF_FULL_REPORT_2026-03-31.md /home/yderf/manual-trading-agent/docs/reports/)",
-      "Bash(scp root@trujillo-server.tail65d80f.ts.net:/home/emilio/manual-trading-agent/docs/MANUAL_TRADING_AGENT_OPERATOR_GUIDE.md /home/yderf/manual-trading-agent/docs/)",
       "Bash(python3:*)",
-      "Bash(awk '{print $1,$2,$3,$11,\"elapsed=\"$10}')",
-      "Bash(kill 92115 113974)",
+      "Bash(scp *)",
       "Bash(git add *)",
+      "Bash(git checkout *)",
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(git pull *)",
+      "Bash(git fetch *)",
       "Bash(git stash *)"
     ]
   }

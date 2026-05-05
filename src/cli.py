@@ -16,7 +16,7 @@ from typing import Any, Literal, TypedDict, cast
 from src.backtest.engine import BacktestEngine
 from src.config import get_settings
 from src.data.fetcher import DataFetcher
-from src.indicators.adx import calculate_adx
+from src.indicators.adx import calculate_adx_full
 from src.indicators.candlestick import (
     CandlePattern,
     PatternType,
@@ -352,6 +352,54 @@ def _append_audit_log(payload: dict[str, object]) -> None:
         fh.write(json.dumps(payload) + "\n")
 
 
+def _pending_trades_path() -> Path:
+    return _logs_dir() / "pending_trades.json"
+
+
+def _load_pending_trades() -> list[dict[str, Any]]:
+    path = _pending_trades_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_pending_trades(trades: list[dict[str, Any]]) -> None:
+    path = _pending_trades_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(trades, indent=2), encoding="utf-8")
+
+
+def _check_trade_outcome(
+    trade: dict[str, Any],
+    bar_times_unix: list[int],
+    highs: list[float],
+    lows: list[float],
+) -> str | None:
+    """Return 'tp', 'sl', or None. Checks each 15m bar after signal fired_at."""
+    fired_at = int(trade["fired_at"])
+    direction = str(trade["direction"])
+    tp = float(trade["tp"])
+    sl = float(trade["sl"])
+    for ts, h, lo in zip(bar_times_unix, highs, lows, strict=True):
+        if ts <= fired_at:
+            continue
+        if direction == "BUY":
+            if h >= tp:
+                return "tp"
+            if lo <= sl:
+                return "sl"
+        else:
+            if lo <= tp:
+                return "tp"
+            if h >= sl:
+                return "sl"
+    return None
+
+
 def _build_scan_telemetry_payload(
     *,
     ts: str,
@@ -628,10 +676,13 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     near_state = _load_near_setup_state() if notifier else {}
     cooldown_state = _load_cooldown_state()
     alignment_state = _load_alignment_state()
+    pending_trades = _load_pending_trades()
     now_ts = int(time.time())
     now_utc = datetime.now(UTC)
     scan_run_id = now_utc.isoformat()
     confirmed_pairs: set[str] = set()
+    # Expire trades older than 48 hours
+    pending_trades = [t for t in pending_trades if now_ts - int(t.get("fired_at", 0)) < 48 * 3600]
 
     for pair in selected_pairs:
         is_shadow = pair in shadow_set
@@ -692,6 +743,44 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             high_15m = data_15m["high"].values.tolist()
             low_15m = data_15m["low"].values.tolist()
             open_15m = data_15m["open"].values.tolist() if "open" in data_15m else close_15m
+            bar_times_unix = [int(ts.timestamp()) for ts in data_15m.index]
+
+            # Check pending trade outcomes for this pair
+            pair_pending = [t for t in pending_trades if t.get("pair") == pair]
+            for trade in pair_pending:
+                outcome = _check_trade_outcome(trade, bar_times_unix, high_15m, low_15m)
+                if outcome:
+                    pending_trades = [t for t in pending_trades if t is not trade]
+                    pip_mult = 100.0 if "JPY" in pair else 10000.0
+                    tp_pips = abs(float(trade["tp"]) - float(trade["entry"])) * pip_mult
+                    sl_pips = abs(float(trade["sl"]) - float(trade["entry"])) * pip_mult
+                    result_pips = tp_pips if outcome == "tp" else -sl_pips
+                    bars_held = sum(1 for ts in bar_times_unix if ts > int(trade["fired_at"]))
+                    _append_audit_log({
+                        "ts": now_utc.isoformat(),
+                        "pair": pair,
+                        "state": "outcome",
+                        "direction": trade["direction"],
+                        "outcome": outcome,
+                        "entry": trade["entry"],
+                        "tp": trade["tp"],
+                        "sl": trade["sl"],
+                        "result_pips": result_pips,
+                        "bars_held": bars_held,
+                        "signal_id": trade.get("signal_id"),
+                    })
+                    if notifier and pair not in shadow_set:
+                        await notifier.send_trade_outcome(
+                            pair=symbol,
+                            direction=str(trade["direction"]),
+                            entry=float(trade["entry"]),
+                            tp=float(trade["tp"]),
+                            sl=float(trade["sl"]),
+                            outcome=outcome,
+                            tp_pips=tp_pips,
+                            sl_pips=sl_pips,
+                            bars_held=bars_held,
+                        )
 
             # Calculate RSI for each timeframe
             close_1h_list = data_1h["close"].values.tolist()
@@ -730,12 +819,15 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 profile, "SELL", close_price, hh, ll, pip_size, bar_high, bar_low
             )
 
-            # ADX trend filter on 1h timeframe
-            adx_1h = calculate_adx(
+            # ADX trend filter on 1h timeframe — also capture +DI/-DI for signal context
+            adx_1h_full = calculate_adx_full(
                 data_1h["high"].values.tolist()[-50:],
                 data_1h["low"].values.tolist()[-50:],
                 data_1h["close"].values.tolist()[-50:],
             )
+            adx_1h = adx_1h_full[0] if adx_1h_full else None
+            plus_di_1h: float | None = adx_1h_full[1] if adx_1h_full else None
+            minus_di_1h: float | None = adx_1h_full[2] if adx_1h_full else None
             is_ranging = adx_1h is not None and adx_1h < ADX_TREND_THRESHOLD
             # Spread: requires real bid/ask source (OANDA)
             quote: SpreadQuote | None = None
@@ -1230,16 +1322,34 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             sl=sl,
                             patterns=candle_patterns,
                             divergence=bullish_div if all_oversold else bearish_div,
+                            adx=adx_1h,
+                            plus_di=plus_di_1h,
+                            minus_di=minus_di_1h,
                         )
                     near_state[pair] = {"fingerprint": entry_fp, "sent_at": now_ts, "kind": "entry"}
                     cooldown_state[pair] = {
                         "until": now_ts + settings.strategy.cooldown_minutes * 60
                     }
+                    # Track for outcome notification
+                    pip_mult = 100.0 if "JPY" in pair else 10000.0
+                    signal_id = now_utc.isoformat()
+                    pending_trades.append({
+                        "signal_id": signal_id,
+                        "pair": pair,
+                        "direction": signal_direction,
+                        "entry": entry,
+                        "tp": tp,
+                        "sl": sl,
+                        "tp_pips": abs(tp - entry) * pip_mult,
+                        "sl_pips": abs(sl - entry) * pip_mult,
+                        "fired_at": now_ts,
+                    })
                     _append_audit_log(
                         {
                             "ts": now_utc.isoformat(),
                             "pair": pair,
                             "state": "entry",
+                            "signal_id": signal_id,
                             "direction": signal_direction,
                             "confidence": signal_confidence,
                             "reasons": signal_reasons,
@@ -1249,6 +1359,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             "rsi_1h": float(rsi_1h),
                             "rsi_30m": float(rsi_30m),
                             "rsi_15m": float(rsi_15m_val),
+                            "adx_1h": adx_1h,
+                            "plus_di_1h": plus_di_1h,
+                            "minus_di_1h": minus_di_1h,
                             "breakout_buy": breakout_buy,
                             "breakout_sell": breakout_sell,
                             "shadow": is_shadow,
@@ -1460,6 +1573,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 _save_near_setup_state(near_state)
             _save_cooldown_state(cooldown_state)
             _save_alignment_state(alignment_state)
+        _save_pending_trades(pending_trades)
 
 
 def _calculate_atr(

@@ -103,6 +103,12 @@ class NearStateRecord(TypedDict, total=False):
     fingerprint: str
     sent_at: int
     kind: str
+    miss_count: int
+
+
+# Number of consecutive scans a pair must drop out of its tracked state
+# before its pre-signal alert is considered invalidated (anti-flicker).
+INVALIDATION_MISS_THRESHOLD = 2
 
 
 class ActiveSignalRecord(TypedDict, total=False):
@@ -1601,13 +1607,27 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                         "fingerprint": fingerprint,
                         "sent_at": now_ts,
                         "kind": state_kind,
+                        "miss_count": 0,
                     }
                     changed = True
+                else:
+                    # Pair still in tracked state this scan: reset any miss streak.
+                    if int(prev.get("miss_count", 0)) > 0:
+                        near_state[pair] = {
+                            **prev,
+                            "miss_count": 0,
+                        }
+                        changed = True
 
             stale_pairs = [pair for pair in list(near_state.keys()) if pair not in active_pairs]
             for pair in stale_pairs:
                 prev = near_state.get(pair)
                 if not prev:
+                    continue
+                miss_count = int(prev.get("miss_count", 0)) + 1
+                if miss_count < INVALIDATION_MISS_THRESHOLD:
+                    near_state[pair] = {**prev, "miss_count": miss_count}
+                    changed = True
                     continue
                 kind = str(prev.get("kind", "near"))
                 notifications_enabled_for_kind = (

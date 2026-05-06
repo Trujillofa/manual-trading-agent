@@ -104,6 +104,8 @@ After a signal fires, same-direction signals for that pair are suppressed until 
 
 Opposite-direction signals are always allowed and re-arm both sides. State persists in `logs/active_signal_state.json`. The legacy `strategy.cooldown_minutes` setting is retained for backwards compatibility but no longer gates anything.
 
+**Pre-signal alert anti-flicker.** The ⏳ aligned-pending and 👀 near-setup alerts use a separate state-change invalidation in `near_state`. To avoid noise from RSI ticking across the 30/70 boundary, a pair must drop out of its tracked state for `INVALIDATION_MISS_THRESHOLD = 2` consecutive scans (≈ 30 min on the 15-min schedule) before the ❌ Setup Invalidated message fires.
+
 Shared parameters:
 - **RSI thresholds**: 30/70 on 1h, 30m, 15m (per `config/settings.yaml`)
 - **TP/SL**: ATR-based — TP = 1.0 × ATR(14), SL = 3.0 × ATR(14)

@@ -30,9 +30,11 @@ from src.indicators.high_low import (
 )
 from src.indicators.rsi import (
     calculate_rsi,
+    calculate_rsi_ma_series,
     calculate_rsi_series,
     detect_bearish_divergence,
     detect_bullish_divergence,
+    detect_rsi_curl,
 )
 from src.indicators.sma import calculate_sma
 from src.news.news_checker import NewsChecker
@@ -870,6 +872,12 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             rsi_30m = calculate_rsi(close_30m_list[-50:], rsi_period)
             rsi_15m_val = calculate_rsi(close_15m[-50:], rsi_period)
 
+            # RSI-MA (confidence modifier) — compute RSI series and its SMA for curl detection
+            rsi_series_1h = calculate_rsi_series(close_1h_list, rsi_period)
+            rsi_ma_1h = calculate_rsi_ma_series(
+                [float(v) if v is not None else None for v in rsi_series_1h], ma_period=5
+            )
+
             # Calculate SMA for each timeframe (used for trend-alignment gate)
             close_1h_list = data_1h["close"].values.tolist()
             close_30m_list = data_30m["close"].values.tolist()
@@ -1202,6 +1210,26 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     signal_reasons.append(
                         f"bearish pattern ({', '.join(p.name for p in bearish_pats[:2])})"
                     )
+
+            # RSI-MA confidence modifier: boost curl-confirmed entries, dampen others
+            if signal_direction and rsi_series_1h and rsi_ma_1h:
+                rsi_val_now = rsi_series_1h[-1]
+                rsi_ma_now = rsi_ma_1h[-1]
+                if rsi_val_now is not None and rsi_ma_now is not None:
+                    rsi_tail = [
+                        float(v) if v is not None else None
+                        for v in rsi_series_1h[-12:]
+                    ]
+                    ma_tail = [
+                        float(v) if v is not None else None
+                        for v in rsi_ma_1h[-12:]
+                    ]
+                    direction = "buy" if signal_direction == "BUY" else "sell"
+                    if detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
+                        signal_confidence = min(1.0, signal_confidence * 1.10)
+                        signal_reasons.append("RSI-MA curl confirmed")
+                    else:
+                        signal_confidence *= 0.85
 
             if signal_direction:
                 if not session_ok:

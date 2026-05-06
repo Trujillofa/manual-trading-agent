@@ -23,8 +23,12 @@ from src.indicators.high_low import (
 from src.indicators.rsi import (
     Divergence,
     calculate_rsi,
+    calculate_rsi_ma_series,
     detect_bearish_divergence,
     detect_bullish_divergence,
+    detect_rsi_curl,
+    detect_rsi_slope_change,
+    rsi_ma_distance,
 )
 
 
@@ -104,6 +108,11 @@ class EnhancedBacktestEngine:
         rsi_oversold: float = 30.0,
         use_sma_alignment: bool = True,
         sma_period: int = 50,
+        use_rsi_ma: bool = False,
+        rsi_ma_period: int = 5,
+        rsi_ma_variant: str = "curl",
+        rsi_ma_distance_max: float = 15.0,
+        rsi_ma_confidence_mod: float = 0.85,
     ) -> None:
         self.initial_balance = initial_balance
         self.risk_per_trade = risk_per_trade
@@ -119,6 +128,11 @@ class EnhancedBacktestEngine:
         self.rsi_oversold = rsi_oversold
         self.use_sma_alignment = use_sma_alignment
         self.sma_period = sma_period
+        self.use_rsi_ma = use_rsi_ma
+        self.rsi_ma_period = rsi_ma_period
+        self.rsi_ma_variant = rsi_ma_variant
+        self.rsi_ma_distance_max = rsi_ma_distance_max
+        self.rsi_ma_confidence_mod = rsi_ma_confidence_mod
 
     def _calculate_atr(
         self, highs: list[float], lows: list[float], closes: list[float], period: int = 14
@@ -320,6 +334,13 @@ class EnhancedBacktestEngine:
         # Calculate indicators
         data = data.copy()
         data["rsi"] = self._calculate_rsi_column(data, 14)
+        # RSI-MA: SMA of the RSI series for curl detection
+        rsi_raw = data["rsi"].tolist()
+        rsi_ma_series = calculate_rsi_ma_series(
+            [float(v) if not pd.isna(v) else None for v in rsi_raw],
+            ma_period=self.rsi_ma_period,
+        )
+        data["rsi_ma"] = rsi_ma_series
         data["hh"] = rolling_highest_highs(data["high"].tolist(), lookback)
         data["ll"] = rolling_lowest_lows(data["low"].tolist(), lookback)
         # SMA: rolling mean with min_periods=sma_period so early bars are NaN
@@ -520,6 +541,88 @@ class EnhancedBacktestEngine:
                     )
                 ):
                     signal = SignalType.HOLD
+
+                # ── RSI-MA variant gates ──────────────────────────────────
+                # Variants: curl, fresh, slope, distance, confidence, conditional
+                if signal != SignalType.HOLD and self.use_rsi_ma:
+                    rsi_val_now = float(rsi) if not pd.isna(rsi) else None
+                    rsi_ma_now = data["rsi_ma"].iloc[i]
+                    rsi_ma_now = float(rsi_ma_now) if not pd.isna(rsi_ma_now) else None
+
+                    if rsi_val_now is not None and rsi_ma_now is not None:
+                        direction = "buy" if signal == SignalType.BUY else "sell"
+
+                        if self.rsi_ma_variant == "slope":
+                            # Slope inflection: RSI-MA free-fall ending
+                            ma_tail = [
+                                data["rsi_ma"].iloc[j] if not pd.isna(data["rsi_ma"].iloc[j]) else None
+                                for j in range(max(0, i - 10), i + 1)
+                            ]
+                            if not detect_rsi_slope_change(ma_tail, direction, lookback=3):
+                                signal = SignalType.HOLD
+
+                        elif self.rsi_ma_variant == "distance":
+                            # Distance threshold: RSI must be at right distance from MA
+                            if not rsi_ma_distance(
+                                rsi_val_now, rsi_ma_now, direction,
+                                min_distance=3.0, max_distance=self.rsi_ma_distance_max,
+                            ):
+                                signal = SignalType.HOLD
+
+                        elif self.rsi_ma_variant == "fresh":
+                            # Fresh momentum: RSI moving AWAY from MA (still extreme)
+                            if signal == SignalType.BUY and rsi_val_now > rsi_ma_now:
+                                signal = SignalType.HOLD
+                            elif signal == SignalType.SELL and rsi_val_now < rsi_ma_now:
+                                signal = SignalType.HOLD
+
+                        elif self.rsi_ma_variant == "confidence":
+                            # Confidence modifier: curl boosts, no-curl dampens
+                            rsi_tail = [
+                                float(data["rsi"].iloc[j])
+                                if not pd.isna(data["rsi"].iloc[j])
+                                else None
+                                for j in range(max(0, i - 10), i + 1)
+                            ]
+                            ma_tail = [
+                                data["rsi_ma"].iloc[j] if not pd.isna(data["rsi_ma"].iloc[j]) else None
+                                for j in range(max(0, i - 10), i + 1)
+                            ]
+                            if detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
+                                confidence = min(1.0, confidence * 1.10)  # boost
+                            else:
+                                confidence *= self.rsi_ma_confidence_mod  # dampen
+
+                        elif self.rsi_ma_variant == "conditional":
+                            # Only gate low-confidence signals
+                            if confidence < 0.6:
+                                rsi_tail = [
+                                    float(data["rsi"].iloc[j])
+                                    if not pd.isna(data["rsi"].iloc[j])
+                                    else None
+                                    for j in range(max(0, i - 10), i + 1)
+                                ]
+                                ma_tail = [
+                                    data["rsi_ma"].iloc[j] if not pd.isna(data["rsi_ma"].iloc[j]) else None
+                                    for j in range(max(0, i - 10), i + 1)
+                                ]
+                                if not detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
+                                    signal = SignalType.HOLD
+
+                        else:
+                            # Default: curl variant (strict cross)
+                            rsi_tail = [
+                                float(data["rsi"].iloc[j])
+                                if not pd.isna(data["rsi"].iloc[j])
+                                else None
+                                for j in range(max(0, i - 10), i + 1)
+                            ]
+                            ma_tail = [
+                                data["rsi_ma"].iloc[j] if not pd.isna(data["rsi_ma"].iloc[j]) else None
+                                for j in range(max(0, i - 10), i + 1)
+                            ]
+                            if not detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
+                                signal = SignalType.HOLD
 
                 # Only enter with sufficient confidence
                 if signal != SignalType.HOLD and confidence >= 0.4:

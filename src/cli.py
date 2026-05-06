@@ -692,6 +692,25 @@ def create_parser() -> argparse.ArgumentParser:
     enhanced_backtest_parser.add_argument(
         "--no-divergence", action="store_true", help="Disable divergence detection"
     )
+    enhanced_backtest_parser.add_argument(
+        "--rsi-ma", action="store_true", help="Enable RSI-MA curl gate (momentum confirmation)"
+    )
+    enhanced_backtest_parser.add_argument(
+        "--rsi-ma-period", type=int, default=5, help="RSI-MA lookback period (default: 5)"
+    )
+    enhanced_backtest_parser.add_argument(
+        "--rsi-ma-variant", choices=["curl", "fresh", "slope", "distance", "confidence", "conditional"],
+        default="curl",
+        help="RSI-MA variant: curl (cross back), fresh (not exhausted), slope (inflection), distance (momentum threshold), confidence (modifier not gate), conditional (low-conf only)",
+    )
+    enhanced_backtest_parser.add_argument(
+        "--rsi-ma-distance-max", type=float, default=15.0,
+        help="Max RSI-to-MA distance for distance variant (default: 15)",
+    )
+    enhanced_backtest_parser.add_argument(
+        "--rsi-ma-confidence-mod", type=float, default=0.85,
+        help="Confidence multiplier when no curl detected for confidence variant (default: 0.85)",
+    )
 
     subparsers.add_parser("telegram-poll", help="Poll Telegram commands (e.g. /watchlist)")
     subparsers.add_parser("healthcheck", help="Check scanner and Telegram runtime health")
@@ -1757,6 +1776,11 @@ async def run_enhanced_backtest(
     end: str | None,
     use_patterns: bool = True,
     use_divergence: bool = True,
+    use_rsi_ma: bool = False,
+    rsi_ma_period: int = 5,
+    rsi_ma_variant: str = "curl",
+    rsi_ma_distance_max: float = 15.0,
+    rsi_ma_confidence_mod: float = 0.85,
 ) -> None:
     """Run enhanced backtest with realistic TP/SL simulation."""
     from src.backtest.enhanced_engine import EnhancedBacktestEngine
@@ -1766,6 +1790,7 @@ async def run_enhanced_backtest(
     print(f"\n[ENHANCED BACKTEST] {pair}")
     print(f"  Patterns: {'enabled' if use_patterns else 'disabled'}")
     print(f"  Divergence: {'enabled' if use_divergence else 'disabled'}")
+    print(f"  RSI-MA: {'enabled (variant=' + rsi_ma_variant + ', period=' + str(rsi_ma_period) + ')' if use_rsi_ma else 'disabled'}")
 
     try:
         # Fetch 1h data for longer history (15m limited to 60 days on yfinance)
@@ -1789,6 +1814,11 @@ async def run_enhanced_backtest(
             sl_atr_multiplier=float(
                 _get_pair_param(pair, "sl_atr_multiplier", settings.risk.sl_atr_multiplier)
             ),
+            use_rsi_ma=use_rsi_ma,
+            rsi_ma_period=rsi_ma_period,
+            rsi_ma_variant=rsi_ma_variant,
+            rsi_ma_distance_max=rsi_ma_distance_max,
+            rsi_ma_confidence_mod=rsi_ma_confidence_mod,
         )
 
         result = engine.run(pair, data, verbose=False)
@@ -2051,6 +2081,11 @@ def main() -> int:
             args.end,
             use_patterns=not args.no_patterns,
             use_divergence=not args.no_divergence,
+            use_rsi_ma=getattr(args, "rsi_ma", False),
+            rsi_ma_period=getattr(args, "rsi_ma_period", 5),
+            rsi_ma_variant=getattr(args, "rsi_ma_variant", "curl"),
+            rsi_ma_distance_max=getattr(args, "rsi_ma_distance_max", 15.0),
+            rsi_ma_confidence_mod=getattr(args, "rsi_ma_confidence_mod", 0.85),
         ),
         "telegram-poll": run_telegram_poll,
         "healthcheck": run_healthcheck,

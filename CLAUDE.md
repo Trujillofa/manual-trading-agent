@@ -94,6 +94,12 @@ EUR/USD, GBP/USD, USD/CHF, AUD/USD, USD/CAD, NZD/USD, EUR/JPY, EUR/CHF, EUR/AUD,
 
 Rejected (excluded from config):
 EUR/GBP — negative PnL in all 48 configs tested (best: -0.30%, PF 0.66). 2026-04-20 sweep.
+**Note:** This rejection was based on a 58d yfinance 15m sweep with `run_entry_optimization.py`.
+Two independent tests contradict this result:
+- 2026-03-31 Dukascopy M1 bakeoff: EUR/GBP V2_b0.5_c2 scored PF 3.53 (+0.87% PnL)
+- 2026-05-06 Enhanced backtest (2Y yfinance 1h): PF 1.23 (+49.6% PnL, 349 trades)
+EUR/GBP needs proper 180d+ Dukascopy validation via the promotion gate before reinstatement.
+Do not reference the 58d sweep alone as definitive evidence of unprofitability.
 
 **Rule C — one signal per pair per direction, until invalidated.**
 After a signal fires, same-direction signals for that pair are suppressed until **any** of:

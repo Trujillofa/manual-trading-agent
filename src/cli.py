@@ -1370,7 +1370,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 is_shadow = pair in shadow_set
                 if notifier and hh and ll and not is_shadow:
                     confirmed_pairs.add(pair)
-                    entry_fp = f"entry|{signal_direction}|{round(float(rsi_1h), 1)}|{round(float(rsi_30m), 1)}|{round(float(rsi_15m_val), 1)}"
+                    entry_fp = f"entry|{signal_direction}"
                     prev = near_state.get(pair)
                     should_send_entry = not prev or str(prev.get("fingerprint", "")) != entry_fp
                     if should_send_entry:
@@ -1560,16 +1560,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     continue
                 active_pairs.add(pair)
                 state_kind = "aligned_pending_breakout" if breakout_pending else "near"
-                fingerprint = f"{state_kind}|{direction}|{round(r1, 1)}|{round(r30, 1)}|{round(r15, 1)}|{remaining}"
+                fingerprint = f"{state_kind}|{direction}"
                 prev = near_state.get(pair)
-                should_send = False
-                if not prev:
-                    should_send = True
-                else:
-                    prev_fp = str(prev.get("fingerprint", ""))
-                    prev_ts = prev.get("sent_at", 0)
-                    if prev_fp != fingerprint or now_ts - prev_ts >= 6 * 3600:
-                        should_send = True
+                should_send = not prev or str(prev.get("fingerprint", "")) != fingerprint
                 if should_send:
                     missing_txt = ", ".join(missing_timeframes) if missing_timeframes else "none"
                     micro_lines = []

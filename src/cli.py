@@ -105,8 +105,13 @@ class NearStateRecord(TypedDict, total=False):
     kind: str
 
 
-class CooldownStateRecord(TypedDict, total=False):
-    until: int
+class ActiveSignalRecord(TypedDict, total=False):
+    direction: str
+    fired_at: int
+    entry: float
+    tp: float
+    sl: float
+    sma_side: str
 
 
 class AlignmentStateRecord(TypedDict, total=False):
@@ -318,19 +323,70 @@ def _save_alignment_state(state: dict[str, AlignmentStateRecord]) -> None:
     path.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
-def _cooldown_state_path() -> Path:
-    return _logs_dir() / "cooldown_state.json"
+def _active_signal_state_path() -> Path:
+    return _logs_dir() / "active_signal_state.json"
 
 
-def _load_cooldown_state() -> dict[str, CooldownStateRecord]:
-    path = _cooldown_state_path()
-    return cast(dict[str, CooldownStateRecord], _load_json_mapping(path))
+def _load_active_signal_state() -> dict[str, ActiveSignalRecord]:
+    path = _active_signal_state_path()
+    return cast(dict[str, ActiveSignalRecord], _load_json_mapping(path))
 
 
-def _save_cooldown_state(state: dict[str, CooldownStateRecord]) -> None:
-    path = _cooldown_state_path()
+def _save_active_signal_state(state: dict[str, ActiveSignalRecord]) -> None:
+    path = _active_signal_state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+def _is_signal_invalidated(
+    record: ActiveSignalRecord,
+    data_15m: Any,
+    rsi_15m_series: list[float],
+    current_close: float,
+    current_sma_15m: float | None,
+) -> tuple[bool, str | None]:
+    """Rule C invalidation: TP/SL hit, RSI(15m) midline cross, or SMA flip."""
+    direction = record.get("direction")
+    fired_at = int(record.get("fired_at", 0))
+    tp = float(record.get("tp", 0.0))
+    sl = float(record.get("sl", 0.0))
+    if direction not in {"BUY", "SELL"} or fired_at <= 0:
+        return True, "invalid_record"
+
+    fired_at_dt = datetime.fromtimestamp(fired_at, tz=UTC)
+    bars_since = data_15m[data_15m.index > fired_at_dt]
+
+    if not bars_since.empty:
+        highs = bars_since["high"].astype(float)
+        lows = bars_since["low"].astype(float)
+        if direction == "BUY":
+            if (highs >= tp).any():
+                return True, "tp_hit"
+            if (lows <= sl).any():
+                return True, "sl_hit"
+        else:
+            if (lows <= tp).any():
+                return True, "tp_hit"
+            if (highs >= sl).any():
+                return True, "sl_hit"
+
+        # RSI(15m) midline cross on any closed bar since fire
+        bar_count = len(bars_since)
+        rsi_tail = rsi_15m_series[-bar_count:] if bar_count <= len(rsi_15m_series) else rsi_15m_series
+        rsi_clean = [r for r in rsi_tail if r is not None]
+        if direction == "BUY" and any(r >= 50.0 for r in rsi_clean):
+            return True, "rsi_midline_cross"
+        if direction == "SELL" and any(r <= 50.0 for r in rsi_clean):
+            return True, "rsi_midline_cross"
+
+    # SMA flip against the original direction
+    if current_sma_15m is not None:
+        if direction == "BUY" and current_close > current_sma_15m:
+            return True, "sma_flip"
+        if direction == "SELL" and current_close < current_sma_15m:
+            return True, "sma_flip"
+
+    return False, None
 
 
 def _audit_log_path() -> Path:
@@ -430,7 +486,7 @@ def _build_scan_telemetry_payload(
         "spread_unavailable_or_too_wide": "spread unavailable/too wide" in reason_text,
         "session": "outside allowed session" in reason_text,
         "news": "blocked by high-impact news" in reason_text,
-        "cooldown": "cooldown active" in reason_text,
+        "active_signal": "active signal not yet invalidated" in reason_text,
         "confirmation_expired": "confirmation window expired" in reason_text,
         "breakout_unconfirmed": "breakout" in reason_text and "not confirmed" in reason_text,
         "data_unavailable": state == "data_unavailable",
@@ -674,7 +730,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     print(f"\n[SCAN] Scanning {len(selected_pairs)} pairs (MTF: 1h + 30m + 15m)...")
     near_candidates: list[NearCandidate] = []
     near_state = _load_near_setup_state() if notifier else {}
-    cooldown_state = _load_cooldown_state()
+    active_signal_state = _load_active_signal_state()
     alignment_state = _load_alignment_state()
     pending_trades = _load_pending_trades()
     now_ts = int(time.time())
@@ -1063,9 +1119,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             if settings.strategy.session_filter_enabled:
                 session_ok = _session_allowed(now_utc, list(settings.strategy.session_allowed_utc))
             news_blocked = settings.news.enabled and news_checker.is_blocked(pair, now_utc)
-            cooldown_info = cooldown_state.get(pair, {})
-            cooldown_until = cooldown_info.get("until", 0)
-            cooldown_active = now_ts < cooldown_until
+            active_record = active_signal_state.get(pair)
 
             signal_direction: Literal["BUY", "SELL", None] = None
             signal_confidence = 0.0
@@ -1136,8 +1190,20 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     no_trade_reasons.append(
                         f"trending market (ADX {adx_str} >= {ADX_TREND_THRESHOLD:.0f})"
                     )
-                if cooldown_active:
-                    no_trade_reasons.append("cooldown active")
+                if active_record and active_record.get("direction") == signal_direction:
+                    invalidated, invalidation_reason = _is_signal_invalidated(
+                        active_record,
+                        data_15m,
+                        rsi_series,
+                        float(close_price),
+                        float(sma_15m) if sma_15m is not None else None,
+                    )
+                    if invalidated:
+                        active_signal_state.pop(pair, None)
+                        active_record = None
+                        print(f"  ♻️  Re-armed (prior signal invalidated: {invalidation_reason})")
+                    else:
+                        no_trade_reasons.append("active signal not yet invalidated")
                 # SMA alignment gate: all 3 TFs must agree with signal direction
                 if settings.strategy.sma_alignment_enabled:
                     sma_values_available = (
@@ -1327,8 +1393,14 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             minus_di=minus_di_1h,
                         )
                     near_state[pair] = {"fingerprint": entry_fp, "sent_at": now_ts, "kind": "entry"}
-                    cooldown_state[pair] = {
-                        "until": now_ts + settings.strategy.cooldown_minutes * 60
+                    sma_side = "below" if signal_direction == "BUY" else "above"
+                    active_signal_state[pair] = {
+                        "direction": signal_direction,
+                        "fired_at": int(now_ts),
+                        "entry": float(entry),
+                        "tp": float(tp),
+                        "sl": float(sl),
+                        "sma_side": sma_side,
                     }
                     # Track for outcome notification
                     pip_mult = 100.0 if "JPY" in pair else 10000.0
@@ -1563,7 +1635,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
 
             if changed:
                 _save_near_setup_state(near_state)
-            _save_cooldown_state(cooldown_state)
+            _save_active_signal_state(active_signal_state)
             _save_alignment_state(alignment_state)
         elif notifier:
             # Near and aligned-pending notifications disabled: clear stale state so no
@@ -1571,7 +1643,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             if near_state:
                 near_state.clear()
                 _save_near_setup_state(near_state)
-            _save_cooldown_state(cooldown_state)
+            _save_active_signal_state(active_signal_state)
             _save_alignment_state(alignment_state)
         _save_pending_trades(pending_trades)
 

@@ -2,12 +2,34 @@ trading:
   mode: "paper"
   pairs:
     majors:
+      - EUR/USD
+      - GBP/USD
       - USD/JPY
-      - GBP/JPY
-      - NZD/JPY
+      - USD/CHF
+      - AUD/USD
+      - USD/CAD
+      - NZD/USD
     minors:
-      - AUD/CAD
+      - EUR/JPY
+      - EUR/CHF
+      - EUR/AUD
+      - EUR/CAD
+      - EUR/NZD
+      - GBP/JPY
       - GBP/CHF
+      - GBP/AUD
+      - GBP/CAD
+      - GBP/NZD
+      - AUD/JPY
+      - AUD/CAD
+      - AUD/CHF
+      - AUD/NZD
+      - NZD/JPY
+      - NZD/CAD
+      - NZD/CHF
+      - CAD/JPY
+      - CAD/CHF
+      - CHF/JPY
     shadow: []
   lot_size: 3
 

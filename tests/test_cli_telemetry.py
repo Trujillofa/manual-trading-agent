@@ -62,7 +62,7 @@ def test_build_scan_telemetry_payload_sets_expected_counts_and_blockers() -> Non
         "spread_unavailable_or_too_wide": True,
         "session": False,
         "news": False,
-        "cooldown": False,
+        "active_signal": False,
         "confirmation_expired": True,
         "breakout_unconfirmed": True,
         "data_unavailable": False,

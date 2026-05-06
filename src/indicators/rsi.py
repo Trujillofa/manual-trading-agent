@@ -319,3 +319,167 @@ def detect_divergence(
         return bullish
 
     return bearish or bullish
+
+
+def calculate_rsi_ma_series(
+    rsi_values: list[float | None], ma_period: int = 5
+) -> list[float | None]:
+    """Calculate SMA over an RSI series.
+
+    Returns a list aligned with rsi_values where each entry is the simple
+    moving average of the last ``ma_period`` non-None RSI values.  Bars with
+    insufficient lookback are None.
+
+    This is the "RSI-MA" indicator: the trend of RSI itself.  When RSI
+    crosses above its own MA, momentum is accelerating upward (curl).
+    When RSI crosses below its MA, momentum is decelerating / turning.
+
+    Args:
+        rsi_values: List of RSI readings (may contain None).
+        ma_period: Lookback for the SMA (default 5).
+
+    Returns:
+        List of smoothed RSI values (None where insufficient data).
+    """
+    result: list[float | None] = [None] * len(rsi_values)
+    window: list[float] = []
+
+    for i, v in enumerate(rsi_values):
+        if v is None:
+            continue
+        window.append(float(v))
+        if len(window) > ma_period:
+            window = window[-ma_period:]
+        if len(window) == ma_period:
+            result[i] = sum(window) / ma_period
+
+    return result
+
+
+def detect_rsi_curl(
+    rsi_values: list[float | None],
+    rsi_ma_values: list[float | None],
+    direction: str,
+    lookback: int = 3,
+) -> bool:
+    """Detect RSI momentum curl (RSI crossing back through its MA).
+
+    For BUY signals: RSI was below its MA and is now crossing above
+    (momentum turning up after oversold alignment).
+
+    For SELL signals: RSI was above its MA and is now crossing below
+    (momentum turning down after overbought alignment).
+
+    Args:
+        rsi_values: Raw RSI series.
+        rsi_ma_values: Smoothed RSI series (same length).
+        direction: "buy" or "sell".
+        lookback: How many bars back to look for the cross (default 3).
+
+    Returns:
+        True if a curl is detected within the lookback window.
+    """
+    if len(rsi_values) < lookback + 1 or len(rsi_ma_values) < lookback + 1:
+        return False
+
+    # Walk backwards looking for a cross
+    for offset in range(lookback):
+        idx = len(rsi_values) - 1 - offset
+        if idx < 1:
+            break
+        rsi_now = rsi_values[idx]
+        rsi_prev = rsi_values[idx - 1]
+        ma_now = rsi_ma_values[idx]
+        ma_prev = rsi_ma_values[idx - 1]
+
+        if any(v is None for v in (rsi_now, rsi_prev, ma_now, ma_prev)):
+            continue
+
+        if direction == "buy":
+            # RSI crossed above its MA (prev: RSI < MA, now: RSI > MA)
+            if rsi_prev < ma_prev and rsi_now > ma_now:
+                return True
+        elif direction == "sell":
+            # RSI crossed below its MA (prev: RSI > MA, now: RSI < MA)
+            if rsi_prev > ma_prev and rsi_now < ma_now:
+                return True
+
+    return False
+
+
+def detect_rsi_slope_change(
+    rsi_ma_values: list[float | None],
+    direction: str,
+    lookback: int = 3,
+) -> bool:
+    """Detect RSI-MA slope inflection — free-fall ending, curl starting.
+
+    For BUY: RSI-MA was falling and is now flattening or turning up.
+    For SELL: RSI-MA was rising and is now flattening or turning down.
+
+    This catches the inflection point BEFORE the laggy cross,
+    giving earlier entries than the curl variant.
+
+    Args:
+        rsi_ma_values: Smoothed RSI series.
+        direction: "buy" or "sell".
+        lookback: Bars for the early vs recent slope comparison (default 3).
+
+    Returns:
+        True if slope is inflecting favorably.
+    """
+    if len(rsi_ma_values) < lookback + 2:
+        return False
+
+    # Early window (older bars, pre-inflection)
+    early = [v for v in rsi_ma_values[-(lookback + 2):-lookback] if v is not None]
+    # Recent window (newer bars, post-inflection)
+    recent = [v for v in rsi_ma_values[-lookback:] if v is not None]
+
+    if len(early) < 2 or len(recent) < 2:
+        return False
+
+    early_slope = early[-1] - early[0]
+    recent_slope = recent[-1] - recent[0]
+
+    if direction == "buy":
+        # Was falling (early negative), now less negative or positive
+        return early_slope < 0 and recent_slope > early_slope
+    # SELL: was rising, now less positive or negative
+    return early_slope > 0 and recent_slope < early_slope
+
+
+def rsi_ma_distance(
+    rsi_value: float,
+    rsi_ma_value: float,
+    direction: str,
+    min_distance: float = 3.0,
+    max_distance: float = 15.0,
+) -> bool:
+    """Check if RSI is sufficiently far from its MA in the right direction.
+
+    For BUY (oversold): RSI should be BELOW its MA (fresh oversold).
+    For SELL (overbought): RSI should be ABOVE its MA (fresh overbought).
+
+    The distance must be between min_distance and max_distance:
+    - Below min_distance: noise, no real momentum
+    - Above max_distance: panic/extreme, wait for it to narrow
+
+    Args:
+        rsi_value: Current RSI reading.
+        rsi_ma_value: Current RSI-MA reading.
+        direction: "buy" or "sell".
+        min_distance: Minimum RSI points away from MA (default 3).
+        max_distance: Maximum RSI points away from MA (default 15).
+
+    Returns:
+        True if RSI is at the right distance from its MA.
+    """
+    diff = rsi_value - rsi_ma_value  # positive = RSI above MA
+
+    if direction == "buy":
+        # RSI below MA (negative diff) = fresh oversold momentum
+        distance = -diff
+        return min_distance <= distance <= max_distance
+    # SELL: RSI above MA (positive diff) = fresh overbought momentum
+    return min_distance <= diff <= max_distance

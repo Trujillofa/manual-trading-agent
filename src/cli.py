@@ -1123,7 +1123,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             )
             breakout_pending = aligned and not breakout_confirmed
             # If breakout happened but outside the confirmation window, treat as pending
-            if breakout_confirmed and confirm_bars > 0 and not within_confirm_window:
+            # BUT only if still aligned — don't flag pending when RSI has drifted away
+            if breakout_confirmed and confirm_bars > 0 and not within_confirm_window and aligned:
                 breakout_confirmed = False
                 breakout_pending = True
 
@@ -1624,13 +1625,27 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     if isinstance(r1m, float):
                         micro_lines.append(f"RSI 1m: `{r1m:.1f}`")
                     micro_txt = ("\n" + "\n".join(micro_lines)) if micro_lines else ""
-                    if breakout_pending:
+                    candidate_aligned = bool(candidate.get("aligned"))
+                    if breakout_pending and candidate_aligned:
                         message = (
                             f"⏳ *MTF Aligned / Breakout Pending*\n\n"
                             f"Pair: `{pair.replace('/', '')}`\n"
                             f"Bias: `{direction}`\n"
                             f"MTF RSI: `fully aligned`\n"
                             f"Missing: `15m breakout confirmation`\n\n"
+                            f"RSI 1h: `{r1:.1f}`\n"
+                            f"RSI 30m: `{r30:.1f}`\n"
+                            f"RSI 15m: `{r15:.1f}`"
+                            f"{micro_txt}"
+                        )
+                    elif breakout_pending and not candidate_aligned:
+                        # Breakout pending but RSI drifted out of alignment
+                        message = (
+                            f"⚠️ *Stale Alignment / Breakout Pending*\n\n"
+                            f"Pair: `{pair.replace('/', '')}`\n"
+                            f"Bias: `{direction}`\n"
+                            f"MTF RSI: `alignment lost` (RSI drifted)\n"
+                            f"Breakout still active but RSI no longer aligned\n\n"
                             f"RSI 1h: `{r1:.1f}`\n"
                             f"RSI 30m: `{r30:.1f}`\n"
                             f"RSI 15m: `{r15:.1f}`"

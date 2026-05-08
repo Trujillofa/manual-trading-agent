@@ -609,6 +609,13 @@ class EnhancedBacktestEngine:
                                 if not detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
                                     signal = SignalType.HOLD
 
+                        elif self.rsi_ma_variant == "gate":
+                            # Gate: SMA(RSI) must be outside 30/70 — mirrors live rsi_ma_gate_enabled
+                            if signal == SignalType.BUY and rsi_ma_now > self.rsi_oversold:
+                                signal = SignalType.HOLD
+                            elif signal == SignalType.SELL and rsi_ma_now < self.rsi_overbought:
+                                signal = SignalType.HOLD
+
                         else:
                             # Default: curl variant (strict cross)
                             rsi_tail = [

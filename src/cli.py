@@ -702,7 +702,7 @@ def create_parser() -> argparse.ArgumentParser:
         "--rsi-ma-period", type=int, default=5, help="RSI-MA lookback period (default: 5)"
     )
     enhanced_backtest_parser.add_argument(
-        "--rsi-ma-variant", choices=["curl", "fresh", "slope", "distance", "confidence", "conditional"],
+        "--rsi-ma-variant", choices=["curl", "fresh", "slope", "distance", "confidence", "conditional", "gate"],
         default="curl",
         help="RSI-MA variant: curl (cross back), fresh (not exhausted), slope (inflection), distance (momentum threshold), confidence (modifier not gate), conditional (low-conf only)",
     )

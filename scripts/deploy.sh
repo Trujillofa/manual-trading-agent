@@ -63,6 +63,12 @@ rsync -a --delete \
   --exclude='.pytest_cache' \
   --exclude='.ruff_cache' \
   --exclude='.mypy_cache' \
+  --exclude='.staging' \
+  --exclude='.staging/' \
+  --exclude='.git' \
+  --exclude='.git/' \
+  --exclude='.ops-backups' \
+  --exclude='.ops-backups/' \
   '${STAGING_PATH}/' '${REMOTE_PATH}/'
 EOF
 

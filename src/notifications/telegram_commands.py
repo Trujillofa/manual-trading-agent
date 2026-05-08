@@ -68,6 +68,15 @@ class TelegramCommandHandler:
                 f"{self.base_url}/sendMessage",
                 json={"chat_id": self.chat_id, "text": text, "parse_mode": "Markdown"},
             )
+            if response.status_code == 400 and "parse entities" in response.text:
+                # Markdown formatting failed — retry as plain text so the message is never lost
+                logger.warning(
+                    "Telegram Markdown parse error, retrying as plain text: %s", response.text
+                )
+                response = await client.post(
+                    f"{self.base_url}/sendMessage",
+                    json={"chat_id": self.chat_id, "text": text},
+                )
             if not response.is_success:
                 logger.error(
                     "Telegram command reply failed: status=%s body=%s",

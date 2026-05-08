@@ -44,6 +44,8 @@ strategy:
   rsi_oversold: 30
   sma_period: 50
   sma_alignment_enabled: true
+  rsi_ma_gate_enabled: true
+  rsi_ma_gate_period: 5
   lookback_bars: 20
   cooldown_minutes: 60
   session_filter_enabled: true

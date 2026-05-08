@@ -497,6 +497,7 @@ def _build_scan_telemetry_payload(
         "active_signal": "active signal not yet invalidated" in reason_text,
         "confirmation_expired": "confirmation window expired" in reason_text,
         "breakout_unconfirmed": "breakout" in reason_text and "not confirmed" in reason_text,
+        "rsi_ma_gate": "rsi-ma" in reason_text and "gate" in reason_text,
         "data_unavailable": state == "data_unavailable",
     }
     return {
@@ -872,10 +873,17 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             rsi_30m = calculate_rsi(close_30m_list[-50:], rsi_period)
             rsi_15m_val = calculate_rsi(close_15m[-50:], rsi_period)
 
-            # RSI-MA (confidence modifier) — compute RSI series and its SMA for curl detection
+            # RSI-MA series for all three TFs (gate + curl confidence modifier)
+            rsi_ma_period = settings.strategy.rsi_ma_gate_period
             rsi_series_1h = calculate_rsi_series(close_1h_list, rsi_period)
             rsi_ma_1h = calculate_rsi_ma_series(
-                [float(v) if v is not None else None for v in rsi_series_1h], ma_period=5
+                [float(v) if v is not None else None for v in rsi_series_1h],
+                ma_period=rsi_ma_period,
+            )
+            rsi_series_30m = calculate_rsi_series(close_30m_list, rsi_period)
+            rsi_ma_30m = calculate_rsi_ma_series(
+                [float(v) if v is not None else None for v in rsi_series_30m],
+                ma_period=rsi_ma_period,
             )
 
             # Calculate SMA for each timeframe (used for trend-alignment gate)
@@ -974,6 +982,10 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
 
             # Detect RSI divergence on 15m
             rsi_series = calculate_rsi_series(close_15m, rsi_period)
+            rsi_ma_15m = calculate_rsi_ma_series(
+                [float(v) if v is not None else None for v in rsi_series],
+                ma_period=rsi_ma_period,
+            )
             bullish_div = detect_bullish_divergence(close_15m[-100:], rsi_series[-100:], lookback=5)
             bearish_div = detect_bearish_divergence(close_15m[-100:], rsi_series[-100:], lookback=5)
 
@@ -1231,6 +1243,38 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                         signal_reasons.append("RSI-MA curl confirmed")
                     else:
                         signal_confidence *= 0.85
+
+            # RSI-MA gate: SMA(RSI, N) must also be outside 30/70 on all three TFs
+            if signal_direction and settings.strategy.rsi_ma_gate_enabled:
+                ma_now_1h = rsi_ma_1h[-1] if rsi_ma_1h else None
+                ma_now_30m = rsi_ma_30m[-1] if rsi_ma_30m else None
+                ma_now_15m = rsi_ma_15m[-1] if rsi_ma_15m else None
+                if all(v is not None for v in (ma_now_1h, ma_now_30m, ma_now_15m)):
+                    assert ma_now_1h is not None
+                    assert ma_now_30m is not None
+                    assert ma_now_15m is not None
+                    ob = float(rsi_overbought)
+                    os_ = float(rsi_oversold)
+                    if signal_direction == "BUY":
+                        gate_ok = ma_now_1h <= os_ and ma_now_30m <= os_ and ma_now_15m <= os_
+                        if not gate_ok:
+                            failing = [
+                                f"{tf}={v:.1f}"
+                                for tf, v in (("1h", ma_now_1h), ("30m", ma_now_30m), ("15m", ma_now_15m))
+                                if v > os_
+                            ]
+                    else:
+                        gate_ok = ma_now_1h >= ob and ma_now_30m >= ob and ma_now_15m >= ob
+                        if not gate_ok:
+                            failing = [
+                                f"{tf}={v:.1f}"
+                                for tf, v in (("1h", ma_now_1h), ("30m", ma_now_30m), ("15m", ma_now_15m))
+                                if v < ob
+                            ]
+                    if not gate_ok:
+                        no_trade_reasons.append(
+                            f"RSI-MA({rsi_ma_period}) gate: SMA(RSI) not outside 30-70 ({', '.join(failing)})"
+                        )
 
             if signal_direction:
                 if not session_ok:

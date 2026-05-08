@@ -65,6 +65,7 @@ def test_build_scan_telemetry_payload_sets_expected_counts_and_blockers() -> Non
         "active_signal": False,
         "confirmation_expired": True,
         "breakout_unconfirmed": True,
+        "rsi_ma_gate": False,
         "data_unavailable": False,
     }
 

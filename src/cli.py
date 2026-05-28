@@ -84,6 +84,9 @@ class NearCandidate(TypedDict):
     rsi_15m: float
     rsi_5m: float | None
     rsi_1m: float | None
+    rsi_ma_1h: float | None
+    rsi_ma_30m: float | None
+    rsi_ma_15m: float | None
     patterns: list[str]
     bullish_div: float | None
     bearish_div: float | None
@@ -590,6 +593,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     "rsi_15m": float(rsi_15m_val),
                     "rsi_5m": micro_context.get("rsi_5m"),
                     "rsi_1m": micro_context.get("rsi_1m"),
+                    "rsi_ma_1h": rsi_ma_1h[-1] if rsi_ma_1h and rsi_ma_1h[-1] is not None else None,
+                    "rsi_ma_30m": rsi_ma_30m[-1] if rsi_ma_30m and rsi_ma_30m[-1] is not None else None,
+                    "rsi_ma_15m": rsi_ma_15m[-1] if rsi_ma_15m and rsi_ma_15m[-1] is not None else None,
                     "patterns": [p.name for p in candle_patterns],
                     "bullish_div": bullish_div.strength if bullish_div else None,
                     "bearish_div": bearish_div.strength if bearish_div else None,
@@ -1104,6 +1110,15 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                         micro_lines.append(f"RSI 5m: `{r5:.1f}`")
                     if isinstance(r1m, float):
                         micro_lines.append(f"RSI 1m: `{r1m:.1f}`")
+                    rma1h = candidate.get("rsi_ma_1h")
+                    rma30 = candidate.get("rsi_ma_30m")
+                    rma15 = candidate.get("rsi_ma_15m")
+                    if isinstance(rma1h, float):
+                        micro_lines.append(f"RSI-MA 1h: `{rma1h:.1f}`")
+                    if isinstance(rma30, float):
+                        micro_lines.append(f"RSI-MA 30m: `{rma30:.1f}`")
+                    if isinstance(rma15, float):
+                        micro_lines.append(f"RSI-MA 15m: `{rma15:.1f}`")
                     micro_txt = ("\n" + "\n".join(micro_lines)) if micro_lines else ""
                     candidate_aligned = bool(candidate.get("aligned"))
                     if breakout_pending and candidate_aligned:

@@ -50,39 +50,32 @@ A setup can still be blocked by:
 ---
 
 ## Current promoted pair profiles
-### Promoted now
-#### EUR/GBP
-- Profile: **V2_b0.5_c2**
-- Meaning:
-  - reversal confirmation
-  - 0.5 pip buffer
-  - confirmation valid for 2 bars after alignment
 
-#### GBP/CHF
-- Profile: **V1_b0.5_c0**
-- Meaning:
-  - breakout continuation
-  - 0.5 pip buffer
-  - immediate confirmation only
+CLAUDE.md is the authoritative source. See `config/settings.yaml` for
+per-pair confirmation profiles under `strategy.confirmation_profiles`.
 
-#### AUD/CAD
-- Profile: **V1_b2_c0**
-- Meaning:
-  - breakout continuation
-  - 2.0 pip buffer
-  - immediate confirmation only
+### Promoted (tuned with per-pair overrides)
 
-### Tentative
-#### EUR/CHF
-- Profile: **V1_b0_c0**
-- Use as observational / lower confidence until more live evidence exists
+| Pair | Profile | SMA | TP/SL (ATR) | Status |
+|------|---------|-----|-------------|--------|
+| GBP/CHF | V2_b0_c0 | 50 | 1.0/3.0 | Shadow-only (audit records, no Telegram alerts) |
+| NZD/JPY | V0_b0_c0 | 20 | 2.5/2.5 | Live Telegram alerts |
+| GBP/JPY | V0_b0_c0 | 20 | 1.5/2.5 | Live Telegram alerts |
+| USD/JPY | V0_b0_c0 | 40 | 2.0/2.5 | Live Telegram alerts |
+| AUD/CAD | V0_b0_c0 | 50 | 1.0/3.0 | Live Telegram alerts |
 
-### Not promoted
-- EUR/CAD
-- USD/JPY
-- GBP/CAD
-- AUD/NZD
-- USD/CHF
+### Scout (default config, no per-pair overrides)
+
+EUR/USD, GBP/USD, USD/CHF, AUD/USD, USD/CAD, NZD/USD, EUR/JPY, EUR/CHF,
+EUR/AUD, EUR/CAD, EUR/NZD, GBP/AUD, GBP/CAD, GBP/NZD, AUD/JPY, AUD/CHF,
+AUD/NZD, NZD/CAD, NZD/CHF, CAD/JPY, CAD/CHF, CHF/JPY.
+
+### Rejected (excluded from config)
+
+**EUR/GBP** — negative PnL in all 48 configs tested (best: -0.30%, PF 0.66).
+2026-04-20 sweep. Despite two contradictory backtest results (Dukascopy PF 3.53
+and enhanced backtest PF 1.23), the pair remains rejected pending proper 180d+
+Dukascopy validation.
 
 ---
 
@@ -171,15 +164,15 @@ Currently **not active in a real sense** because:
 ## Recommended operating policy
 ### Active focus
 Focus live attention on:
-- EUR/GBP
-- GBP/CHF
-- AUD/CAD
+- AUD/CAD (promoted, V0_b0_c0, live Telegram alerts)
+- NZD/JPY, GBP/JPY, USD/JPY (promoted with per-pair overrides)
 
-### Secondary observation only
-- EUR/CHF
+### Shadow-only (audit records, no alerts)
+- GBP/CHF
 
 ### Ignore for now
-- everything else until more research is done
+- EUR/GBP (rejected, negative PnL)
+- Everything else until more research is done
 
 ---
 
@@ -203,40 +196,36 @@ These documents are the source of truth for why current promoted pair profiles w
 ## Infrastructure & Repositories
 
 ### Local (`/home/yderf/`)
+- manual-trading-agent: `/home/yderf/Projects/trading/manual-trading-agent`
+- Deploy via `git archive` → rsync → `docker compose build` on Hetzner
 
-| Repo | Path | Branch | Commit |
-|---|---|---|---|
-| manual-trading-agent | /home/yderf/manual-trading-agent | main | 18bd2b9 |
-| ctrader-trading-agent | /home/yderf/ctrader-trading-agent | main | 0348802 |
-| depositotrujillo.co | /home/yderf/depositotrujillo.co | main | 3008c56 |
-| hermes-agent | /home/yderf/hermes-agent | main | b7e71fb7 |
-| mt5-trading-agent | /home/yderf/mt5-trading-agent | docs/mt5-implementation-plan | (active branch) |
-
-### Hetzner (SSH: `crypto-agent` via Tailscale 100.103.209.50)
-
-| Repo | Path | Branch | Commit |
-|---|---|---|---|
-| crypto-agent | /opt/crypto-agent | main | b327366 |
-| ctrader-trading-agent | /opt/ctrader-trading-agent | main | 386f0e5 |
-| manual-trading-agent | /home/emilio/manual-trading-agent | main | f432b48 |
+### Hetzner (SSH: `crypto-agent`)
+- manual-trading-agent: `/home/emilio/manual-trading-agent`
+- Container: `manual-trading-agent` (scans every 15min + Telegram polling)
 
 ### GitHub (Trujillofa)
+- https://github.com/Trujillofa/manual-trading-agent
 
-Repos: manual-trading-agent, crypto-trading-agent, ctrader-trading-agent, depotru_database, depositotrujillo.co, Algorithmic_Trading_Machine_Learning, algorithmic-trading-python-master, Trujillo-s, finnhub-python, skills-introduction-to-github
-
-### Branch inventory
-
-| Repo | Local branches | Remote branches |
-|---|---|---|
-| manual-trading-agent | main, feat/deployment-and-tp-sl-fix | main, feat/deployment-and-tp-sl-fix, hetzner-merge, copilot/analyze-test-coverage |
-| ctrader-trading-agent | main, stable, fix/backtest-same-bar-bias, fix/session-reporting | main, stable |
-| mt5-trading-agent | docs/mt5-implementation-plan | main, docs/mt5-implementation-plan |
-
-### Operating notes
-
-- No git worktrees exist anywhere; all repos use single-checkout clones.
-- manual-trading-agent has 3 copies (local, Hetzner, GitHub), so commits may diverge.
-- ctrader-trading-agent has 2 copies (local, Hetzner), so commits may diverge.
-- crypto-agent exists only on Hetzner; there is no local copy.
-- SSH to Hetzner uses `ssh crypto-agent` (Tailscale IP) or `ssh crypto-agent-public` (public IP 46.225.119.221), both using key `~/.ssh/hetzner_deploy`.
-- GitHub auth uses the Trujillofa account over HTTPS.
+### Module structure (as of 2026-05-28)
+```
+src/
+├── cli.py              # CLI entry (1,379 lines)
+├── scanner/
+│   ├── gates.py        # Confirmation profiles, breakout, session, ADX, spread, signal invalidation
+│   ├── state.py        # JSON persistence, trade outcome tracking, path helpers
+│   └── telemetry.py    # Audit log building, scan telemetry aggregation
+├── dashboard/
+│   └── report.py       # Healthcheck, signal dashboard, paper P&L
+├── indicators/
+│   ├── adx.py, atr.py, rsi.py, sma.py, high_low.py, candlestick.py, pivot_points.py
+├── backtest/
+│   └── enhanced_engine.py  # Realistic TP/SL backtest simulation
+├── config/settings.py
+├── data/fetcher.py     # yfinance + Twelve Data + OANDA
+├── news/news_checker.py
+├── notifications/
+│   ├── telegram.py
+│   └── telegram_commands.py
+├── risk/manager.py
+└── strategy/multi_timeframe.py
+```

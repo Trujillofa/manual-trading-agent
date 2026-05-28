@@ -51,7 +51,7 @@ class TelegramCommandHandler:
         HEARTBEAT_PATH.write_text(json.dumps(payload), encoding="utf-8")
 
     async def get_updates(self) -> list[dict[str, Any]]:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=45.0)) as client:
             response = await client.get(
                 f"{self.base_url}/getUpdates",
                 params={"offset": self.offset, "timeout": 20, "limit": 20},

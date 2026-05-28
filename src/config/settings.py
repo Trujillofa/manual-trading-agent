@@ -89,6 +89,40 @@ class PairOverride:
 
 
 @dataclass
+class ConfirmationProfileEntry:
+    """Per-pair or default confirmation profile parameters."""
+
+    variant: str = "V2"
+    buffer_pips: float = 0.5
+    confirm_bars: int = 2
+
+    def __post_init__(self) -> None:
+        if self.variant not in {"V0", "V1", "V2", "V2R"}:
+            raise ValueError(
+                f"confirmation_profile variant must be V0/V1/V2/V2R, got: {self.variant}"
+            )
+        if self.buffer_pips < 0:
+            raise ValueError("confirmation_profile buffer_pips must be >= 0")
+        if self.confirm_bars < 0:
+            raise ValueError("confirmation_profile confirm_bars must be >= 0")
+
+
+@dataclass
+class ConfirmationProfilesConfig:
+    """Confirmation profile container with default and per-pair overrides."""
+
+    default: ConfirmationProfileEntry = field(default_factory=ConfirmationProfileEntry)
+    pairs: dict[str, ConfirmationProfileEntry] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        for pair, _ in self.pairs.items():
+            if not _is_non_empty_string(pair):
+                raise ValueError(
+                    "confirmation_profiles.pairs keys must be non-empty strings"
+                )
+
+
+@dataclass
 class StrategyConfig:
     rsi_period: int = 14
     rsi_overbought: float = 70.0
@@ -115,6 +149,9 @@ class StrategyConfig:
         }
     )
     pair_overrides: dict[str, PairOverride] = field(default_factory=dict)
+    confirmation_profiles: ConfirmationProfilesConfig = field(
+        default_factory=ConfirmationProfilesConfig
+    )
 
     def __post_init__(self) -> None:
         if self.rsi_period <= 0:
@@ -324,10 +361,35 @@ class Settings:
                 if isinstance(override_data, dict):
                     pair_overrides_parsed[pair_key] = PairOverride(**override_data)
 
+        # Build confirmation_profiles from strategy config
+        raw_profiles = strategy_data.get("confirmation_profiles", {})
+        profiles_config: ConfirmationProfilesConfig
+        if isinstance(raw_profiles, dict):
+            raw_default = raw_profiles.get("default", {})
+            default_entry = (
+                ConfirmationProfileEntry(**raw_default)
+                if isinstance(raw_default, dict)
+                else ConfirmationProfileEntry()
+            )
+            raw_pairs = raw_profiles.get("pairs", {})
+            pairs_parsed: dict[str, ConfirmationProfileEntry] = {}
+            if isinstance(raw_pairs, dict):
+                for pair_key, profile_data in raw_pairs.items():
+                    if isinstance(profile_data, dict):
+                        pairs_parsed[pair_key] = ConfirmationProfileEntry(**profile_data)
+            profiles_config = ConfirmationProfilesConfig(
+                default=default_entry, pairs=pairs_parsed
+            )
+        else:
+            profiles_config = ConfirmationProfilesConfig()
+
         strategy_payload = {
-            k: v for k, v in strategy_data.items() if k != "pair_overrides"
+            k: v
+            for k, v in strategy_data.items()
+            if k not in {"pair_overrides", "confirmation_profiles"}
         }
         strategy_payload["pair_overrides"] = pair_overrides_parsed
+        strategy_payload["confirmation_profiles"] = profiles_config
 
         return cls(
             trading=TradingConfig(**trading_payload),

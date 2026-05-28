@@ -53,6 +53,34 @@ strategy:
     - "06-17"
     - "12-21"
   breakout_buffer_pips: 0.0
+  # Per-pair confirmation profiles from optimization bakeoff (2026-04-03).
+  # V0 = RSI-only (no breakout gate), V1 = continuation, V2 = reversal, V2R = reversal structural break
+  confirmation_profiles:
+    default:
+      variant: "V2"
+      buffer_pips: 0.5
+      confirm_bars: 2
+    pairs:
+      AUD/CAD:
+        variant: "V0"
+        buffer_pips: 0.0
+        confirm_bars: 0
+      GBP/CHF:
+        variant: "V2"
+        buffer_pips: 0.0
+        confirm_bars: 0
+      NZD/JPY:
+        variant: "V0"
+        buffer_pips: 0.0
+        confirm_bars: 0
+      GBP/JPY:
+        variant: "V0"
+        buffer_pips: 0.0
+        confirm_bars: 0
+      USD/JPY:
+        variant: "V0"
+        buffer_pips: 0.0
+        confirm_bars: 0
   spread_filter_enabled: true
   max_spread_pips: 2.0
   spread_limits_pips:

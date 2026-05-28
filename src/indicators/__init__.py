@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from src.indicators.atr import calculate_atr
 from src.indicators.candlestick import (
     CandlePattern,
     PatternType,
@@ -40,6 +41,8 @@ from src.indicators.rsi import (
 )
 
 __all__ = [
+    # ATR
+    "calculate_atr",
     # RSI
     "calculate_rsi",
     "calculate_rsi_series",

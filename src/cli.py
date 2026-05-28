@@ -13,10 +13,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
-from src.backtest.engine import BacktestEngine
 from src.config import get_settings
 from src.data.fetcher import DataFetcher
 from src.indicators.adx import calculate_adx_full
+from src.indicators.atr import calculate_atr
 from src.indicators.candlestick import (
     CandlePattern,
     PatternType,
@@ -39,29 +39,19 @@ from src.indicators.rsi import (
 from src.indicators.sma import calculate_sma
 from src.news.news_checker import NewsChecker
 from src.notifications.telegram import TelegramNotifier
-from src.strategy.multi_timeframe import MTFRSIStrategy
 
-# Pair-specific confirmation profiles from optimization bakeoff (2026-04-03).
-# Format: {"variant": "V1"|"V2"|"V2R", "buffer_pips": float, "confirm_bars": int}
+# Per-pair confirmation profiles are loaded from config/settings.yaml.
+# The format per profile: {"variant": str, "buffer_pips": float, "confirm_bars": int}
 # V0 = RSI-only (no breakout gate, fires on MTF alignment alone)
 # V1 = continuation breakout (BUY below LL, SELL above HH)
 # V2 = reversal breakout (BUY wick through + close reclaim, SELL wick through + close reject)
 # V2R = reversal structural break (BUY above HH, SELL below LL)
 # buffer_pips = pip buffer on breakout threshold
 # confirm_bars = max bars after MTF alignment to accept breakout (0 = immediate only)
-CONFIRMATION_PROFILES: dict[str, ConfirmationProfile] = {
-    "AUD/CAD": {"variant": "V0", "buffer_pips": 0.0, "confirm_bars": 0},
-    "GBP/CHF": {"variant": "V2", "buffer_pips": 0.0, "confirm_bars": 0},
-    "NZD/JPY": {"variant": "V0", "buffer_pips": 0.0, "confirm_bars": 0},
-    "GBP/JPY": {"variant": "V0", "buffer_pips": 0.0, "confirm_bars": 0},
-    "USD/JPY": {"variant": "V0", "buffer_pips": 0.0, "confirm_bars": 0},
-}
-
-# Default profile for pairs without a specific one
 DEFAULT_CONFIRMATION_PROFILE: ConfirmationProfile = {
-    "variant": "V2",
-    "buffer_pips": 0.5,
-    "confirm_bars": 2,
+    "variant": get_settings().strategy.confirmation_profiles.default.variant,
+    "buffer_pips": get_settings().strategy.confirmation_profiles.default.buffer_pips,
+    "confirm_bars": get_settings().strategy.confirmation_profiles.default.confirm_bars,
 }
 
 # ADX threshold: only take mean-reversion signals when ADX < this value (ranging market)
@@ -210,7 +200,11 @@ def _get_ctrader_spread(pair: str) -> SpreadQuote | None:
 
 
 def _get_confirmation_profile(pair: str) -> ConfirmationProfile:
-    return CONFIRMATION_PROFILES.get(pair, DEFAULT_CONFIRMATION_PROFILE)
+    profiles = get_settings().strategy.confirmation_profiles
+    entry = profiles.pairs.get(pair)
+    if entry is not None:
+        return {"variant": entry.variant, "buffer_pips": entry.buffer_pips, "confirm_bars": entry.confirm_bars}
+    return DEFAULT_CONFIRMATION_PROFILE
 
 
 def _profile_label(profile: ConfirmationProfile) -> str:
@@ -676,11 +670,6 @@ def create_parser() -> argparse.ArgumentParser:
     news_parser = subparsers.add_parser("news", help="Check upcoming news")
     news_parser.add_argument("--hours", type=int, default=24, help="Hours ahead")
 
-    backtest_parser = subparsers.add_parser("backtest", help="Run backtest")
-    backtest_parser.add_argument("--pair", required=True, help="Pair to backtest (e.g., EUR/USD)")
-    backtest_parser.add_argument("--start", help="Start date YYYY-MM-DD")
-    backtest_parser.add_argument("--end", help="End date YYYY-MM-DD")
-
     enhanced_backtest_parser = subparsers.add_parser(
         "backtest-enhanced", help="Run enhanced backtest with TP/SL"
     )
@@ -904,7 +893,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             close_price = close_15m[-1]
 
             # Calculate ATR for TP/SL
-            atr = _calculate_atr(high_15m[-14:], low_15m[-14:], close_15m[-14:])
+            atr = calculate_atr(high_15m[-14:], low_15m[-14:], close_15m[-14:])
             pip_size = 0.01 if "JPY" in pair else 0.0001
             bar_high = high_15m[-1] if high_15m else None
             bar_low = low_15m[-1] if low_15m else None
@@ -1767,26 +1756,6 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
         _save_pending_trades(pending_trades)
 
 
-def _calculate_atr(
-    highs: list[float], lows: list[float], closes: list[float], period: int = 14
-) -> float | None:
-    """Calculate Average True Range."""
-    if len(highs) < period or len(lows) < period or len(closes) < period:
-        return None
-
-    true_ranges = []
-    for i in range(1, len(highs)):
-        tr1 = highs[i] - lows[i]
-        tr2 = abs(highs[i] - closes[i - 1])
-        tr3 = abs(lows[i] - closes[i - 1])
-        true_ranges.append(max(tr1, tr2, tr3))
-
-    if len(true_ranges) < period:
-        return None
-
-    return sum(true_ranges[-period:]) / period
-
-
 async def run_analyze(pair: str, timeframe: str) -> None:
     _ = get_settings()
     fetcher = DataFetcher()
@@ -1826,33 +1795,6 @@ async def run_news(hours: int) -> None:
 
         for event in events:
             print(f"  {event.timestamp.strftime('%Y-%m-%d %H:%M')} {event.currency}: {event.name}")
-    except Exception as exc:
-        print(f"  Error: {exc}")
-
-
-async def run_backtest(pair: str, start: str | None, end: str | None) -> None:
-    _ = get_settings()
-    fetcher = DataFetcher()
-    strategy = MTFRSIStrategy()
-    engine = BacktestEngine(strategy)
-
-    print(f"\n[BACKTEST] {pair}")
-
-    try:
-        mtf_data = fetcher.fetch_multi_timeframe(pair, start=start, end=end)
-
-        result = await engine.run(
-            pair,
-            mtf_data["1h"],
-            mtf_data["30m"],
-            mtf_data["15m"],
-        )
-
-        print(f"  Period: {result.start_date.date()} to {result.end_date.date()}")
-        print(f"  Total trades: {result.total_trades}")
-        print(f"  Win rate: {result.win_rate:.1%}")
-        print(f"  Total PnL: ${result.total_pnl:.2f}")
-        print(f"  Max drawdown: {result.max_drawdown:.1%}")
     except Exception as exc:
         print(f"  Error: {exc}")
 
@@ -2161,7 +2103,6 @@ def main() -> int:
         "scan": lambda: run_scan(_parse_pairs(args.pairs), args.timeframe),
         "analyze": lambda: run_analyze(args.pair, args.timeframe),
         "news": lambda: run_news(args.hours),
-        "backtest": lambda: run_backtest(args.pair, args.start, args.end),
         "backtest-enhanced": lambda: run_enhanced_backtest(
             args.pair,
             args.start,

@@ -395,14 +395,10 @@ def detect_rsi_curl(
         if any(v is None for v in (rsi_now, rsi_prev, ma_now, ma_prev)):
             continue
 
-        if direction == "buy":
-            # RSI crossed above its MA (prev: RSI < MA, now: RSI > MA)
-            if rsi_prev < ma_prev and rsi_now > ma_now:
-                return True
-        elif direction == "sell":
-            # RSI crossed below its MA (prev: RSI > MA, now: RSI < MA)
-            if rsi_prev > ma_prev and rsi_now < ma_now:
-                return True
+        if direction == "buy" and rsi_prev < ma_prev and rsi_now > ma_now:
+            return True
+        if direction == "sell" and rsi_prev > ma_prev and rsi_now < ma_now:
+            return True
 
     return False
 

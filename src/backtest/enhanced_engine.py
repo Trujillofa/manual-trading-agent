@@ -10,6 +10,7 @@ from typing import Literal, cast
 import pandas as pd
 
 from src.indicators.adx import calculate_adx
+from src.indicators.atr import calculate_atr
 from src.indicators.candlestick import (
     CandlePattern,
     PatternType,
@@ -133,25 +134,6 @@ class EnhancedBacktestEngine:
         self.rsi_ma_variant = rsi_ma_variant
         self.rsi_ma_distance_max = rsi_ma_distance_max
         self.rsi_ma_confidence_mod = rsi_ma_confidence_mod
-
-    def _calculate_atr(
-        self, highs: list[float], lows: list[float], closes: list[float], period: int = 14
-    ) -> float | None:
-        """Calculate ATR."""
-        if len(highs) < period or len(lows) < period or len(closes) < period:
-            return None
-
-        true_ranges = []
-        for i in range(1, len(highs)):
-            tr1 = highs[i] - lows[i]
-            tr2 = abs(highs[i] - closes[i - 1])
-            tr3 = abs(lows[i] - closes[i - 1])
-            true_ranges.append(max(tr1, tr2, tr3))
-
-        if len(true_ranges) < period:
-            return None
-
-        return sum(true_ranges[-period:]) / period
 
     def _calculate_rsi_column(self, data: pd.DataFrame, period: int = 14) -> pd.Series:
         """Calculate RSI column for dataframe."""
@@ -383,7 +365,7 @@ class EnhancedBacktestEngine:
             low = lows[i]
             rsi = data["rsi"].iloc[i]
             # ATR needs period+1 bars, include current bar
-            atr = self._calculate_atr(
+            atr = calculate_atr(
                 highs[max(0, i - atr_period) : i + 1],
                 lows[max(0, i - atr_period) : i + 1],
                 closes[max(0, i - atr_period) : i + 1],
@@ -571,9 +553,7 @@ class EnhancedBacktestEngine:
 
                         elif self.rsi_ma_variant == "fresh":
                             # Fresh momentum: RSI moving AWAY from MA (still extreme)
-                            if signal == SignalType.BUY and rsi_val_now > rsi_ma_now:
-                                signal = SignalType.HOLD
-                            elif signal == SignalType.SELL and rsi_val_now < rsi_ma_now:
+                            if signal == SignalType.BUY and rsi_val_now > rsi_ma_now or signal == SignalType.SELL and rsi_val_now < rsi_ma_now:
                                 signal = SignalType.HOLD
 
                         elif self.rsi_ma_variant == "confidence":
@@ -611,9 +591,7 @@ class EnhancedBacktestEngine:
 
                         elif self.rsi_ma_variant == "gate":
                             # Gate: SMA(RSI) must be outside 30/70 — mirrors live rsi_ma_gate_enabled
-                            if signal == SignalType.BUY and rsi_ma_now > self.rsi_oversold:
-                                signal = SignalType.HOLD
-                            elif signal == SignalType.SELL and rsi_ma_now < self.rsi_overbought:
+                            if signal == SignalType.BUY and rsi_ma_now > self.rsi_oversold or signal == SignalType.SELL and rsi_ma_now < self.rsi_overbought:
                                 signal = SignalType.HOLD
 
                         else:

@@ -26,6 +26,17 @@ class TelegramCommandHandler:
         self.chat_id = str(chat_id)
         self.base_url = f"https://api.telegram.org/bot{bot_token}"
         self.offset = self._load_offset()
+        self._client: httpx.AsyncClient | None = None
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=45.0))
+        return self._client
+
+    async def close(self) -> None:
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     def _load_offset(self) -> int:
         if not OFFSET_PATH.exists():
@@ -51,16 +62,16 @@ class TelegramCommandHandler:
         HEARTBEAT_PATH.write_text(json.dumps(payload), encoding="utf-8")
 
     async def get_updates(self) -> list[dict[str, Any]]:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=45.0)) as client:
-            response = await client.get(
-                f"{self.base_url}/getUpdates",
-                params={"offset": self.offset, "timeout": 20, "limit": 20},
-            )
-            response.raise_for_status()
-            payload = response.json()
-            if not payload.get("ok"):
-                return []
-            return list(payload.get("result", []))
+        client = await self._get_client()
+        response = await client.get(
+            f"{self.base_url}/getUpdates",
+            params={"offset": self.offset, "timeout": 20, "limit": 20},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not payload.get("ok"):
+            return []
+        return list(payload.get("result", []))
 
     async def send_message(self, text: str) -> None:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -272,13 +283,16 @@ class TelegramCommandHandler:
 
     async def run_forever(self) -> None:
         self._write_heartbeat("starting")
+        backoff = 1
         while True:
             try:
                 updates = await self.get_updates()
+                backoff = 1
                 self._write_heartbeat("ok")
                 for update in updates:
                     await self.handle_update(update)
             except Exception as exc:
                 logger.exception("Telegram polling loop failed")
                 self._write_heartbeat("error", str(exc))
-                await asyncio.sleep(5)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 30)

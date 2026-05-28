@@ -5,15 +5,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
-import json
 import os
 import sys
 import time
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from typing import Any, Literal, TypedDict, cast
+from datetime import UTC, datetime
+from typing import Literal, TypedDict, cast
 
 from src.config import get_settings
+from src.dashboard.report import run_dashboard as _dashboard_run
+from src.dashboard.report import run_healthcheck as _healthcheck_run
 from src.data.fetcher import DataFetcher
 from src.indicators.adx import calculate_adx_full
 from src.indicators.atr import calculate_atr
@@ -23,8 +23,6 @@ from src.indicators.candlestick import (
     detect_patterns,
 )
 from src.indicators.high_low import (
-    is_breakout_high,
-    is_breakout_low,
     previous_rolling_highest_high,
     previous_rolling_lowest_low,
 )
@@ -39,88 +37,38 @@ from src.indicators.rsi import (
 from src.indicators.sma import calculate_sma
 from src.news.news_checker import NewsChecker
 from src.notifications.telegram import TelegramNotifier
-
-# Per-pair confirmation profiles are loaded from config/settings.yaml.
-# The format per profile: {"variant": str, "buffer_pips": float, "confirm_bars": int}
-# V0 = RSI-only (no breakout gate, fires on MTF alignment alone)
-# V1 = continuation breakout (BUY below LL, SELL above HH)
-# V2 = reversal breakout (BUY wick through + close reclaim, SELL wick through + close reject)
-# V2R = reversal structural break (BUY above HH, SELL below LL)
-# buffer_pips = pip buffer on breakout threshold
-# confirm_bars = max bars after MTF alignment to accept breakout (0 = immediate only)
-DEFAULT_CONFIRMATION_PROFILE: ConfirmationProfile = {
-    "variant": get_settings().strategy.confirmation_profiles.default.variant,
-    "buffer_pips": get_settings().strategy.confirmation_profiles.default.buffer_pips,
-    "confirm_bars": get_settings().strategy.confirmation_profiles.default.confirm_bars,
-}
-
-# ADX threshold: only take mean-reversion signals when ADX < this value (ranging market)
-ADX_TREND_THRESHOLD = 25.0
-SCAN_HEALTH_MAX_AGE_SECONDS = 30 * 60
-TELEGRAM_HEARTBEAT_MAX_AGE_SECONDS = 5 * 60
-
-# Conservative fallback spreads (pips) when no live source is available.
-DEFAULT_SPREAD_PIPS: dict[str, float] = {
-    "EUR/USD": 0.8,
-    "GBP/USD": 1.2,
-    "USD/JPY": 0.9,
-    "USD/CHF": 1.2,
-    "USD/CAD": 1.4,
-    "AUD/USD": 1.1,
-    "NZD/USD": 1.4,
-    "EUR/JPY": 1.3,
-    "GBP/JPY": 2.1,
-    "EUR/GBP": 1.0,
-    "NZD/JPY": 1.9,
-    "AUD/JPY": 1.6,
-    "GBP/CHF": 2.0,
-    "AUD/CAD": 2.0,
-}
-
-
-class ConfirmationProfile(TypedDict):
-    variant: str
-    buffer_pips: float
-    confirm_bars: int
-
-
-class SpreadQuote(TypedDict, total=False):
-    bid: float
-    ask: float
-    spread: float
-    source: str
-
-
-class NearStateRecord(TypedDict, total=False):
-    fingerprint: str
-    sent_at: int
-    kind: str
-    miss_count: int
-
-
-# Number of consecutive scans a pair must drop out of its tracked state
-# before its pre-signal alert is considered invalidated (anti-flicker).
-INVALIDATION_MISS_THRESHOLD = 2
-
-
-class ActiveSignalRecord(TypedDict, total=False):
-    direction: str
-    fired_at: int
-    entry: float
-    tp: float
-    sl: float
-    sma_side: str
-
-
-class AlignmentStateRecord(TypedDict, total=False):
-    direction: str
-    bars: int
-
-
-class MicroContext(TypedDict):
-    rsi_5m: float | None
-    rsi_1m: float | None
-    execution_note: str | None
+from src.scanner.gates import (
+    ADX_TREND_THRESHOLD,
+    MicroContext,
+    SpreadQuote,
+    _check_breakout_with_profile,
+    _execution_note,
+    _fetch_micro_context,
+    _get_confirmation_profile,
+    _get_ctrader_spread,
+    _get_pair_param,
+    _get_static_spread_quote,
+    _is_signal_invalidated,
+    _mtf_distance_to_buy,
+    _mtf_distance_to_sell,
+    _priority_for_pair,
+    _profile_label,
+    _session_allowed,
+)
+from src.scanner.state import (
+    INVALIDATION_MISS_THRESHOLD,
+    _append_audit_log,
+    _check_trade_outcome,
+    _load_active_signal_state,
+    _load_alignment_state,
+    _load_near_setup_state,
+    _load_pending_trades,
+    _save_active_signal_state,
+    _save_alignment_state,
+    _save_near_setup_state,
+    _save_pending_trades,
+)
+from src.scanner.telemetry import _build_scan_telemetry_payload
 
 
 class NearCandidate(TypedDict):
@@ -142,515 +90,12 @@ class NearCandidate(TypedDict):
     price: float
 
 
-class ScanTelemetrySummary(TypedDict):
-    scans: int
-    mtf_alignments: int
-    aligned_pending_breakout: int
-    entries: int
-    blockers: dict[str, int]
-
-
-def _get_pair_param(pair: str, param: str, default: float | int) -> float | int:
-    """Look up a per-pair override from config, falling back to the global default."""
-    settings = get_settings()
-    override = settings.strategy.pair_overrides.get(pair)
-    if override is not None:
-        value = getattr(override, param, None)
-        if value is not None:
-            return value
-    return default
-
-
-def _get_static_spread_quote(pair: str, pip_size: float) -> SpreadQuote | None:
-    pips = DEFAULT_SPREAD_PIPS.get(pair.upper()) or DEFAULT_SPREAD_PIPS.get(pair)
-    if pips is None:
-        return None
-    return {"spread": float(pips) * pip_size, "source": "static"}
-
-
-def _get_ctrader_spread(pair: str) -> SpreadQuote | None:
-    """Fetch live bid/ask from the cTrader spread endpoint.
-
-    Expected endpoint: http://host.docker.internal:28081/spread/GBPUSD
-    Returns {bid, ask, spread} or None on failure.
-    """
-    import urllib.error
-    import urllib.request
-
-    base_url = os.getenv("CTRADER_SPREAD_URL", "http://host.docker.internal:28081")
-    normalized = pair.upper().replace("/", "")
-    url = f"{base_url.rstrip('/')}/spread/{normalized}"
-    try:
-        with urllib.request.urlopen(url, timeout=5) as resp:
-            payload = json.loads(resp.read().decode())
-        if not isinstance(payload, dict):
-            return None
-        bid = payload.get("bid")
-        ask = payload.get("ask")
-        spread = payload.get("spread")
-        if (
-            isinstance(bid, (int, float))
-            and isinstance(ask, (int, float))
-            and isinstance(spread, (int, float))
-        ):
-            return {"bid": float(bid), "ask": float(ask), "spread": float(spread)}
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
-        return None
-    return None
-
-
-def _get_confirmation_profile(pair: str) -> ConfirmationProfile:
-    profiles = get_settings().strategy.confirmation_profiles
-    entry = profiles.pairs.get(pair)
-    if entry is not None:
-        return {"variant": entry.variant, "buffer_pips": entry.buffer_pips, "confirm_bars": entry.confirm_bars}
-    return DEFAULT_CONFIRMATION_PROFILE
-
-
-def _profile_label(profile: ConfirmationProfile) -> str:
-    v = profile["variant"]
-    b = profile["buffer_pips"]
-    c = profile["confirm_bars"]
-    return f"{v}_b{b}_c{c}"
-
-
-def _check_breakout_with_profile(
-    profile: ConfirmationProfile,
-    direction: str,
-    close_price: float,
-    hh: float | None,
-    ll: float | None,
-    pip_size: float,
-    bar_high: float | None = None,
-    bar_low: float | None = None,
-) -> bool:
-    """Check breakout using the pair's confirmation profile."""
-    buffer_pips = profile["buffer_pips"]
-    variant = profile["variant"]
-    buffer_pct = (buffer_pips * pip_size) / close_price if close_price else 0.0
-
-    if variant == "V0":
-        # RSI-only: no breakout gate required
-        return True
-    elif variant == "V1":
-        # Continuation: BUY breaks below LL, SELL breaks above HH
-        if direction == "BUY" and ll is not None:
-            return is_breakout_low(close_price, ll, buffer_pct)
-        if direction == "SELL" and hh is not None:
-            return is_breakout_high(close_price, hh, buffer_pct)
-    elif variant == "V2":
-        # Reversal: wick through level + close back inside
-        # BUY: bar low wicked through LL, but close reclaimed above LL
-        # SELL: bar high wicked through HH, but close rejected below HH
-        if direction == "BUY" and ll is not None:
-            down_trigger = ll - buffer_pips * pip_size
-            wick_through = (
-                (bar_low is not None and bar_low <= down_trigger) if bar_low is not None else True
-            )
-            close_reclaim = close_price > ll
-            return wick_through and close_reclaim
-        if direction == "SELL" and hh is not None:
-            up_trigger = hh + buffer_pips * pip_size
-            wick_through = (
-                (bar_high is not None and bar_high >= up_trigger) if bar_high is not None else True
-            )
-            close_reject = close_price < hh
-            return wick_through and close_reject
-    elif variant == "V2R":
-        # Opposite-direction Structural Break Reversal: BUY breaks above HH, SELL breaks below LL
-        if direction == "BUY" and hh is not None:
-            return is_breakout_high(close_price, hh, buffer_pct)
-        if direction == "SELL" and ll is not None:
-            return is_breakout_low(close_price, ll, buffer_pct)
-    return False
-
-
 def _parse_pairs(raw_pairs: str | None) -> list[str] | None:
     if raw_pairs is None:
         return None
 
     pairs = [pair.strip().upper() for pair in raw_pairs.split(",") if pair.strip()]
     return pairs or None
-
-
-def _logs_dir() -> Path:
-    configured = os.getenv("MANUAL_TRADING_AGENT_LOG_DIR")
-    if configured:
-        return Path(configured)
-
-    app_root = Path("/app")
-    if app_root.exists() and os.access(app_root, os.W_OK):
-        return app_root / "logs"
-
-    return Path.cwd() / "logs"
-
-
-def _near_setup_state_path() -> Path:
-    return _logs_dir() / "near_setup_state.json"
-
-
-def _load_json_mapping(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return cast(dict[str, Any], payload) if isinstance(payload, dict) else {}
-
-
-def _load_near_setup_state() -> dict[str, NearStateRecord]:
-    path = _near_setup_state_path()
-    return cast(dict[str, NearStateRecord], _load_json_mapping(path))
-
-
-def _save_near_setup_state(state: dict[str, NearStateRecord]) -> None:
-    path = _near_setup_state_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2), encoding="utf-8")
-
-
-def _alignment_state_path() -> Path:
-    return _logs_dir() / "alignment_state.json"
-
-
-def _load_alignment_state() -> dict[str, AlignmentStateRecord]:
-    path = _alignment_state_path()
-    return cast(dict[str, AlignmentStateRecord], _load_json_mapping(path))
-
-
-def _save_alignment_state(state: dict[str, AlignmentStateRecord]) -> None:
-    path = _alignment_state_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2), encoding="utf-8")
-
-
-def _active_signal_state_path() -> Path:
-    return _logs_dir() / "active_signal_state.json"
-
-
-def _load_active_signal_state() -> dict[str, ActiveSignalRecord]:
-    path = _active_signal_state_path()
-    return cast(dict[str, ActiveSignalRecord], _load_json_mapping(path))
-
-
-def _save_active_signal_state(state: dict[str, ActiveSignalRecord]) -> None:
-    path = _active_signal_state_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2), encoding="utf-8")
-
-
-def _is_signal_invalidated(
-    record: ActiveSignalRecord,
-    data_15m: Any,
-    rsi_15m_series: list[float],
-    current_close: float,
-    current_sma_15m: float | None,
-) -> tuple[bool, str | None]:
-    """Rule C invalidation: TP/SL hit, RSI(15m) midline cross, or SMA flip."""
-    direction = record.get("direction")
-    fired_at = int(record.get("fired_at", 0))
-    tp = float(record.get("tp", 0.0))
-    sl = float(record.get("sl", 0.0))
-    if direction not in {"BUY", "SELL"} or fired_at <= 0:
-        return True, "invalid_record"
-
-    fired_at_dt = datetime.fromtimestamp(fired_at, tz=UTC)
-    bars_since = data_15m[data_15m.index > fired_at_dt]
-
-    if not bars_since.empty:
-        highs = bars_since["high"].astype(float)
-        lows = bars_since["low"].astype(float)
-        if direction == "BUY":
-            if (highs >= tp).any():
-                return True, "tp_hit"
-            if (lows <= sl).any():
-                return True, "sl_hit"
-        else:
-            if (lows <= tp).any():
-                return True, "tp_hit"
-            if (highs >= sl).any():
-                return True, "sl_hit"
-
-        # RSI(15m) midline cross on any closed bar since fire
-        bar_count = len(bars_since)
-        rsi_tail = rsi_15m_series[-bar_count:] if bar_count <= len(rsi_15m_series) else rsi_15m_series
-        rsi_clean = [r for r in rsi_tail if r is not None]
-        if direction == "BUY" and any(r >= 50.0 for r in rsi_clean):
-            return True, "rsi_midline_cross"
-        if direction == "SELL" and any(r <= 50.0 for r in rsi_clean):
-            return True, "rsi_midline_cross"
-
-    # SMA flip against the original direction
-    if current_sma_15m is not None:
-        if direction == "BUY" and current_close > current_sma_15m:
-            return True, "sma_flip"
-        if direction == "SELL" and current_close < current_sma_15m:
-            return True, "sma_flip"
-
-    return False, None
-
-
-def _audit_log_path() -> Path:
-    return _logs_dir() / "signal_audit.jsonl"
-
-
-def _scan_log_path() -> Path:
-    return Path("/app/logs/scan.log")
-
-
-def _telegram_heartbeat_path() -> Path:
-    return Path("/app/logs/telegram_heartbeat.json")
-
-
-def _append_audit_log(payload: dict[str, object]) -> None:
-    path = _audit_log_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(payload) + "\n")
-
-
-def _pending_trades_path() -> Path:
-    return _logs_dir() / "pending_trades.json"
-
-
-def _load_pending_trades() -> list[dict[str, Any]]:
-    path = _pending_trades_path()
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
-
-
-def _save_pending_trades(trades: list[dict[str, Any]]) -> None:
-    path = _pending_trades_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(trades, indent=2), encoding="utf-8")
-
-
-def _check_trade_outcome(
-    trade: dict[str, Any],
-    bar_times_unix: list[int],
-    highs: list[float],
-    lows: list[float],
-) -> str | None:
-    """Return 'tp', 'sl', or None. Checks each 15m bar after signal fired_at."""
-    fired_at = int(trade["fired_at"])
-    direction = str(trade["direction"])
-    tp = float(trade["tp"])
-    sl = float(trade["sl"])
-    for ts, h, lo in zip(bar_times_unix, highs, lows, strict=True):
-        if ts <= fired_at:
-            continue
-        if direction == "BUY":
-            if h >= tp:
-                return "tp"
-            if lo <= sl:
-                return "sl"
-        else:
-            if lo <= tp:
-                return "tp"
-            if h >= sl:
-                return "sl"
-    return None
-
-
-def _build_scan_telemetry_payload(
-    *,
-    ts: str,
-    scan_run_id: str,
-    pair: str,
-    state: str,
-    direction: str | None,
-    aligned: bool,
-    breakout_pending: bool,
-    entry_triggered: bool,
-    bars_aligned: int | None,
-    confirm_bars: int | None,
-    within_confirm_window: bool | None,
-    spread_pips: float | None,
-    max_spread_pips: float | None,
-    spread_source: str | None,
-    adx_1h: float | None,
-    is_ranging: bool | None,
-    rsi_1h: float | None,
-    rsi_30m: float | None,
-    rsi_15m: float | None,
-    no_trade_reasons: list[str],
-    is_shadow: bool = False,
-) -> dict[str, object]:
-    reason_text = " | ".join(no_trade_reasons).lower()
-    blockers = {
-        "adx_trending": "trending market" in reason_text,
-        "spread_unavailable_or_too_wide": "spread unavailable/too wide" in reason_text,
-        "session": "outside allowed session" in reason_text,
-        "news": "blocked by high-impact news" in reason_text,
-        "active_signal": "active signal not yet invalidated" in reason_text,
-        "confirmation_expired": "confirmation window expired" in reason_text,
-        "breakout_unconfirmed": "breakout" in reason_text and "not confirmed" in reason_text,
-        "rsi_ma_gate": "rsi-ma" in reason_text and "gate" in reason_text,
-        "data_unavailable": state == "data_unavailable",
-    }
-    return {
-        "ts": ts,
-        "kind": "scan_telemetry",
-        "scan_run_id": scan_run_id,
-        "pair": pair,
-        "state": state,
-        "direction": direction,
-        "is_shadow": is_shadow,
-        "counts": {
-            "scan": 1,
-            "mtf_alignment": int(aligned),
-            "aligned_pending_breakout": int(state == "aligned_pending_breakout"),
-            "entry": int(entry_triggered),
-        },
-        "blockers": blockers,
-        "context": {
-            "bars_aligned": bars_aligned,
-            "confirm_bars": confirm_bars,
-            "within_confirm_window": within_confirm_window,
-            "breakout_pending": breakout_pending,
-            "spread_pips": spread_pips,
-            "max_spread_pips": max_spread_pips,
-            "spread_source": spread_source,
-            "adx_1h": adx_1h,
-            "is_ranging": is_ranging,
-            "rsi_1h": rsi_1h,
-            "rsi_30m": rsi_30m,
-            "rsi_15m": rsi_15m,
-        },
-        "reasons": no_trade_reasons,
-    }
-
-
-def _aggregate_scan_telemetry(records: list[dict[str, object]]) -> dict[str, ScanTelemetrySummary]:
-    per_pair: dict[str, ScanTelemetrySummary] = {}
-    for rec in records:
-        pair = str(rec.get("pair", "unknown"))
-        counts = cast(dict[str, object], rec.get("counts", {}))
-        blockers = cast(dict[str, object], rec.get("blockers", {}))
-        summary = per_pair.setdefault(
-            pair,
-            {
-                "scans": 0,
-                "mtf_alignments": 0,
-                "aligned_pending_breakout": 0,
-                "entries": 0,
-                "blockers": {},
-            },
-        )
-        summary["scans"] += int(cast(int, counts.get("scan", 0)))
-        summary["mtf_alignments"] += int(cast(int, counts.get("mtf_alignment", 0)))
-        summary["aligned_pending_breakout"] += int(
-            cast(int, counts.get("aligned_pending_breakout", 0))
-        )
-        summary["entries"] += int(cast(int, counts.get("entry", 0)))
-        for blocker, active in blockers.items():
-            if active:
-                summary["blockers"][blocker] = summary["blockers"].get(blocker, 0) + 1
-    return per_pair
-
-
-def _path_age_seconds(path: Path, now_utc: datetime) -> float | None:
-    if not path.exists():
-        return None
-    modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
-    return max((now_utc - modified_at).total_seconds(), 0.0)
-
-
-def _healthcheck_status(now_utc: datetime | None = None) -> tuple[bool, str]:
-    settings = get_settings()
-    current_time = now_utc or datetime.now(UTC)
-
-    scan_age = _path_age_seconds(_scan_log_path(), current_time)
-    if scan_age is None:
-        return False, "scan log missing"
-    if scan_age > SCAN_HEALTH_MAX_AGE_SECONDS:
-        return False, f"scan log stale ({scan_age:.0f}s old)"
-
-    if settings.telegram.enabled and settings.telegram.is_configured:
-        telegram_age = _path_age_seconds(_telegram_heartbeat_path(), current_time)
-        if telegram_age is None:
-            return False, "telegram heartbeat missing"
-        if telegram_age > TELEGRAM_HEARTBEAT_MAX_AGE_SECONDS:
-            return False, f"telegram heartbeat stale ({telegram_age:.0f}s old)"
-
-    return True, "ok"
-
-
-def _mtf_distance_to_buy(rsi_1h: float, rsi_30m: float, rsi_15m: float, threshold: float) -> float:
-    return max(rsi_1h - threshold, rsi_30m - threshold, rsi_15m - threshold)
-
-
-def _mtf_distance_to_sell(rsi_1h: float, rsi_30m: float, rsi_15m: float, threshold: float) -> float:
-    return max(threshold - rsi_1h, threshold - rsi_30m, threshold - rsi_15m)
-
-
-def _session_allowed(now_utc: datetime, windows: list[str]) -> bool:
-    hour = now_utc.hour
-    for window in windows:
-        try:
-            start_s, end_s = window.split("-")
-            start_h = int(start_s)
-            end_h = int(end_s)
-        except Exception:
-            continue
-        if start_h <= hour < end_h:
-            return True
-    return False
-
-
-def _priority_for_pair(settings, pair: str) -> int:
-    priorities = getattr(settings.strategy, "pair_priorities", {}) or {}
-    return int(priorities.get(pair, 50))
-
-
-def _fetch_micro_context(fetcher: DataFetcher, symbol: str, rsi_period: int) -> MicroContext:
-    """Fetch 5m/1m RSI for micro-timing context. Suppresses yfinance noise on cross pairs."""
-    import logging as _logging
-
-    context: MicroContext = {
-        "rsi_5m": None,
-        "rsi_1m": None,
-        "execution_note": None,
-    }
-    # Suppress noisy yfinance warnings for unsupported cross pair intervals
-    yf_logger = _logging.getLogger("yfinance")
-    prev_level = yf_logger.level
-    yf_logger.setLevel(_logging.CRITICAL)
-    try:
-        data_5m = fetcher.fetch(symbol, period="1d", interval="5min")
-        if not data_5m.empty:
-            context["rsi_5m"] = calculate_rsi(data_5m["close"].values.tolist()[-50:], rsi_period)
-        data_1m = fetcher.fetch(symbol, period="1d", interval="1min")
-        if not data_1m.empty:
-            context["rsi_1m"] = calculate_rsi(data_1m["close"].values.tolist()[-50:], rsi_period)
-    except Exception:
-        pass
-    finally:
-        yf_logger.setLevel(prev_level)
-    return context
-
-
-def _execution_note(direction: str, rsi_5m: float | None, rsi_1m: float | None) -> str:
-    if rsi_5m is None and rsi_1m is None:
-        return "No 1m/5m context available"
-    vals = [v for v in [rsi_5m, rsi_1m] if v is not None]
-    if direction == "BUY":
-        if any(v > 70 for v in vals):
-            return "15m confirmed, but 1m/5m is stretched up — wait for a small pullback"
-        if any(v < 30 for v in vals):
-            return "15m confirmed and 1m/5m still depressed — watch for reversal trigger"
-        return "15m confirmed and 1m/5m is balanced — market entry is acceptable"
-    if any(v < 30 for v in vals):
-        return "15m confirmed, but 1m/5m is stretched down — wait for a small bounce"
-    if any(v > 70 for v in vals):
-        return "15m confirmed and 1m/5m still elevated — watch for reversal trigger"
-    return "15m confirmed and 1m/5m is balanced — market entry is acceptable"
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -898,6 +343,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             bar_high = high_15m[-1] if high_15m else None
             bar_low = low_15m[-1] if low_15m else None
             profile = _get_confirmation_profile(pair)
+
             breakout_buy = _check_breakout_with_profile(
                 profile, "BUY", close_price, hh, ll, pip_size, bar_high, bar_low
             )
@@ -1098,6 +544,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             remaining = len(missing_timeframes)
 
             micro_context: MicroContext = {"rsi_5m": None, "rsi_1m": None, "execution_note": None}
+
             if remaining == 1 or near_distance <= 4.0:
                 micro_context = _fetch_micro_context(fetcher, symbol, rsi_period)
 
@@ -1898,197 +1345,11 @@ async def run_telegram_poll() -> None:
 
 
 async def run_healthcheck() -> None:
-    ok, message = _healthcheck_status()
-    print(message)
-    if not ok:
-        raise SystemExit(1)
+    await _healthcheck_run()
 
 
 async def run_dashboard(days: int) -> None:
-    """Show signal dashboard: entries, block reasons, paper P&L tracking."""
-    audit_path = _audit_log_path()
-    if not audit_path.exists():
-        print("No signal audit log found.")
-        return
-
-    cutoff = datetime.now(UTC) - timedelta(days=days)
-    entries: list[dict[str, object]] = []
-    blocked: list[dict[str, object]] = []
-    aligned: list[dict[str, object]] = []
-    watched: list[dict[str, object]] = []
-    telemetry: list[dict[str, object]] = []
-
-    with audit_path.open(encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            ts_str = rec.get("ts", "")
-            try:
-                ts = datetime.fromisoformat(ts_str)
-            except (ValueError, TypeError):
-                continue
-            if ts < cutoff:
-                continue
-            if rec.get("kind") == "scan_telemetry":
-                telemetry.append(cast(dict[str, object], rec))
-                continue
-            state = rec.get("state", "")
-            if state == "entry":
-                entries.append(rec)
-            elif state == "blocked":
-                blocked.append(rec)
-            elif state == "aligned_pending_breakout":
-                aligned.append(rec)
-            elif state == "watch":
-                watched.append(rec)
-
-    print(f"=== Signal Dashboard (last {days} days) ===\n")
-
-    # Summary counts
-    print(f"Entry signals:    {len(entries)}")
-    print(f"Blocked signals:  {len(blocked)}")
-    print(f"Aligned pending:  {len(aligned)}")
-    print(f"Watch list:       {len(watched)}")
-    print()
-
-    if telemetry:
-        print("--- SCAN TELEMETRY ---")
-        telemetry_summary = _aggregate_scan_telemetry(telemetry)
-        print(
-            f"{'Pair':<10} {'Scans':>5} {'Align':>5} {'Pending':>7} {'Entries':>7} {'Top blocker':>28}"
-        )
-        print("-" * 72)
-        for pair, summary in sorted(
-            telemetry_summary.items(),
-            key=lambda item: (-item[1]["mtf_alignments"], item[0]),
-        )[:15]:
-            blocker_label = "-"
-            if summary["blockers"]:
-                blocker_label, blocker_count = max(
-                    summary["blockers"].items(),
-                    key=lambda item: item[1],
-                )
-                blocker_label = f"{blocker_label} ({blocker_count})"
-            print(
-                f"{pair:<10} {summary['scans']:>5} {summary['mtf_alignments']:>5} {summary['aligned_pending_breakout']:>7} {summary['entries']:>7} {blocker_label:>28}"
-            )
-        print()
-
-    # Entry signals detail
-    if entries:
-        print("--- ENTRY SIGNALS ---")
-        print(
-            f"{'Timestamp':<22} {'Pair':<10} {'Dir':<5} {'Entry':>10} {'TP':>10} {'SL':>10} {'RSI 1h':>7} {'RSI 30m':>8} {'RSI 15m':>8}"
-        )
-        print("-" * 95)
-        for e in entries:
-            ts_display = str(e.get("ts", ""))[:19]
-            pair_name = str(e.get("pair", ""))
-            direction_name = str(e.get("direction", ""))
-            entry_value = float(cast(float, e.get("entry", 0.0)))
-            tp_value = float(cast(float, e.get("tp", 0.0)))
-            sl_value = float(cast(float, e.get("sl", 0.0)))
-            rsi_1h_value = float(cast(float, e.get("rsi_1h", 0.0)))
-            rsi_30m_value = float(cast(float, e.get("rsi_30m", 0.0)))
-            rsi_15m_value = float(cast(float, e.get("rsi_15m", 0.0)))
-            print(
-                f"{ts_display:<22} {pair_name:<10} {direction_name:<5} "
-                f"{entry_value:>10.5f} {tp_value:>10.5f} {sl_value:>10.5f} "
-                f"{rsi_1h_value:>7.1f} {rsi_30m_value:>8.1f} {rsi_15m_value:>8.1f}"
-            )
-
-        # Paper P&L estimation using current price
-        print("\n--- PAPER P&L (mark-to-market) ---")
-        fetcher = DataFetcher()
-        pairs_seen = {str(e.get("pair", "")) for e in entries}
-        current_prices: dict[str, float] = {}
-        for pair in pairs_seen:
-            if not pair:
-                continue
-            try:
-                symbol = pair.replace("/", "")
-                df = fetcher.fetch(symbol, period="1d", interval="15m")
-                if not df.empty:
-                    current_prices[pair] = float(df["close"].iloc[-1])
-            except Exception:
-                pass
-
-        total_paper_pnl = 0.0
-        print(
-            f"{'Timestamp':<22} {'Pair':<10} {'Dir':<5} {'Entry':>10} {'Current':>10} {'P&L pips':>10} {'Status':>10}"
-        )
-        print("-" * 82)
-        for e in entries:
-            pair = str(e.get("pair", ""))
-            direction = str(e.get("direction", ""))
-            entry_px = float(cast(float, e.get("entry", 0.0)))
-            tp_px = float(cast(float, e.get("tp", 0.0)))
-            sl_px = float(cast(float, e.get("sl", 0.0)))
-            pip_size = 0.01 if "JPY" in pair else 0.0001
-            current = current_prices.get(pair)
-            ts_display = str(e.get("ts", ""))[:19]
-
-            if current is None:
-                print(
-                    f"{ts_display:<22} {pair:<10} {direction:<5} {entry_px:>10.5f} {'N/A':>10} {'N/A':>10} {'no data':>10}"
-                )
-                continue
-
-            if direction == "BUY":
-                pnl_pips = (current - entry_px) / pip_size
-                hit_tp = current >= tp_px
-                hit_sl = current <= sl_px
-            else:
-                pnl_pips = (entry_px - current) / pip_size
-                hit_tp = current <= tp_px
-                hit_sl = current >= sl_px
-
-            status = "TP HIT" if hit_tp else ("SL HIT" if hit_sl else "OPEN")
-            total_paper_pnl += pnl_pips
-            print(
-                f"{ts_display:<22} {pair:<10} {direction:<5} "
-                f"{entry_px:>10.5f} {current:>10.5f} {pnl_pips:>+10.1f} {status:>10}"
-            )
-        print(f"\nTotal paper P&L: {total_paper_pnl:+.1f} pips")
-    else:
-        print("No entry signals in this period.")
-
-    # Block reason breakdown
-    if blocked:
-        print("\n--- BLOCK REASONS ---")
-        reason_counts: dict[str, int] = {}
-        for b in blocked:
-            reasons = cast(list[str], b.get("reasons", []))
-            for reason in reasons:
-                reason_counts[reason] = reason_counts.get(reason, 0) + 1
-        for reason, count in sorted(reason_counts.items(), key=lambda x: -x[1])[:15]:
-            print(f"  {count:>4}x  {reason}")
-
-    # Pairs with most aligned-pending (closest to triggering)
-    if aligned:
-        print("\n--- MOST ACTIVE PAIRS (aligned pending breakout) ---")
-        pair_counts: dict[str, int] = {}
-        for a in aligned:
-            p = str(a.get("pair", "unknown"))
-            pair_counts[p] = pair_counts.get(p, 0) + 1
-        for pair, count in sorted(pair_counts.items(), key=lambda x: -x[1])[:10]:
-            print(f"  {count:>4}x  {pair}")
-
-    if watched:
-        print("\n--- MOST WATCHED PAIRS ---")
-        watch_counts: dict[str, int] = {}
-        for w in watched:
-            p = str(w.get("pair", "unknown"))
-            watch_counts[p] = watch_counts.get(p, 0) + 1
-        for pair, count in sorted(watch_counts.items(), key=lambda x: -x[1])[:10]:
-            print(f"  {count:>4}x  {pair}")
-
-    print()
+    await _dashboard_run(days)
 
 
 def main() -> int:

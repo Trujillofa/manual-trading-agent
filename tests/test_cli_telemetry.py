@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.cli import _aggregate_scan_telemetry, _build_scan_telemetry_payload, _logs_dir
+from src.scanner.state import _logs_dir
+from src.scanner.telemetry import _aggregate_scan_telemetry, _build_scan_telemetry_payload
 
 
 def test_logs_dir_falls_back_to_local_logs(monkeypatch, tmp_path) -> None:

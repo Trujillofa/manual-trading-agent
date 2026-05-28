@@ -7,6 +7,10 @@ name = "manual-trading-agent"
 version = "0.1.0"
 description = "Manual forex trading assistant with RSI-based multi-timeframe strategy"
 requires-python = ">=3.11"
+
+[project.scripts]
+manual-trading-agent = "src.cli:main"
+
 dependencies = [
     "pydantic>=2.0",
     "PyYAML>=6.0",

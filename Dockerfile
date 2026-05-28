@@ -27,7 +27,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 EXPOSE 9090
 
 # Run the agent
-CMD ["python", "-m", "src.cli", "run"]
+CMD ["python", "-m", "src.cli", "scan"]
 
 # --- Test stage (not included in production image) ---
 FROM base AS test

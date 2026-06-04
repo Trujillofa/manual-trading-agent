@@ -74,20 +74,21 @@ writes Telegram/audit) is now first-class in the harness via `engine="live_mtf_r
 See research/evaluate.py (backtest_live_entry + evaluate_config dispatch) and
 src/scanner/evaluator.py (pure evaluate_entry + overrides= for param search).
 
-Recent sampled baseline (LIVE_BT_MAX_BARS=3000, current production settings.yaml,
-no overrides): IS 2 trades / OOS 0 trades across the 8 pairs → DISCARD on the strict
-MIN_TRADES=30 + OOS PF>=1.20 + positive PnL gates. (Archived to
-results/live_sampled_baseline_strict_20260604.log .) Per-split top rejections and
-progress are now emitted by the driver.
+Corrected sampled baseline (rerun after restoring the configured 3-TF SMA alignment
+gate, same-direction-only Rule C suppression, and costed driver P&L):
+LIVE_BT_MAX_BARS=3000, current production settings.yaml, no overrides, 8 cached pairs
+→ IS 0 trades / OOS 0 trades → DISCARD on the strict MIN_TRADES=30 + OOS PF>=1.20
+and positive PnL gates.
 
-A relaxed variant (adx=40, no session, confirm_bars=12, buffer=1.0 on same windows)
-was launched for volume delta comparison (still full Rule C + TP/SL + pure evaluator).
-Results in /tmp/live_sampled_relaxed_8pair.log when complete.
+Pre-fix sampled numbers are retired for quantitative claims. The archived strict
+2 IS / 0 OOS and relaxed 14 IS / 10 OOS runs were generated before those parity fixes
+and should be treated only as historical debugging context.
 
-This (plus the volume diags + prior harness runs on the live driver) is the honest
-R1 evidence on the actual live entry family. Low frequency is structural; the
-centralized evaluator + ATR fix + Rule C + searchable harness are the concrete
-deliverables. Branch B (selective manual alert tool) is the supported posture.
+This corrected sample, plus historical volume diagnostics and prior harness runs on
+the live driver, is the honest R1 evidence on the actual live entry family. Low
+frequency is structural; the centralized evaluator + ATR fix + Rule C + searchable
+harness are the concrete deliverables. Branch B (selective manual alert tool) is the
+supported posture.
 
 ## Honesty rules
 

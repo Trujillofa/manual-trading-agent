@@ -51,7 +51,7 @@ A setup can still be blocked by:
 
 ## Current watchlist profiles (Branch B posture, 2026-06)
 
-**This is a low-frequency, high-selectivity manual alert tool.** Expect few signals (often 0-2 per pair per month under current gates + Rule C). Per-pair "promoted" overrides and old P&L claims in prior tables/reports came from divergent engines (Donchian/yfinance backtests) and have been retired. See CLAUDE.md "2026-06 research note" and the sampled R1 evidence (strict 2 IS/0 OOS, relaxed 14 IS/10 OOS on live entry family — both DISCARD under honest gates).
+**This is a low-frequency, high-selectivity manual alert tool.** Expect few signals under current gates + Rule C. Per-pair "promoted" overrides and old P&L claims in prior tables/reports came from divergent engines (Donchian/yfinance backtests) and have been retired. See CLAUDE.md "2026-06 research note" for the corrected sampled R1 evidence; the current strict live-family sample produced 0 IS / 0 OOS trades and remains DISCARD under honest gates.
 
 All pairs now run on global defaults (V2 reversal, b0.5/c2, sma=50, tp=1.0×ATR, sl=3.0×ATR). The 5 historical per-pair overrides (sma/tp/sl + custom profiles) were reverted to defaults in the same change as the unified evaluator deploy for consistency.
 

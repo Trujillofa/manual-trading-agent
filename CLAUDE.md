@@ -185,6 +185,8 @@ Even substantial loosening of the dominant observed rejection reasons (session +
 
 With the 2026-06 Rule C multi-active + re-arm fix in the driver, future runs will count additional re-entries after midline/SMA invalidations (live behavior), so the "live frequency" match is now exact and N will be >= the above (still expected to be low given structural sparsity).
 
+Note on fidelity: driver multi-active list permits overlapping virtual positions (each alert resolved independently at its TP/SL) while live pops the active record on re-arm (latest wins for suppression). This can make harness trade count N slightly higher than live bookkeeping in re-arm scenarios; it is a deliberate P&L modeling choice for per-signal outcomes and does not alter the sparse/no-edge conclusion.
+
 A rejection diagnostic using the live evaluator (research/diagnose_live_entry_volume.py --bars 1000 on the 8 PAIRS from research.evaluate, 800 post-warmup bars with empty active/alignment states for speed + historical mocks injected to the pure evaluate_entry) completed successfully (exit 0, full output captured in /tmp/full_8pair_live_diag.log and task logs). This broadens the R1 "why" analysis to the full current watchlist (not just the 3 tuned).
 
 Validated 3-tuned baseline numbers exactly:

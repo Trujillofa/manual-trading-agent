@@ -79,6 +79,8 @@ Signal output → signal_audit.jsonl + Telegram notification
 
 **27 pairs enabled** (all majors and minors except EUR/GBP). The promotion gate is intentionally relaxed in favour of broad coverage with the Rule C invalidation rule (see below). Five pairs retain backtest-validated per-pair overrides via `strategy.pair_overrides`; the other 22 use defaults (SMA 50, TP 1.0×ATR, SL 3.0×ATR).
 
+**Note on historical promotion numbers (2026-06):** The per-pair PnL/PF/WR figures in the table below (and earlier reports) were derived from divergent engines (Donchian reclaim variants or yfinance backtests) that did not match the live scanner's V* + full gates + ATR + Rule C implementation. Live/Hetzner audit and honest R1 harness on the unified live entry show far lower frequency (single-digit or zero trades in multi-month windows). Treat the table as historical/scout context only; current production posture is Branch B (selective manual alert tool). See research note and sampled baselines for evidence.
+
 Tuned (per-pair overrides):
 
 | Pair | Config | SMA | TP/SL (ATR) | Trades (2y) | PnL % | PF | WR | Promotion date |
@@ -115,6 +117,10 @@ Opposite-direction signals are always allowed and re-arm both sides. State persi
 Shared parameters:
 - **RSI thresholds**: 30/70 on 1h, 30m, 15m (per `config/settings.yaml`)
 - **TP/SL**: ATR-based — TP = 1.0 × ATR(14), SL = 3.0 × ATR(14)
+  (Fixed 2026-06: previous live scans always fell back to fixed 30/90 pips due to
+  off-by-one in calculate_atr on 14-bar slices. Live now uses the configured
+  multipliers. This changes TP/SL levels for new signals; Rule C outcomes for
+  historical signals are unaffected.)
 - **ADX filter**: ADX(14) < 25 on 1h (mean-reversion only in ranging regime)
 - **Session filter**: 06–17 UTC, 12–21 UTC
 - **News lockout**: 3-star Forex Factory events; 60 min before / 30 min after
@@ -144,6 +150,76 @@ Failing any gate → keep on default params. Low trade count is the dominant fai
 - **Bake-off script** (`scripts/run_confirmation_bakeoff.py`): Sweeps variants × buffers × confirm-bars per pair; artifacts under `results/`
 - **Optimization script** (`scripts/run_entry_optimization.py`): Broader grid including RSI, TP/SL, ADX
 - Latest validation: see `docs/reports/WATCHLIST_EXPANSION_2026-04-14.md`
+
+**2026-06 research note (honest search on realistic engine)**: A short autoresearch run (research/autosearch.py + evaluate with strict IS/OOS gates: OOS trades >=30 + OOS PF >=1.20 + positive PnL on OOS) on 8 pairs did not surface any config that achieved a strict "KEEP" verdict (no best_config.json written; "keeps" for search score still failed the gates with low trades or negative pnl). This is consistent with the structural low frequency (~6-12 OOS trades even when relaxing some filters). 
+
+The live entry logic has been centralized in `src/scanner/evaluator.py` (full MTF RSI alignment + V0/V1/V2 profiles + confirm window + RSI-MA curl/hard gate + session/news/spread/ADX/Rule C + ATR(14) TP/SL with per-pair mults) and is now the single source of truth. The research harness (research/evaluate.py) now supports engine="live_mtf_rsi" (thin bar-walker driver that maintains active/alignment_state, injects mocks, calls the pure evaluate_entry, simulates TP/SL hits for P&L, returns compatible stats). 
+
+R1 executed on the *live* family (not Donchian): 
+- Full 365d split for EUR/USD via the honest harness + live driver: 0 trades (IS and OOS), verdict DISCARD (0 < 30 trades, PF 0, PnL 0).
+- 2-pair pooled (EUR/USD + GBP/USD) on full splits: IS 0 trades, OOS 1 trade total → still DISCARD (OOS trades 1 < 30, IS PnL 0).
+- 3-pair pooled on the previously "tuned" pairs (GBP/CHF + GBP/JPY + USD/JPY) full splits: IS 9 trades (pf 2.06 but mean_pnl% 0.0), OOS 1 trade → DISCARD (IS trades 9 < 30, OOS trades 1 < 30).
+- 8-pair recent-sample (LIVE_BT_MAX_BARS=2200 ~3 weeks recent frames, pooled across entire watchlist): IS 1 trade, OOS 0 trades → DISCARD (IS trades 1 < 30, OOS trades 0 < 30, OOS PnL 0%, etc.).
+- Recent-slice sampling + direct driver runs on GBP/CHF (and spot checks on others): 0 fires in the windows.
+The decisive experiment confirms the live entry family does not clear volume + strict OOS profitability gates on this data (low N is structural; even the best historical pairs produce single-digit trades across hundreds of days under the full current logic + Rule C; across all 8 pairs in recent data only a single "IS" trade total). 
+
+Practical recent-window IS/OOS baseline on the *live* entry family (LIVE_BT_MAX_BARS=3000 truncate + full driver walk on the 8 cached pairs, engine="live_mtf_rsi", overrides=None = current settings.yaml + profiles + overrides + Rule C + ATR TP/SL simulation) completed in 8 min with per-split (IS + OOS for every pair) top rejection prints + final aggregate:
+
+verdict: **DISCARD**
+score: -7.5
+reasons: ['IS trades 2 < 30', 'OOS trades 0 < 30', 'OOS PF 0.00 < 1.2', 'OOS PnL 0.00% <= 0', 'IS PnL -0.00% <= 0']
+
+IS stats: trades=2 (tiny negative pooled PnL), win_rate=0, pf=0, max_consec=1
+OOS stats: trades=0 (everything 0)
+
+(Artifact /tmp/live_sampled_baseline_8pair.log ; driver now emits progress every 500 bars + "top rejection reasons" at end of *every* IS/OOS split walk. All 16 splits' tops captured; session, V* "breakout ... not confirmed", ADX ?/high, RSI-MA, and occasional "confirmation window expired (N bars > C)" are the themes. V2 pairs show more breakout/confirm rejections; JPY crosses more RSI-MA + session.)
+
+This sampled run (recent ~30d-ish windows post-truncate, full Rule C state carry + TP/SL on subsequent bar H/L exactly as live) confirms the low-volume reality from the 800-bar strict 8-pair diag (516 aligned/0 fires), the 400-bar relaxed diag (223 aligned/0 fires even with session+ADX loosened), earlier harness R1 (single-digit or 0 trades on live driver), and Hetzner/live audit (rare entries). 2 IS trades total across 8 pairs in the sampled window is the highest "volume" seen for the current production live family under honest conditions. All configs DISCARD on the strict gates (MIN_TRADES=30 on both windows + OOS PF>=1.20 + positive PnL). Low N is structural given the full gate stack + V*/confirm + Rule C.
+
+(The full non-truncated 365d version would be the gold-standard for any promotion-gate decision but follows the same regime; the mechanism + per-split diagnostics + sampled numbers + relaxed what-ifs now give a complete, reproducible picture without multi-hour waits in dev.)
+
+Direct apples-to-apples comparison on the *exact same recent sampled windows* (strict current production vs relaxed main blockers; note: runs used pre-fidelity-fix driver so real N slightly higher):
+- Strict (current settings): IS 2 trades, OOS 0 trades → DISCARD
+- Relaxed (adx=40, session off, confirm_bars=12, buffer_pips=1.0, otherwise identical full driver/Rule C/TP-SL/pure evaluator): IS 14 trades, OOS 10 trades → still DISCARD (OOS PF 0.53, negative PnL, trades <<30 on both)
+Even substantial loosening of the dominant observed rejection reasons (session + ADX + V2 confirmation) only lifts volume from 2/0 to 14/10 — nowhere near the honest 30-trade gate on both windows, and the OOS edge is poor. Archived logs: results/live_sampled_baseline_strict_20260604.log and results/live_sampled_baseline_relaxed_adx40_nosession_c12_b1_20260604.log . Per-split tops for the relaxed run show the expected shift (far fewer session rejections, ADX now at 40, breakout/confirm and residual ADX/RSI-MA still prominent; Rule C "active signal not yet invalidated" appears in some splits).
+
+With the 2026-06 Rule C multi-active + re-arm fix in the driver, future runs will count additional re-entries after midline/SMA invalidations (live behavior), so the "live frequency" match is now exact and N will be >= the above (still expected to be low given structural sparsity).
+
+A rejection diagnostic using the live evaluator (research/diagnose_live_entry_volume.py --bars 1000 on the 8 PAIRS from research.evaluate, 800 post-warmup bars with empty active/alignment states for speed + historical mocks injected to the pure evaluate_entry) completed successfully (exit 0, full output captured in /tmp/full_8pair_live_diag.log and task logs). This broadens the R1 "why" analysis to the full current watchlist (not just the 3 tuned).
+
+Validated 3-tuned baseline numbers exactly:
+- GBP/CHF: aligned=97, fires=0. Top: 61 "15m breakout high not confirmed", 33 "trending market (ADX ? >= 25.0)", 24 "outside allowed session", 17 "15m breakout low not confirmed", 10 "trending (ADX 51)".
+- GBP/JPY: aligned=45, fires=0. Top: 34 "outside allowed session", 31 "trending (ADX ?)", 4+ "RSI-MA(5) gate", 4 "trending (ADX 25)".
+- USD/JPY: aligned=72, fires=0. Top: 33 "outside allowed session", 33 "trending (ADX ?)", 8 "trending (ADX 100)", 4+ "RSI-MA(5) gate".
+
+Full 8-pair results (800 bars each post-warmup, fires=0 for all):
+- EUR/USD: aligned=38. Top: 26 "15m breakout low not confirmed", 20 "outside allowed session", 10 "15m breakout high not confirmed", 8 "trending (ADX 100)", 8 "trending (ADX ?)".
+- GBP/USD: aligned=38. Top: 30 "outside allowed session", 21 "trending (ADX ?)", 20 "15m breakout high not confirmed", 15 "15m breakout low not confirmed".
+- GBP/CHF: aligned=97 (as above).
+- GBP/JPY: aligned=45 (as above).
+- USD/JPY: aligned=72 (as above).
+- NZD/JPY: aligned=145 (highest). Top: 78 "outside allowed session", 17 "trending (ADX ?)", 12 each for several high ADX values.
+- AUD/CAD: aligned=29. Top: 18 "outside allowed session", 18 "trending (ADX ?)", 4 "RSI-MA(5) gate".
+- USD/CHF: aligned=52. Top: 41 "15m breakout high not confirmed", 35 "outside allowed session", 29 "trending (ADX ?)".
+
+Pooled (6400 bars): 516 MTF aligned events, 0 fires (fire rate 0.0000 per bar). Top pooled rejections: 272 "outside allowed session", 190 "trending market (ADX ? >= 25.0)", 132 "15m breakout high not confirmed", 61 "15m breakout low not confirmed", then ADX 100/ high values + some RSI-MA gates.
+
+Dominant gates across the watchlist: session filter, ADX ranging filter (incl. the ADX ? None-safe case), and for V2-profile pairs the 15m breakout confirmation window ("not confirmed" after wick-through + reclaim within confirm_bars). RSI-MA gate contributes on JPY crosses. This profile directly explains the harness R1 low-volume results (single-digit or zero trades even on best pairs across full IS/OOS windows → all DISCARD on MIN_TRADES=30 + PnL/PF gates).
+
+The reusable script (research/diagnose_live_entry_volume.py) is validated (reproduces prior 3-tuned exactly) and reusable for any window/pairs. The broadened diagnostic completes the R1 rejection characterization on the live entry family using the now-unified pure evaluator + driver-equivalent walk.
+
+The reusable diagnostic tool makes it easy to re-run on any window/pairs for gate tuning insight. Unification complete (live == harness by construction for the entry decision + TP/SL + Rule C/alignment state, including re-arms after midline cross or SMA flip). The driver now tracks actives as list per pair (to support concurrent after re-arm) and passes latest for evaluator suppression check; previous sampled runs used single-active which under-counted. ATR fix + evaluator purity (5 injected params, no I/O) + CLI cleanup (single authoritative evaluate_entry call, dead parallel logic deleted, bars_aligned ownership, unit test coverage in tests/test_evaluator.py) also landed. Rule C re-arm fidelity gap fixed 2026-06.
+
+Live family is now parameterizable for search: evaluate_entry accepts `overrides: dict` (rsi_oversold/overbought or lower/upper_bound aliases, adx_threshold, buffer_pips, confirm_bars, tp_atr_mult, session_filter_enabled, pair_overrides etc). Harness (evaluate_config + backtest_live_entry) forwards from research CONFIG when engine="live_mtf_rsi". diagnose_live_entry_volume.py supports --adx-threshold / --no-session etc for quick what-if volume. This enables true R1 autosearch over the actual live entry (not just Donchian) + "relax gate X" diagnostics. See research/strategy_config.py notes + evaluator.py.
+
+The system is best viewed as a high-quality, selective manual alert tool rather than a high-volume profitable strategy under current gates and the honest validation bar (sampled recent windows on the actual live entry: strict 2 IS / 0 OOS trades; even relaxed main gates 14 IS / 10 OOS — both DISCARD on MIN_TRADES=30 + OOS PF/PnL; 0 fires in 6400-bar volume diag despite 516 alignments). See research/ for the live driver (backtest_live_entry), evaluate_config dispatch on engine="live_mtf_rsi", and diagnose_live_entry_volume.py. Unification complete (live == harness by construction for the entry). ATR fix + evaluator purity + CLI cleanup (single call, dead logic removed, bars_aligned ownership, test_evaluator.py) also landed. No config cleared the strict OOS gates (MIN_TRADES=30 on both IS/OOS + OOS PF>=1.20 + positive PnL) on realistic engine; low-frequency is structural given the full gate stack + V* confirmation + Rule C. Branch B path (document reality; position as selective filter/alert aid) is the evidence-based posture.
+
+**Correctness changes ready for deploy (paper-shadow recommended):**
+- ATR(14) fix (src/indicators/atr.py: needs period+1 bars; updated all call sites + doc).
+- Unified pure evaluate_entry (src/scanner/evaluator.py: removed all I/O, 5 injected params for purity/backtestability, overrides= for search; Rule C re-arm fidelity 2026-06).
+- CLI single source (src/cli.py: one evaluate_entry call, dead parallel MTF/RSI-MA block deleted, explicit bars_aligned + injected spread/news/now).
+- Driver fidelity (research/evaluate.py: multi-active list + re-arm on midline/SMA to match live Rule C; progress + per-split rejection prints).
+These are safe correctness improvements for the existing selective alert use-case. Old per-pair "promotion table" PnL claims (e.g. +88% GBP/CHF) came from divergent Donchian/yfinance engines and should be retired from production notes. Deploy via normal Docker/main promotion with extra monitoring of ATR TP/SL vs Rule C states and audit entries.
 
 ## Code Conventions
 

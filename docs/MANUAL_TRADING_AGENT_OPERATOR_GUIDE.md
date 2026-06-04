@@ -49,33 +49,19 @@ A setup can still be blocked by:
 
 ---
 
-## Current promoted pair profiles
+## Current watchlist profiles (Branch B posture, 2026-06)
 
-CLAUDE.md is the authoritative source. See `config/settings.yaml` for
-per-pair confirmation profiles under `strategy.confirmation_profiles`.
+**This is a low-frequency, high-selectivity manual alert tool.** Expect few signals (often 0-2 per pair per month under current gates + Rule C). Per-pair "promoted" overrides and old P&L claims in prior tables/reports came from divergent engines (Donchian/yfinance backtests) and have been retired. See CLAUDE.md "2026-06 research note" and the sampled R1 evidence (strict 2 IS/0 OOS, relaxed 14 IS/10 OOS on live entry family — both DISCARD under honest gates).
 
-### Promoted (tuned with per-pair overrides)
+All pairs now run on global defaults (V2 reversal, b0.5/c2, sma=50, tp=1.0×ATR, sl=3.0×ATR). The 5 historical per-pair overrides (sma/tp/sl + custom profiles) were reverted to defaults in the same change as the unified evaluator deploy for consistency.
 
-| Pair | Profile | SMA | TP/SL (ATR) | Status |
-|------|---------|-----|-------------|--------|
-| GBP/CHF | V2_b0_c0 | 50 | 1.0/3.0 | Shadow-only (audit records, no Telegram alerts) |
-| NZD/JPY | V0_b0_c0 | 20 | 2.5/2.5 | Live Telegram alerts |
-| GBP/JPY | V0_b0_c0 | 20 | 1.5/2.5 | Live Telegram alerts |
-| USD/JPY | V0_b0_c0 | 40 | 2.0/2.5 | Live Telegram alerts |
-| AUD/CAD | V0_b0_c0 | 50 | 1.0/3.0 | Live Telegram alerts |
+### Watchlist (all on default config)
 
-### Scout (default config, no per-pair overrides)
+majors + minors listed in config/settings.yaml (27 pairs total; EUR/GBP remains excluded).
 
-EUR/USD, GBP/USD, USD/CHF, AUD/USD, USD/CAD, NZD/USD, EUR/JPY, EUR/CHF,
-EUR/AUD, EUR/CAD, EUR/NZD, GBP/AUD, GBP/CAD, GBP/NZD, AUD/JPY, AUD/CHF,
-AUD/NZD, NZD/CAD, NZD/CHF, CAD/JPY, CAD/CHF, CHF/JPY.
+**EUR/GBP** remains excluded (historical negative results across multiple backtests; no reinstatement without full 180d+ Dukascopy validation on the unified live entry).
 
-### Rejected (excluded from config)
-
-**EUR/GBP** — negative PnL in all 48 configs tested (best: -0.30%, PF 0.66).
-2026-04-20 sweep. Despite two contradictory backtest results (Dukascopy PF 3.53
-and enhanced backtest PF 1.23), the pair remains rejected pending proper 180d+
-Dukascopy validation.
+Refer to `config/settings.yaml` for exact current profiles (now minimal) and CLAUDE.md for the full R1 evidence, driver details, and Branch B rationale. The operator should treat alerts as rare, high-quality decision support — not high-volume autonomous trades. TP/SL levels are advisory.
 
 ---
 
@@ -161,25 +147,28 @@ Currently **not active in a real sense** because:
 
 ---
 
-## Recommended operating policy
-### Active focus
-Focus live attention on:
-- AUD/CAD (promoted, V0_b0_c0, live Telegram alerts)
-- NZD/JPY, GBP/JPY, USD/JPY (promoted with per-pair overrides)
+## Recommended operating policy (Branch B, low-frequency selective alerts)
+All pairs now on global defaults (no "promoted" custom overrides; those were retired 2026-06 along with the divergent-engine promotion numbers).
 
-### Shadow-only (audit records, no alerts)
-- GBP/CHF
+### Active focus (rare signals expected)
+- The full watchlist (majors + minors). Treat every alert as high-quality, low-frequency decision support.
+- Use `/pair <symbol>` for deep dives on any near/aligned candidate.
+
+### Shadow / audit focus
+- GBP/CHF and any others you choose for extra logging (no Telegram if desired).
 
 ### Ignore for now
-- EUR/GBP (rejected, negative PnL)
-- Everything else until more research is done
+- EUR/GBP (historical exclusion).
+- Do not expect high volume or the old per-pair P&L figures.
+
+See CLAUDE.md research note for the full evidence (sampled R1 on unified live entry, driver details, etc.). The operator's job is to use the rare, well-explained alerts as input to manual decisions.
 
 ---
 
 ## Recommended operator workflow
 1. Check `/status`
 2. Check `/watchlist`
-3. If a promoted pair is near or aligned-pending, use `/pair <symbol>`
+3. For any near or aligned-pending (rare), use `/pair <symbol>` for details
 4. If aligned-pending, wait for confirmation rather than forcing entry
 5. If confirmed entry appears, review micro context and blockers
 6. Log important observations / outcomes for future bake-offs

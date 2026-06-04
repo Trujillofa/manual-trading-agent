@@ -653,12 +653,13 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             signal_reasons = decision.get("reasons", [])
             no_trade_reasons = decision.get("no_trade_reasons", [])
 
-            # Minimal re-arm side-effect for Rule C state: if we are firing a new signal in a direction that had a previous active,
-            # the evaluator decided it was allowed (previous must have been invalidated), so pop the old one.
-            # (The full reason is internal to the evaluator; we just maintain the state machine.)
+            # Re-arm side-effect for Rule C state: only when the evaluator ACTUALLY fires a new
+            # same-direction signal (fired == not blocked) does it mean the prior active was
+            # invalidated. Gating on `fired` (not just `direction`) avoids erasing the active record
+            # for a same-direction candidate that the evaluator is itself suppressing via Rule C.
             prev_active = active_signal_state.get(pair)
             if (
-                signal_direction
+                decision.get("fired")
                 and prev_active
                 and prev_active.get("direction") == signal_direction
             ):

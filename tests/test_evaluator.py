@@ -196,6 +196,34 @@ class TestEvaluateEntryRuleC:
             )
             assert res["fired"] is False
 
+    def test_opposite_direction_active_not_suppressed(self) -> None:
+        # Regression: an active SELL must NOT suppress a BUY candidate (opposite always allowed).
+        d15 = _make_ohlc_df(_down_plunge(60))
+        d30 = _make_ohlc_df(_down_plunge(60))
+        d1h = _make_ohlc_df(_down_plunge(60))
+        fired_dt = datetime(2023, 12, 1, 12, 0, tzinfo=UTC)
+        active_sell = {
+            "direction": "SELL",
+            "fired_at": int(fired_dt.timestamp()),
+            "entry": 1.1000,
+            "tp": 1.0990,
+            "sl": 1.2000,
+        }
+        res = evaluate_entry(
+            "EUR/USD",
+            d1h,
+            d30,
+            d15,
+            active_signal_state={"EUR/USD": active_sell},
+            news_blocked=False,
+            spread_quote={"spread": 0.00005},
+            spread_filter_enabled=True,
+        )
+        # Rule C must not fire for an opposite-direction active record, whatever else gates it.
+        assert not any(
+            "active signal not yet invalidated" in r for r in res.get("no_trade_reasons", [])
+        )
+
 
 class TestEvaluateEntryPurityNoSideEffects:
     """Calling evaluate_entry must not perform network or mutate caller state."""

@@ -147,7 +147,9 @@ def evaluate_entry(
     from src.indicators.sma import calculate_sma
 
     sma_15m = calculate_sma(close_15m, sma_period)
-    # (sma_1h/30m computed in full version if needed for other gates; only sma_15m used for Rule C here)
+    # sma_1h/30m needed for the 3-TF SMA alignment entry gate (parity with live cli)
+    sma_1h = calculate_sma(close_1h_list, sma_period)
+    sma_30m = calculate_sma(close_30m_list, sma_period)
 
     # HH/LL prior
     hh = previous_rolling_highest_high(high_15m, lookback, len(high_15m) - 1)
@@ -399,7 +401,8 @@ def evaluate_entry(
         spread_ok_final = False
 
     active_record = active_state.get(pair)
-    if signal_direction and active_record:
+    # Rule C suppresses only SAME-direction repeats; opposite-direction signals are always allowed.
+    if signal_direction and active_record and active_record.get("direction") == signal_direction:
         # simplified invalidation check (full uses 15m data)
         try:
             invalidated, _ = _is_signal_invalidated(
@@ -424,6 +427,21 @@ def evaluate_entry(
         if not is_ranging:
             adx_str = f"{adx_1h:.0f}" if adx_1h is not None else "?"
             no_trade_reasons.append(f"trending market (ADX {adx_str} >= {adx_threshold})")
+        # SMA alignment gate: price must be on the signal's side of SMA on all 3 TFs (parity with live cli)
+        if _eff("sma_alignment_enabled", settings.strategy.sma_alignment_enabled) and (
+            sma_1h is not None and sma_30m is not None and sma_15m is not None
+        ):
+            c1h = close_1h_list[-1]
+            c30 = close_30m_list[-1]
+            if signal_direction == "BUY":
+                sma_aligned = c1h < sma_1h and c30 < sma_30m and close_price < sma_15m
+            else:
+                sma_aligned = c1h > sma_1h and c30 > sma_30m and close_price > sma_15m
+            if not sma_aligned:
+                side_label = "below" if signal_direction == "BUY" else "above"
+                no_trade_reasons.append(
+                    f"SMA({sma_period}) misaligned (price not {side_label} on all TFs)"
+                )
 
     # TP/SL (ATR path, now reliable)
     tp = sl = entry = None

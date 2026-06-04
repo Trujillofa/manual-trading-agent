@@ -244,10 +244,13 @@ def _to_utc_dt(ts: object) -> datetime:
 def backtest_live_entry(
     pair: str,
     frames: dict[str, pd.DataFrame],
-    spread_pips: float = 0.0,
+    spread_pips: float = 1.5,
     warmup: int = 60,
     overrides: dict[str, Any]
     | None = None,  # live family param overrides (see evaluate_entry); enables search over current entry logic
+    commission_per_order: float = 3.0,
+    slippage_pips: float = 2.0,
+    risk_pct: float = 0.01,
 ) -> "ConfigResult":  # noqa: UP037,F821  (name imported inside fn; postponed eval + ruff local scope)
     """Run the live MTF RSI + V* + all-gates entry logic over the provided frames.
 
@@ -344,7 +347,16 @@ def backtest_live_entry(
                         exit_price = sl
                         ex_reason = "sl"
                 if hit and exit_price is not None:
-                    pnl = (exit_price - ent) if direc == "BUY" else (ent - exit_price)
+                    # Realistic P&L: risk-based sizing + spread/slippage/commission (parity with
+                    # the Donchian engine run_config so harness PF/PnL are financially meaningful).
+                    pip = 0.01 if "JPY" in pair else 0.0001
+                    adverse = (spread_pips + slippage_pips) * pip
+                    raw_price = (exit_price - ent) if direc == "BUY" else (ent - exit_price)
+                    raw_price -= adverse  # costs work against the trade
+                    sl_dist = abs(ent - sl)
+                    position_size = (balance * risk_pct / sl_dist) if sl_dist > 0 else 1.0
+                    commission_cash = 2 * commission_per_order  # round-trip
+                    pnl = position_size * raw_price - commission_cash
                     pnl_pct = (pnl / balance * 100.0) if balance > 0 else 0.0
                     balance += pnl
                     peak = max(peak, balance)

@@ -36,6 +36,10 @@ def _build_scan_telemetry_payload(
     rsi_15m: float | None,
     no_trade_reasons: list[str],
     is_shadow: bool = False,
+    atr: float | None = None,
+    tp: float | None = None,
+    sl: float | None = None,
+    computed_entry: float | None = None,
 ) -> dict[str, object]:
     reason_text = " | ".join(no_trade_reasons).lower()
     blockers = {
@@ -77,6 +81,10 @@ def _build_scan_telemetry_payload(
             "rsi_1h": rsi_1h,
             "rsi_30m": rsi_30m,
             "rsi_15m": rsi_15m,
+            "atr": atr,
+            "tp": tp,
+            "sl": sl,
+            "computed_entry": computed_entry,
         },
         "reasons": no_trade_reasons,
     }

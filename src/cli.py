@@ -218,6 +218,11 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
         telemetry_entry_triggered = False
         bars_aligned: int | None = None
         confirm_bars: int | None = None
+        # ATR/TP/SL from evaluator (for durable verification in blocked/pending audit rows)
+        atr_val: float | None = None
+        tp_val: float | None = None
+        sl_val: float | None = None
+        entry_val: float | None = None
         within_confirm_window: bool | None = None
         spread_pips: float | None = None
         max_spread_for_pair: float | None = None
@@ -248,6 +253,10 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                         entry_triggered=telemetry_entry_triggered,
                         bars_aligned=bars_aligned,
                         confirm_bars=confirm_bars,
+                        atr=atr_val,
+                        tp=tp_val,
+                        sl=sl_val,
+                        computed_entry=entry_val,
                         within_confirm_window=within_confirm_window,
                         spread_pips=spread_pips,
                         max_spread_pips=max_spread_for_pair,
@@ -508,6 +517,10 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                         entry_triggered=telemetry_entry_triggered,
                         bars_aligned=bars_aligned,
                         confirm_bars=confirm_bars,
+                        atr=atr_val,
+                        tp=tp_val,
+                        sl=sl_val,
+                        computed_entry=entry_val,
                         within_confirm_window=within_confirm_window,
                         spread_pips=spread_pips,
                         max_spread_pips=max_spread_for_pair,
@@ -652,6 +665,13 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             signal_confidence = decision.get("confidence", 0.0)
             signal_reasons = decision.get("reasons", [])
             no_trade_reasons = decision.get("no_trade_reasons", [])
+
+            # For durable paper-shadow / ATR verification in audit (even for blocked/aligned_pending)
+            # These are computed by the evaluator for any candidate (using ATR path post-fix).
+            atr_val = decision.get("atr")
+            tp_val = decision.get("tp")
+            sl_val = decision.get("sl")
+            entry_val = decision.get("entry")
 
             # Re-arm side-effect for Rule C state: only when the evaluator ACTUALLY fires a new
             # same-direction signal (fired == not blocked) does it mean the prior active was

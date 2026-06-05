@@ -32,6 +32,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, cast
 
+import pandas as pd
+
 from src.config import get_settings
 from src.indicators.atr import calculate_atr
 from src.indicators.high_low import (
@@ -119,6 +121,29 @@ def evaluate_entry(
     close_1h_list = data_1h["close"].values.tolist()
     close_30m_list = data_30m["close"].values.tolist()
 
+    # Fast path for research driver: if the (time-respecting) df slices carry precomputed columns
+    # (attached by backtest_live_entry precomp on full frames), use the last value instead of
+    # recomputing indicators on every bar. Live calls pass plain price dfs and fall back here.
+    # This makes full-history research iterations (365d) fast while preserving exact live behavior.
+    pre_rsi_15m = pre_rsi_ma_15m = pre_sma_15m = pre_atr = pre_adx_1h = None
+    if len(data_15m) > 0 and hasattr(data_15m, "columns"):
+        cols = data_15m.columns
+        if "rsi" in cols:
+            v = data_15m["rsi"].iloc[-1]
+            pre_rsi_15m = float(v) if not pd.isna(v) else None
+        if "rsi_ma" in cols:
+            v = data_15m["rsi_ma"].iloc[-1]
+            pre_rsi_ma_15m = float(v) if not pd.isna(v) else None
+        if "sma" in cols:
+            v = data_15m["sma"].iloc[-1]
+            pre_sma_15m = float(v) if not pd.isna(v) else None
+        if "atr" in cols:
+            v = data_15m["atr"].iloc[-1]
+            pre_atr = float(v) if not pd.isna(v) else None
+    if len(data_1h) > 0 and hasattr(data_1h, "columns") and "adx" in data_1h.columns:
+        v = data_1h["adx"].iloc[-1]
+        pre_adx_1h = float(v) if not pd.isna(v) else None
+
     rsi_period = _eff("rsi_period", settings.strategy.rsi_period)
     rsi_oversold = _eff("rsi_oversold", _eff("lower_bound", settings.strategy.rsi_oversold))
     rsi_overbought = _eff("rsi_overbought", _eff("upper_bound", settings.strategy.rsi_overbought))
@@ -129,7 +154,9 @@ def evaluate_entry(
     # Indicators
     rsi_1h = calculate_rsi(close_1h_list[-50:], rsi_period)
     rsi_30m = calculate_rsi(close_30m_list[-50:], rsi_period)
-    rsi_15m_val = calculate_rsi(close_15m[-50:], rsi_period)
+    rsi_15m_val = (
+        pre_rsi_15m if pre_rsi_15m is not None else calculate_rsi(close_15m[-50:], rsi_period)
+    )
 
     rsi_series_1h = calculate_rsi_series(close_1h_list, rsi_period)
     rsi_ma_1h = calculate_rsi_ma_series(
@@ -139,14 +166,22 @@ def evaluate_entry(
     rsi_ma_30m = calculate_rsi_ma_series(
         [float(v) if v is not None else None for v in rsi_series_30m], ma_period=rsi_ma_period
     )
-    rsi_series_15m = calculate_rsi_series(close_15m, rsi_period)
-    rsi_ma_15m = calculate_rsi_ma_series(
-        [float(v) if v is not None else None for v in rsi_series_15m], ma_period=rsi_ma_period
+    rsi_series_15m = (
+        data_15m["rsi"].tolist()
+        if "rsi" in data_15m.columns
+        else calculate_rsi_series(close_15m, rsi_period)
+    )
+    rsi_ma_15m = (
+        pre_rsi_ma_15m
+        if pre_rsi_ma_15m is not None
+        else calculate_rsi_ma_series(
+            [float(v) if v is not None else None for v in rsi_series_15m], ma_period=rsi_ma_period
+        )
     )
 
     from src.indicators.sma import calculate_sma
 
-    sma_15m = calculate_sma(close_15m, sma_period)
+    sma_15m = pre_sma_15m if pre_sma_15m is not None else calculate_sma(close_15m, sma_period)
     # sma_1h/30m needed for the 3-TF SMA alignment entry gate (parity with live cli)
     sma_1h = calculate_sma(close_1h_list, sma_period)
     sma_30m = calculate_sma(close_30m_list, sma_period)
@@ -155,8 +190,11 @@ def evaluate_entry(
     hh = previous_rolling_highest_high(high_15m, lookback, len(high_15m) - 1)
     ll = previous_rolling_lowest_low(low_15m, lookback, len(low_15m) - 1)
 
-    # ATR (fixed)
-    atr = calculate_atr(high_15m[-(14 + 1) :], low_15m[-(14 + 1) :], close_15m[-(14 + 1) :])
+    # ATR (fixed) - prefer precomputed column from driver (research fast path)
+    if pre_atr is not None:
+        atr = pre_atr
+    else:
+        atr = calculate_atr(high_15m[-(14 + 1) :], low_15m[-(14 + 1) :], close_15m[-(14 + 1) :])
 
     # Profile + breakout (support overrides for research param search on live family)
     profile = _get_confirmation_profile(pair)
@@ -183,12 +221,15 @@ def evaluate_entry(
     from src.indicators.adx import calculate_adx_full
 
     adx_threshold = float(_eff("adx_threshold", ADX_TREND_THRESHOLD))
-    adx_1h_full = calculate_adx_full(
-        data_1h["high"].values.tolist()[-50:],
-        data_1h["low"].values.tolist()[-50:],
-        data_1h["close"].values.tolist()[-50:],
-    )
-    adx_1h = adx_1h_full[0] if adx_1h_full else None
+    if pre_adx_1h is not None:
+        adx_1h = pre_adx_1h
+    else:
+        adx_1h_full = calculate_adx_full(
+            data_1h["high"].values.tolist()[-50:],
+            data_1h["low"].values.tolist()[-50:],
+            data_1h["close"].values.tolist()[-50:],
+        )
+        adx_1h = adx_1h_full[0] if adx_1h_full else None
     is_ranging = adx_1h is not None and adx_1h < adx_threshold
 
     # Spread: use injected quote (caller in CLI performs OANDA/cTrader/static fetches to keep evaluator pure and backtestable)

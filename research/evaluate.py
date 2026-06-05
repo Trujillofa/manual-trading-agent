@@ -291,6 +291,75 @@ def backtest_live_entry(
     highs15 = d15["high"].astype(float).tolist()
     lows15 = d15["low"].astype(float).tolist()
 
+    # Precompute indicator series once on full frames (O(N) total) and attach as columns.
+    # Slices passed to evaluate_entry will carry the columns; evaluate_entry prefers them
+    # (fast path, no per-bar recalc). Live calls (plain price dfs, no columns) fall back.
+    # This is the key perf refactor for feasible full-history research iterations on the
+    # live entry family.
+    d15 = d15.copy()
+    if not d30.empty:
+        d30 = d30.copy()
+    if not d1h.empty:
+        d1h = d1h.copy()
+
+    closes15_full = d15["close"].astype(float).tolist()
+    # RSI 15m full series + ma (for entry and gates)
+    try:
+        from src.indicators.rsi import calculate_rsi_ma_series, calculate_rsi_series
+
+        rsi15 = calculate_rsi_series(closes15_full, 14)
+        d15["rsi"] = rsi15
+        rsi_ma15 = calculate_rsi_ma_series([float(x) if x is not None else None for x in rsi15], 5)
+        d15["rsi_ma"] = rsi_ma15
+    except Exception:
+        pass
+
+    # SMA 15m
+    try:
+        from src.indicators.sma import calculate_sma
+
+        sma_p = 50  # default; driver uses settings via evaluator anyway
+        d15["sma"] = calculate_sma(closes15_full, sma_p)
+    except Exception:
+        pass
+
+    # ATR 15m full (rolling)
+    try:
+        from src.indicators.atr import calculate_atr
+
+        atr15 = [None] * len(closes15_full)
+        if len(closes15_full) >= 15:
+            for j in range(14, len(closes15_full)):
+                atr15[j] = calculate_atr(
+                    d15["high"].iloc[max(0, j - 14) : j + 1].tolist(),
+                    d15["low"].iloc[max(0, j - 14) : j + 1].tolist(),
+                    d15["close"].iloc[max(0, j - 14) : j + 1].tolist(),
+                    14,
+                )
+        d15["atr"] = atr15
+    except Exception:
+        pass
+
+    # ADX on 1h (for ranging gate)
+    if not d1h.empty:
+        try:
+            from src.indicators.adx import calculate_adx_full
+
+            adx1h = []
+            h1 = d1h["high"].astype(float).tolist()
+            l1 = d1h["low"].astype(float).tolist()
+            c1 = d1h["close"].astype(float).tolist()
+            for j in range(len(d1h)):
+                sl = max(0, j - 50)
+                if j - sl < 15:
+                    adx1h.append(None)
+                else:
+                    full = calculate_adx_full(h1[sl : j + 1], l1[sl : j + 1], c1[sl : j + 1], 14)
+                    adx1h.append(full[0] if full else None)
+            d1h["adx"] = adx1h
+        except Exception:
+            pass
+
     balance = 100000.0
     peak = balance
     max_dd_pct = 0.0

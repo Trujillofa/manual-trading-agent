@@ -29,7 +29,7 @@ Return a dict with at minimum:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime, time, timedelta
 from typing import Any, Literal, cast
 
 import pandas as pd
@@ -534,3 +534,206 @@ def evaluate_entry(
         "no_trade_reasons": no_trade_reasons,
     }
     return result
+
+
+# ---------------------------------------------------------------------------
+# Hypothesis #1 (Option C): Session / Opening-Range Breakout (London & NY)
+# Pure entry function with same contract as evaluate_entry so it slots into
+# the unified driver (backtest_live_entry) and (future) live cli with zero
+# changes to TP/SL sim, Rule C (optional), harness judge, or audit.
+# Design goals per brief: frequency-first (many opens/week), sane payoff
+# (e.g. ~1.5:1 RR target, not 1:3 demanding 75% WR), no pre-commit to ranging.
+# Test one thesis at a time via harness; only add filters if they lift OOS.
+# ---------------------------------------------------------------------------
+
+
+def _find_latest_session_open(
+    now: datetime, session_defs: list[tuple[str, int, int]]
+) -> tuple[str, datetime] | None:
+    """Return (name, open_dt_utc) for the *most recent* (latest) session open <= now (today or prev day)."""
+    now = now.replace(tzinfo=UTC) if now.tzinfo is None else now.astimezone(UTC)
+    candidates: list[tuple[datetime, str, datetime]] = []
+    for day_off in (0, -1):
+        d = (now + timedelta(days=day_off)).date()
+        for sname, sh, sm in session_defs:
+            odt = datetime.combine(d, time(sh, sm), tzinfo=UTC)
+            if odt <= now:
+                candidates.append((odt, sname, odt))
+    if not candidates:
+        return None
+    # latest odt
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    _, sname, odt = candidates[0]
+    return sname, odt
+
+
+def evaluate_session_breakout(
+    pair: str,
+    data_1h: pd.DataFrame,
+    data_30m: pd.DataFrame,
+    data_15m: pd.DataFrame,
+    active_signal_state: dict | None = None,
+    alignment_state: dict | None = None,
+    spread_quote: dict | None = None,
+    news_blocked: bool | None = None,
+    now_utc: datetime | None = None,
+    bars_aligned: int | None = None,
+    spread_filter_enabled: bool = True,
+    overrides: dict | None = None,
+) -> dict[str, Any]:
+    """Pure session opening-range breakout entry (hypothesis #1 for Option C).
+
+    Fires on break of the opening range (first N 15m bars after London/NY open)
+    within a short breakout window. Returns same dict shape as evaluate_entry
+    so driver, harness (engine=live_mtf_rsi + entry=session_orb), and future live
+    path treat it identically (including ATR TP/SL sim, rejection counters, audit).
+
+    Tunables via overrides (for research search later): session_defs, or_bars,
+    breakout_window_bars, buffer_pips, tp_atr_mult, sl_atr_mult, min_atr_pips.
+
+    Frequency first: permissive (no ADX<25, no 3-TF SMA, minimal session gate).
+    Sane geometry: default ~1.5R : 1R (tp 1.5x ATR, sl 1x ATR). Harness will
+    tell us if this (or tuned) clears >=100 pooled OOS + PF>=1.2 + positive PnL.
+    """
+    ov = dict(overrides or {})
+    if data_15m is None or getattr(data_15m, "empty", True) or len(data_15m) < 3:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": ["insufficient 15m data"],
+            "profile": "session_orb",
+        }
+
+    # Determine "now" from injection (harness) or last bar (live path)
+    if now_utc is None:
+        last = data_15m.index[-1]
+        if isinstance(last, pd.Timestamp):
+            now_utc = last.to_pydatetime()
+        else:
+            now_utc = last if isinstance(last, datetime) else datetime.now(UTC)
+    now_utc = now_utc.replace(tzinfo=UTC) if now_utc.tzinfo is None else now_utc.astimezone(UTC)
+
+    if news_blocked:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": ["news blocked"],
+            "profile": "session_orb",
+        }
+
+    # Tunables (sane defaults for first honest read)
+    session_defs: list[tuple[str, int, int]] = ov.get(
+        "session_defs", [("london", 8, 0), ("ny", 13, 30)]
+    )
+    or_bars = int(ov.get("or_bars", 1))  # first 1x15m bar after open = range
+    breakout_window = int(ov.get("breakout_window_bars", 6))  # ~90min to act
+    buffer_pips = float(ov.get("buffer_pips", 1.5))
+    tp_mult = float(ov.get("tp_atr_mult", 1.5))
+    sl_mult = float(ov.get("sl_atr_mult", 1.0))  # 1.5 : 1 RR target (sane vs old 1:3)
+    min_atr_pips = float(ov.get("min_atr_pips", 4.0))
+
+    pip = 0.01 if "JPY" in pair.upper() else 0.0001
+    buf = buffer_pips * pip
+
+    highs = data_15m["high"].astype(float).tolist()
+    lows = data_15m["low"].astype(float).tolist()
+    closes = data_15m["close"].astype(float).tolist()
+    idx = data_15m.index
+
+    active = _find_latest_session_open(now_utc, session_defs)
+    if not active:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": ["no recent session open"],
+            "profile": "session_orb",
+        }
+    sname, open_dt = active
+
+    # Bars belonging to this open (ts >= open_dt)
+    try:
+        open_ts = pd.Timestamp(open_dt)
+        mask = idx >= open_ts
+        if not mask.any():
+            return {
+                "fired": False,
+                "direction": None,
+                "no_trade_reasons": [f"no bars after {sname} open"],
+                "profile": "session_orb",
+            }
+        or_df = data_15m[mask].iloc[: max(1, or_bars)]
+        or_h = float(or_df["high"].max())
+        or_l = float(or_df["low"].min())
+        or_end_ts = or_df.index[-1]
+    except Exception as e:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": [f"orb calc error: {e}"],
+            "profile": "session_orb",
+        }
+
+    # How many bars since OR formation ended (current bar is the latest)
+    post_mask = idx > or_end_ts
+    bars_since_or = int(post_mask.sum())
+    if bars_since_or < 1 or bars_since_or > breakout_window:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": [f"outside breakout window for {sname} ({bars_since_or} bars)"],
+            "profile": "session_orb",
+        }
+
+    cur_h = highs[-1]
+    cur_l = lows[-1]
+    cur_c = closes[-1]
+
+    direction = None
+    if cur_h >= or_h + buf:
+        direction = "BUY"
+    elif cur_l <= or_l - buf:
+        direction = "SELL"
+    if not direction:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": [f"no OR break on current bar for {sname}"],
+            "profile": "session_orb",
+        }
+
+    # ATR for TP/SL (recent window)
+    atr = calculate_atr(highs[-22:], lows[-22:], closes[-22:], 14)
+    if atr is None or atr <= (min_atr_pips * pip):
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": ["low ATR / insufficient range"],
+            "profile": "session_orb",
+            "atr": atr,
+        }
+
+    entry = cur_c
+    risk = sl_mult * atr
+    rew = tp_mult * atr
+    if direction == "BUY":
+        tp = entry + rew
+        sl = entry - risk
+    else:
+        tp = entry - rew
+        sl = entry + risk
+
+    return {
+        "fired": True,
+        "direction": direction,
+        "entry": float(entry),
+        "tp": float(tp),
+        "sl": float(sl),
+        "atr": float(atr),
+        "no_trade_reasons": [],
+        "confidence": 0.55,
+        "profile": f"session_orb_{sname}",
+        "session": sname,
+        "or_high": or_h,
+        "or_low": or_l,
+        "bars_since_or": bars_since_or,
+    }

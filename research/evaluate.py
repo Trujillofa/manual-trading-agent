@@ -46,7 +46,10 @@ from scripts.run_donchian_backtest import (  # noqa: E402
     fetch_pair,
     run_config,
 )
-from src.scanner.evaluator import evaluate_entry  # noqa: E402  # the pure live entry (R2)
+from src.scanner.evaluator import (  # noqa: E402  # the pure live entry (R2)
+    evaluate_entry,
+    evaluate_session_breakout,
+)
 
 # --- fixed constants (the contract; do not tune these to flatter a config) ---
 PAIRS: tuple[str, ...] = (
@@ -181,11 +184,12 @@ def evaluate_config(config: dict) -> EvalResult:
                     live_ov.setdefault("rsi_overbought", config["upper_bound"])
                 if "max_adx" in config:
                     live_ov.setdefault("adx_threshold", config["max_adx"])
+                ent = str(config.get("entry", "mtf_rsi"))
                 is_results.append(
-                    backtest_live_entry(pair, isf, spread_pips=spr, overrides=live_ov)
+                    backtest_live_entry(pair, isf, spread_pips=spr, overrides=live_ov, entry=ent)
                 )
                 oos_results.append(
-                    backtest_live_entry(pair, oosf, spread_pips=spr, overrides=live_ov)
+                    backtest_live_entry(pair, oosf, spread_pips=spr, overrides=live_ov, entry=ent)
                 )
             else:
                 is_cache = build_pair_cache(pair, isf["1h"], isf["30m"], isf["15m"])
@@ -251,13 +255,18 @@ def backtest_live_entry(
     commission_per_order: float = 3.0,
     slippage_pips: float = 2.0,
     risk_pct: float = 0.01,
+    entry: str = "mtf_rsi",  # "mtf_rsi" (default, current production) or "session_orb" (hyp #1) etc. Clean seam.
 ) -> "ConfigResult":  # noqa: UP037,F821  (name imported inside fn; postponed eval + ruff local scope)
-    """Run the live MTF RSI + V* + all-gates entry logic over the provided frames.
+    """Run the *pure* entry logic (mtf_rsi or session_orb etc) over Dukascopy frames.
+
+    entry: selects which pure evaluator to call each bar ("mtf_rsi" -> evaluate_entry,
+           "session_orb" -> evaluate_session_breakout). Both return identical dict contract
+           so TP/SL simulation, costs, harness aggregation, and rejection diagnostics are
+           shared. This is the entry-mode seam for Option C (new hypotheses slot in for free).
 
     frames: {"1h": df, "30m": df, "15m": df} with datetime index, ohlc cols.
     Uses the *current* config/settings.yaml for profiles, overrides, thresholds etc.
-    Pass overrides= to vary rsi_oversold/overbought, adx_threshold, buffer_pips, confirm_bars,
-    tp_atr_mult etc for this run (parameterizes the live entry family for research).
+    Pass overrides= to vary ... (for the selected entry).
     Set env LIVE_BT_MAX_BARS=N for fast recent-only sampling (truncates input frames).
     """
     import os
@@ -494,7 +503,7 @@ def backtest_live_entry(
         else:
             data_1h = d15.iloc[max(0, i - 10) : i + 1].copy()
 
-        # 3) Call the pure evaluator (single source)
+        # 3) Call the pure evaluator (single source, via entry-mode seam)
         now_utc = cur_ts
         spread_q = {
             "spread": float(spread_pips) * (0.01 if "JPY" in pair else 0.0001),
@@ -506,20 +515,40 @@ def backtest_live_entry(
         call_active: dict[str, dict] = {}
         if pair in active_state and active_state[pair]:
             call_active[pair] = active_state[pair][-1]
-        dec = evaluate_entry(
-            pair,
-            data_1h,
-            data_30m,
-            data_15m,
-            active_signal_state=call_active,
-            alignment_state=alignment_state,
-            now_utc=now_utc,
-            spread_quote=spread_q,
-            news_blocked=False,
-            spread_filter_enabled=False,  # in BT we already model via spread_pips or 0
-            bars_aligned=None,  # evaluator recomputes from alignment_state (correct for this bar)
-            overrides=overrides,  # forwarded for live-family param search (rsi_*, adx, buffer etc)
-        )
+        # Dispatch by entry mode. Both fns are pure, same return shape -> driver TP/SL/equity/rejections
+        # and harness verdict logic are identical for any entry (the unification win for Option C).
+        e = (entry or "mtf_rsi").lower()
+        if e in ("session_orb", "session", "orb", "session_breakout"):
+            dec = evaluate_session_breakout(
+                pair,
+                data_1h,
+                data_30m,
+                data_15m,
+                active_signal_state=call_active,
+                alignment_state=alignment_state,
+                now_utc=now_utc,
+                spread_quote=spread_q,
+                news_blocked=False,
+                spread_filter_enabled=False,
+                bars_aligned=None,
+                overrides=overrides,
+            )
+        else:
+            # default: current production MTF RSI + V* + gates
+            dec = evaluate_entry(
+                pair,
+                data_1h,
+                data_30m,
+                data_15m,
+                active_signal_state=call_active,
+                alignment_state=alignment_state,
+                now_utc=now_utc,
+                spread_quote=spread_q,
+                news_blocked=False,
+                spread_filter_enabled=False,  # in BT we already model via spread_pips or 0
+                bars_aligned=None,  # evaluator recomputes from alignment_state (correct for this bar)
+                overrides=overrides,  # forwarded for live-family param search (rsi_*, adx, buffer etc)
+            )
 
         # 4) Update alignment state for next bar's confirm age (mirror cli)
         aligned = bool(dec.get("aligned"))

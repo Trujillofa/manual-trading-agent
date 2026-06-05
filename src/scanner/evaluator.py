@@ -125,15 +125,12 @@ def evaluate_entry(
     # (attached by backtest_live_entry precomp on full frames), use the last value instead of
     # recomputing indicators on every bar. Live calls pass plain price dfs and fall back here.
     # This makes full-history research iterations (365d) fast while preserving exact live behavior.
-    pre_rsi_15m = pre_rsi_ma_15m = pre_sma_15m = pre_atr = pre_adx_1h = None
+    pre_rsi_15m = pre_sma_15m = pre_atr = pre_adx_1h = None
     if len(data_15m) > 0 and hasattr(data_15m, "columns"):
         cols = data_15m.columns
         if "rsi" in cols:
             v = data_15m["rsi"].iloc[-1]
             pre_rsi_15m = float(v) if not pd.isna(v) else None
-        if "rsi_ma" in cols:
-            v = data_15m["rsi_ma"].iloc[-1]
-            pre_rsi_ma_15m = float(v) if not pd.isna(v) else None
         if "sma" in cols:
             v = data_15m["sma"].iloc[-1]
             pre_sma_15m = float(v) if not pd.isna(v) else None
@@ -171,13 +168,12 @@ def evaluate_entry(
         if "rsi" in data_15m.columns
         else calculate_rsi_series(close_15m, rsi_period)
     )
-    rsi_ma_15m = (
-        pre_rsi_ma_15m
-        if pre_rsi_ma_15m is not None
-        else calculate_rsi_ma_series(
+    if "rsi_ma" in data_15m.columns:
+        rsi_ma_15m = data_15m["rsi_ma"].tolist()
+    else:
+        rsi_ma_15m = calculate_rsi_ma_series(
             [float(v) if v is not None else None for v in rsi_series_15m], ma_period=rsi_ma_period
         )
-    )
 
     from src.indicators.sma import calculate_sma
 

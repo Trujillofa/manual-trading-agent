@@ -53,34 +53,14 @@ strategy:
     - "06-17"
     - "12-21"
   breakout_buffer_pips: 0.0
-  # Per-pair confirmation profiles from optimization bakeoff (2026-04-03).
-  # V0 = RSI-only (no breakout gate), V1 = continuation, V2 = reversal, V2R = reversal structural break
+  # Confirmation profiles. Per-pair overrides retired 2026-06 (Branch B: numbers came from divergent engine).
+  # All pairs now use global default (V2 reversal with b0.5 c2). See CLAUDE.md research note.
   confirmation_profiles:
     default:
       variant: "V2"
       buffer_pips: 0.5
       confirm_bars: 2
-    pairs:
-      AUD/CAD:
-        variant: "V0"
-        buffer_pips: 0.0
-        confirm_bars: 0
-      GBP/CHF:
-        variant: "V2"
-        buffer_pips: 0.0
-        confirm_bars: 0
-      NZD/JPY:
-        variant: "V0"
-        buffer_pips: 0.0
-        confirm_bars: 0
-      GBP/JPY:
-        variant: "V0"
-        buffer_pips: 0.0
-        confirm_bars: 0
-      USD/JPY:
-        variant: "V0"
-        buffer_pips: 0.0
-        confirm_bars: 0
+    pairs: {}  # no per-pair overrides (reverted to default for consistency with honest R1)
   spread_filter_enabled: true
   max_spread_pips: 2.0
   spread_limits_pips:
@@ -95,19 +75,7 @@ strategy:
     GBP/JPY: 85
     AUD/CAD: 80
     USD/JPY: 75
-  pair_overrides:
-    NZD/JPY:
-      sma_period: 20
-      tp_atr_multiplier: 2.5
-      sl_atr_multiplier: 2.5
-    GBP/JPY:
-      sma_period: 20
-      tp_atr_multiplier: 1.5
-      sl_atr_multiplier: 2.5
-    USD/JPY:
-      sma_period: 40
-      tp_atr_multiplier: 2.0
-      sl_atr_multiplier: 2.5
+  pair_overrides: {}  # reverted to global defaults (sma_period=50, tp_atr=1.0, sl_atr=3.0) 2026-06 Branch B consolidation; old values from divergent-engine backtests
 
 risk:
   # TP/SL: fixed-dollar values per AGENTS.md (~$500 TP, ~$1800 SL)

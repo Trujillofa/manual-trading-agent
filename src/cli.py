@@ -32,11 +32,11 @@ from src.indicators.rsi import (
     calculate_rsi_series,
     detect_bearish_divergence,
     detect_bullish_divergence,
-    detect_rsi_curl,
 )
 from src.indicators.sma import calculate_sma
 from src.news.news_checker import NewsChecker
 from src.notifications.telegram import TelegramNotifier
+from src.scanner.evaluator import evaluate_entry
 from src.scanner.gates import (
     ADX_TREND_THRESHOLD,
     MicroContext,
@@ -48,12 +48,10 @@ from src.scanner.gates import (
     _get_ctrader_spread,
     _get_pair_param,
     _get_static_spread_quote,
-    _is_signal_invalidated,
     _mtf_distance_to_buy,
     _mtf_distance_to_sell,
     _priority_for_pair,
     _profile_label,
-    _session_allowed,
 )
 from src.scanner.state import (
     INVALIDATION_MISS_THRESHOLD,
@@ -139,16 +137,21 @@ def create_parser() -> argparse.ArgumentParser:
         "--rsi-ma-period", type=int, default=5, help="RSI-MA lookback period (default: 5)"
     )
     enhanced_backtest_parser.add_argument(
-        "--rsi-ma-variant", choices=["curl", "fresh", "slope", "distance", "confidence", "conditional", "gate"],
+        "--rsi-ma-variant",
+        choices=["curl", "fresh", "slope", "distance", "confidence", "conditional", "gate"],
         default="curl",
         help="RSI-MA variant: curl (cross back), fresh (not exhausted), slope (inflection), distance (momentum threshold), confidence (modifier not gate), conditional (low-conf only)",
     )
     enhanced_backtest_parser.add_argument(
-        "--rsi-ma-distance-max", type=float, default=15.0,
+        "--rsi-ma-distance-max",
+        type=float,
+        default=15.0,
         help="Max RSI-to-MA distance for distance variant (default: 15)",
     )
     enhanced_backtest_parser.add_argument(
-        "--rsi-ma-confidence-mod", type=float, default=0.85,
+        "--rsi-ma-confidence-mod",
+        type=float,
+        default=0.85,
         help="Confidence multiplier when no curl detected for confidence variant (default: 0.85)",
     )
 
@@ -277,19 +280,21 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     sl_pips = abs(float(trade["sl"]) - float(trade["entry"])) * pip_mult
                     result_pips = tp_pips if outcome == "tp" else -sl_pips
                     bars_held = sum(1 for ts in bar_times_unix if ts > int(trade["fired_at"]))
-                    _append_audit_log({
-                        "ts": now_utc.isoformat(),
-                        "pair": pair,
-                        "state": "outcome",
-                        "direction": trade["direction"],
-                        "outcome": outcome,
-                        "entry": trade["entry"],
-                        "tp": trade["tp"],
-                        "sl": trade["sl"],
-                        "result_pips": result_pips,
-                        "bars_held": bars_held,
-                        "signal_id": trade.get("signal_id"),
-                    })
+                    _append_audit_log(
+                        {
+                            "ts": now_utc.isoformat(),
+                            "pair": pair,
+                            "state": "outcome",
+                            "direction": trade["direction"],
+                            "outcome": outcome,
+                            "entry": trade["entry"],
+                            "tp": trade["tp"],
+                            "sl": trade["sl"],
+                            "result_pips": result_pips,
+                            "bars_held": bars_held,
+                            "signal_id": trade.get("signal_id"),
+                        }
+                    )
                     if notifier and pair not in shadow_set:
                         await notifier.send_trade_outcome(
                             pair=symbol,
@@ -341,7 +346,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             close_price = close_15m[-1]
 
             # Calculate ATR for TP/SL
-            atr = calculate_atr(high_15m[-14:], low_15m[-14:], close_15m[-14:])
+            # Use period+1 bars so the shared calculate_atr (fixed) can produce a full ATR(14).
+            atr = calculate_atr(high_15m[-(14 + 1) :], low_15m[-(14 + 1) :], close_15m[-(14 + 1) :])
             pip_size = 0.01 if "JPY" in pair else 0.0001
             bar_high = high_15m[-1] if high_15m else None
             bar_low = low_15m[-1] if low_15m else None
@@ -407,6 +413,14 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             elif settings.strategy.spread_filter_enabled:
                 spread_ok = False
 
+            # Compute news_blocked once per pair (using the scan-level news_checker) to inject into pure evaluator
+            news_blocked = False
+            if settings.news.enabled:
+                try:
+                    news_blocked = news_checker.is_blocked(pair, now_utc)
+                except Exception:
+                    news_blocked = False
+
             # Detect candlestick patterns
             candle_patterns: list[CandlePattern] = []
             if len(open_15m) >= 3:
@@ -452,6 +466,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 print(f"  SMA({sma_period}) 15m: N/A")
             print(f"  20-bar HH: {hh:.5f}" if hh else "  20-bar HH: N/A")
             print(f"  20-bar LL: {ll:.5f}" if ll else "  20-bar LL: N/A")
+            print(f"  ATR(14): {atr:.5f}" if atr else "  ATR(14): N/A (will fallback)")
             print(f"  Confirmation profile: {_profile_label(profile)}")
             print(f"  Breakout BUY(low): {'yes' if breakout_buy else 'no'}")
             print(f"  Breakout SELL(high): {'yes' if breakout_sell else 'no'}")
@@ -594,8 +609,12 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     "rsi_5m": micro_context.get("rsi_5m"),
                     "rsi_1m": micro_context.get("rsi_1m"),
                     "rsi_ma_1h": rsi_ma_1h[-1] if rsi_ma_1h and rsi_ma_1h[-1] is not None else None,
-                    "rsi_ma_30m": rsi_ma_30m[-1] if rsi_ma_30m and rsi_ma_30m[-1] is not None else None,
-                    "rsi_ma_15m": rsi_ma_15m[-1] if rsi_ma_15m and rsi_ma_15m[-1] is not None else None,
+                    "rsi_ma_30m": rsi_ma_30m[-1]
+                    if rsi_ma_30m and rsi_ma_30m[-1] is not None
+                    else None,
+                    "rsi_ma_15m": rsi_ma_15m[-1]
+                    if rsi_ma_15m and rsi_ma_15m[-1] is not None
+                    else None,
                     "patterns": [p.name for p in candle_patterns],
                     "bullish_div": bullish_div.strength if bullish_div else None,
                     "bearish_div": bearish_div.strength if bearish_div else None,
@@ -603,204 +622,71 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 }
             )
 
-            session_ok = True
-            if settings.strategy.session_filter_enabled:
-                session_ok = _session_allowed(now_utc, list(settings.strategy.session_allowed_utc))
-            news_blocked = settings.news.enabled and news_checker.is_blocked(pair, now_utc)
-            active_record = active_signal_state.get(pair)
-
+            # Single authoritative call to the pure evaluator (R2 unification).
+            # All MTF/RSI-MA/breakout/gate/Rule C/ATR TP/SL logic lives in evaluate_entry now.
+            # We removed the prior ~110 lines of duplicate signal_direction + RSI-MA computation that
+            # ran in parallel and were then overridden (fragile + wasted work + source of drift).
+            # The evaluator is called exactly once per pair per scan.
             signal_direction: Literal["BUY", "SELL", None] = None
             signal_confidence = 0.0
             signal_reasons: list[str] = []
             no_trade_reasons: list[str] = []
 
-            if all_oversold:
-                signal_direction = "BUY"
-                signal_confidence = 0.6
-                signal_reasons.append(
-                    f"MTF RSI oversold (1h:{rsi_1h:.0f}, 30m:{rsi_30m:.0f}, 15m:{rsi_15m_val:.0f})"
+            decision = evaluate_entry(
+                pair,
+                data_1h,
+                data_30m,
+                data_15m,
+                active_signal_state=active_signal_state,
+                alignment_state=alignment_state,
+                now_utc=now_utc,
+                spread_quote=quote,
+                news_blocked=news_blocked,
+                spread_filter_enabled=settings.strategy.spread_filter_enabled,
+                bars_aligned=bars_aligned,
+                overrides=None,  # cli always uses live settings.yaml (research harness uses overrides for param search)
+            )
+            # Drive from evaluator (it returns direction even for !fired blocked cases, so telemetry can show
+            # the candidate + full no_trade_reasons list from all gates).
+            signal_direction = decision.get("direction")
+            signal_confidence = decision.get("confidence", 0.0)
+            signal_reasons = decision.get("reasons", [])
+            no_trade_reasons = decision.get("no_trade_reasons", [])
+
+            # Re-arm side-effect for Rule C state: only when the evaluator ACTUALLY fires a new
+            # same-direction signal (fired == not blocked) does it mean the prior active was
+            # invalidated. Gating on `fired` (not just `direction`) avoids erasing the active record
+            # for a same-direction candidate that the evaluator is itself suppressing via Rule C.
+            prev_active = active_signal_state.get(pair)
+            if (
+                decision.get("fired")
+                and prev_active
+                and prev_active.get("direction") == signal_direction
+            ):
+                active_signal_state.pop(pair, None)
+                print("  ♻️  Re-armed (prior same-direction signal cleared per evaluator)")
+
+            if signal_direction and no_trade_reasons:
+                # no_trade_reasons (including all final gates) already authoritative from the evaluator override above.
+                telemetry_state = "blocked"
+                telemetry_direction = signal_direction
+                telemetry_reasons = list(no_trade_reasons)
+                print(f"  🚫 NO TRADE: {', '.join(no_trade_reasons)}")
+                _append_audit_log(
+                    {
+                        "ts": now_utc.isoformat(),
+                        "pair": pair,
+                        "state": "blocked",
+                        "candidate_direction": signal_direction,
+                        "reasons": no_trade_reasons,
+                        "rsi_1h": float(rsi_1h),
+                        "rsi_30m": float(rsi_30m),
+                        "rsi_15m": float(rsi_15m_val),
+                        "breakout_buy": breakout_buy,
+                        "breakout_sell": breakout_sell,
+                    }
                 )
-                if breakout_confirmed:
-                    signal_confidence += 0.1
-                    signal_reasons.append("15m breakout low confirmed")
-                    if confirm_bars > 0:
-                        signal_reasons.append(f"confirmed at bar {bars_aligned}/{confirm_bars}")
-                else:
-                    no_trade_reasons.append("15m breakout low not confirmed")
-                    if confirm_bars > 0 and not within_confirm_window:
-                        no_trade_reasons.append(
-                            f"confirmation window expired ({bars_aligned} bars > {confirm_bars})"
-                        )
-                if bullish_div:
-                    signal_confidence += bullish_div.strength * 0.2
-                    signal_reasons.append("bullish divergence")
-                if bullish_pats:
-                    signal_confidence += 0.1
-                    signal_reasons.append(
-                        f"bullish pattern ({', '.join(p.name for p in bullish_pats[:2])})"
-                    )
-
-            elif all_overbought:
-                signal_direction = "SELL"
-                signal_confidence = 0.6
-                signal_reasons.append(
-                    f"MTF RSI overbought (1h:{rsi_1h:.0f}, 30m:{rsi_30m:.0f}, 15m:{rsi_15m_val:.0f})"
-                )
-                if breakout_confirmed:
-                    signal_confidence += 0.1
-                    signal_reasons.append("15m breakout high confirmed")
-                    if confirm_bars > 0:
-                        signal_reasons.append(f"confirmed at bar {bars_aligned}/{confirm_bars}")
-                else:
-                    no_trade_reasons.append("15m breakout high not confirmed")
-                    if confirm_bars > 0 and not within_confirm_window:
-                        no_trade_reasons.append(
-                            f"confirmation window expired ({bars_aligned} bars > {confirm_bars})"
-                        )
-                if bearish_div:
-                    signal_confidence += bearish_div.strength * 0.2
-                    signal_reasons.append("bearish divergence")
-                if bearish_pats:
-                    signal_confidence += 0.1
-                    signal_reasons.append(
-                        f"bearish pattern ({', '.join(p.name for p in bearish_pats[:2])})"
-                    )
-
-            # RSI-MA confidence modifier: boost curl-confirmed entries, dampen others
-            if signal_direction and rsi_series_1h and rsi_ma_1h:
-                rsi_val_now = rsi_series_1h[-1]
-                rsi_ma_now = rsi_ma_1h[-1]
-                if rsi_val_now is not None and rsi_ma_now is not None:
-                    rsi_tail = [
-                        float(v) if v is not None else None
-                        for v in rsi_series_1h[-12:]
-                    ]
-                    ma_tail = [
-                        float(v) if v is not None else None
-                        for v in rsi_ma_1h[-12:]
-                    ]
-                    direction = "buy" if signal_direction == "BUY" else "sell"
-                    if detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
-                        signal_confidence = min(1.0, signal_confidence * 1.10)
-                        signal_reasons.append("RSI-MA curl confirmed")
-                    else:
-                        signal_confidence *= 0.85
-
-            # RSI-MA gate: SMA(RSI, N) must also be outside 30/70 on all three TFs
-            if signal_direction and settings.strategy.rsi_ma_gate_enabled:
-                ma_now_1h = rsi_ma_1h[-1] if rsi_ma_1h else None
-                ma_now_30m = rsi_ma_30m[-1] if rsi_ma_30m else None
-                ma_now_15m = rsi_ma_15m[-1] if rsi_ma_15m else None
-                if all(v is not None for v in (ma_now_1h, ma_now_30m, ma_now_15m)):
-                    assert ma_now_1h is not None
-                    assert ma_now_30m is not None
-                    assert ma_now_15m is not None
-                    ob = float(rsi_overbought)
-                    os_ = float(rsi_oversold)
-                    if signal_direction == "BUY":
-                        gate_ok = ma_now_1h <= os_ and ma_now_30m <= os_ and ma_now_15m <= os_
-                        if not gate_ok:
-                            failing = [
-                                f"{tf}={v:.1f}"
-                                for tf, v in (("1h", ma_now_1h), ("30m", ma_now_30m), ("15m", ma_now_15m))
-                                if v > os_
-                            ]
-                    else:
-                        gate_ok = ma_now_1h >= ob and ma_now_30m >= ob and ma_now_15m >= ob
-                        if not gate_ok:
-                            failing = [
-                                f"{tf}={v:.1f}"
-                                for tf, v in (("1h", ma_now_1h), ("30m", ma_now_30m), ("15m", ma_now_15m))
-                                if v < ob
-                            ]
-                    if not gate_ok:
-                        no_trade_reasons.append(
-                            f"RSI-MA({rsi_ma_period}) gate: SMA(RSI) not outside 30-70 ({', '.join(failing)})"
-                        )
-
-            if signal_direction:
-                if not session_ok:
-                    no_trade_reasons.append("outside allowed session")
-                if news_blocked:
-                    no_trade_reasons.append("blocked by high-impact news")
-                if settings.strategy.spread_filter_enabled and not spread_ok:
-                    no_trade_reasons.append("spread unavailable/too wide")
-                if not is_ranging:
-                    adx_str = f"{adx_1h:.0f}" if adx_1h is not None else "N/A"
-                    no_trade_reasons.append(
-                        f"trending market (ADX {adx_str} >= {ADX_TREND_THRESHOLD:.0f})"
-                    )
-                if active_record and active_record.get("direction") == signal_direction:
-                    invalidated, invalidation_reason = _is_signal_invalidated(
-                        active_record,
-                        data_15m,
-                        rsi_series,
-                        float(close_price),
-                        float(sma_15m) if sma_15m is not None else None,
-                    )
-                    if invalidated:
-                        active_signal_state.pop(pair, None)
-                        active_record = None
-                        print(f"  ♻️  Re-armed (prior signal invalidated: {invalidation_reason})")
-                    else:
-                        no_trade_reasons.append("active signal not yet invalidated")
-                # SMA alignment gate: all 3 TFs must agree with signal direction
-                if settings.strategy.sma_alignment_enabled:
-                    sma_values_available = (
-                        sma_1h is not None
-                        and sma_30m is not None
-                        and sma_15m is not None
-                        and close_1h_last is not None
-                        and close_30m_last is not None
-                    )
-                    if sma_values_available:
-                        assert sma_1h is not None
-                        assert sma_30m is not None
-                        assert sma_15m is not None
-                        assert close_1h_last is not None
-                        assert close_30m_last is not None
-                        sma_1h_value = float(sma_1h)
-                        sma_30m_value = float(sma_30m)
-                        sma_15m_value = float(sma_15m)
-                        close_1h_last_value = float(close_1h_last)
-                        close_30m_last_value = float(close_30m_last)
-                        if signal_direction == "BUY":
-                            sma_aligned = (
-                                close_1h_last_value < sma_1h_value
-                                and close_30m_last_value < sma_30m_value
-                                and close_price < sma_15m_value
-                            )
-                        else:
-                            sma_aligned = (
-                                close_1h_last_value > sma_1h_value
-                                and close_30m_last_value > sma_30m_value
-                                and close_price > sma_15m_value
-                            )
-                        if not sma_aligned:
-                            side_label = "below" if signal_direction == "BUY" else "above"
-                            no_trade_reasons.append(
-                                f"SMA({sma_period}) misaligned (price not {side_label} on all TFs)"
-                            )
-                if no_trade_reasons:
-                    telemetry_state = "blocked"
-                    telemetry_direction = signal_direction
-                    telemetry_reasons = list(no_trade_reasons)
-                    print(f"  🚫 NO TRADE: {', '.join(no_trade_reasons)}")
-                    _append_audit_log(
-                        {
-                            "ts": now_utc.isoformat(),
-                            "pair": pair,
-                            "state": "blocked",
-                            "candidate_direction": signal_direction,
-                            "reasons": no_trade_reasons,
-                            "rsi_1h": float(rsi_1h),
-                            "rsi_30m": float(rsi_30m),
-                            "rsi_15m": float(rsi_15m_val),
-                            "breakout_buy": breakout_buy,
-                            "breakout_sell": breakout_sell,
-                        }
-                    )
-                    signal_direction = None
+                signal_direction = None
 
             if not signal_direction and breakout_pending:
                 telemetry_state = "aligned_pending_breakout"
@@ -863,32 +749,39 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 print(f"  ⚠️ MTF SIGNAL: {signal_direction} (confidence: {signal_confidence:.0%})")
                 print(f"     Reasons: {', '.join(signal_reasons)}")
 
-                # Calculate TP/SL using per-pair overrides (fallback to global defaults)
-                tp_mult = float(
-                    _get_pair_param(pair, "tp_atr_multiplier", settings.risk.tp_atr_multiplier)
-                )
-                sl_mult = float(
-                    _get_pair_param(pair, "sl_atr_multiplier", settings.risk.sl_atr_multiplier)
-                )
-                if atr and atr > 0:
-                    if signal_direction == "SELL":
-                        entry = close_price
-                        tp = entry - (atr * tp_mult)
-                        sl = entry + (atr * sl_mult)
+                # TP/SL come from the single evaluator call (ATR(14) fixed, per-pair multipliers, exact same math as live).
+                # Since we only reach here for cases where evaluator set fired=True (no no_trade_reasons),
+                # decision must have valid tp/sl when signal_direction is set.
+                tp = decision.get("tp")
+                sl = decision.get("sl")
+                entry = decision.get("entry", close_price)
+                if tp is None or sl is None:
+                    # Fallback (ATR missing or evaluator chose legacy path) — keep behavior but rare post-fix
+                    tp_mult = float(
+                        _get_pair_param(pair, "tp_atr_multiplier", settings.risk.tp_atr_multiplier)
+                    )
+                    sl_mult = float(
+                        _get_pair_param(pair, "sl_atr_multiplier", settings.risk.sl_atr_multiplier)
+                    )
+                    if atr and atr > 0:
+                        if signal_direction == "SELL":
+                            entry = close_price
+                            tp = entry - (atr * tp_mult)
+                            sl = entry + (atr * sl_mult)
+                        else:
+                            entry = close_price
+                            tp = entry + (atr * tp_mult)
+                            sl = entry - (atr * sl_mult)
                     else:
-                        entry = close_price
-                        tp = entry + (atr * tp_mult)
-                        sl = entry - (atr * sl_mult)
-                else:
-                    pip_size = 0.0001 if "JPY" not in pair else 0.01
-                    if signal_direction == "SELL":
-                        entry = close_price
-                        tp = entry - (30 * pip_size)
-                        sl = entry + (90 * pip_size)
-                    else:
-                        entry = close_price
-                        tp = entry + (30 * pip_size)
-                        sl = entry - (90 * pip_size)
+                        pip_size = 0.0001 if "JPY" not in pair else 0.01
+                        if signal_direction == "SELL":
+                            entry = close_price
+                            tp = entry - (30 * pip_size)
+                            sl = entry + (90 * pip_size)
+                        else:
+                            entry = close_price
+                            tp = entry + (30 * pip_size)
+                            sl = entry - (90 * pip_size)
 
                 micro_context = _fetch_micro_context(fetcher, symbol, rsi_period)
                 exec_note = _execution_note(
@@ -945,17 +838,19 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     # Track for outcome notification
                     pip_mult = 100.0 if "JPY" in pair else 10000.0
                     signal_id = now_utc.isoformat()
-                    pending_trades.append({
-                        "signal_id": signal_id,
-                        "pair": pair,
-                        "direction": signal_direction,
-                        "entry": entry,
-                        "tp": tp,
-                        "sl": sl,
-                        "tp_pips": abs(tp - entry) * pip_mult,
-                        "sl_pips": abs(sl - entry) * pip_mult,
-                        "fired_at": now_ts,
-                    })
+                    pending_trades.append(
+                        {
+                            "signal_id": signal_id,
+                            "pair": pair,
+                            "direction": signal_direction,
+                            "entry": entry,
+                            "tp": tp,
+                            "sl": sl,
+                            "tp_pips": abs(tp - entry) * pip_mult,
+                            "sl_pips": abs(sl - entry) * pip_mult,
+                            "fired_at": now_ts,
+                        }
+                    )
                     _append_audit_log(
                         {
                             "ts": now_utc.isoformat(),
@@ -1281,7 +1176,9 @@ async def run_enhanced_backtest(
     print(f"\n[ENHANCED BACKTEST] {pair}")
     print(f"  Patterns: {'enabled' if use_patterns else 'disabled'}")
     print(f"  Divergence: {'enabled' if use_divergence else 'disabled'}")
-    print(f"  RSI-MA: {'enabled (variant=' + rsi_ma_variant + ', period=' + str(rsi_ma_period) + ')' if use_rsi_ma else 'disabled'}")
+    print(
+        f"  RSI-MA: {'enabled (variant=' + rsi_ma_variant + ', period=' + str(rsi_ma_period) + ')' if use_rsi_ma else 'disabled'}"
+    )
 
     try:
         # Fetch 1h data for longer history (15m limited to 60 days on yfinance)

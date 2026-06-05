@@ -41,3 +41,15 @@ results/
 
 # Ruff
 .ruff_cache/
+
+/.crew/
+/.crew
+!.crew/artifacts/
+!.crew/graphs/
+!.crew/artifacts/.gitkeep
+!.crew/graphs/.gitkeep
+
+# autoresearch (trading) runtime artifacts
+research/results.tsv
+research/best_config.json
+research/run.log

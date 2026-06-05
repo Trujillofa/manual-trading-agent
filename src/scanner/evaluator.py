@@ -701,6 +701,18 @@ def evaluate_session_breakout(
             "profile": "session_orb",
         }
 
+    # Quality filter (example iteration per brief): close must confirm the break side
+    # (reduces pure-wick fakes; only add if it improves OOS in harness runs).
+    if direction == "BUY" and cur_c < or_h or direction == "SELL" and cur_c > or_l:
+        direction = None
+    if not direction:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": [f"close did not confirm OR break for {sname}"],
+            "profile": "session_orb",
+        }
+
     # ATR for TP/SL (recent window)
     atr = calculate_atr(highs[-22:], lows[-22:], closes[-22:], 14)
     if atr is None or atr <= (min_atr_pips * pip):

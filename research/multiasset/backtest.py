@@ -112,6 +112,17 @@ def run_gross_tsmom_backtest(
 
 def print_gate_report(result: dict, universe_label: str = "universe") -> None:
     """Pretty-print the numbers that feed THE GATE."""
+    if result.get("error"):
+        print(f"\n=== GROSS TSMOM ({universe_label}) ===")
+        print(f"Insufficient data: {result.get('error')}")
+        print(
+            "Need history >> lookback (e.g. 300+ days for 252-bar momentum) for a real gross PF/Sharpe."
+        )
+        print(
+            "This is expected on short windows; the long backfills (metals 2016+, indices 2018+, FX) will provide it."
+        )
+        return
+
     m = result.get("metrics", {})
     print(f"\n=== GROSS TSMOM GATE REPORT ({universe_label}) ===")
     print(f"lookback (bars): {result.get('lookback')}")

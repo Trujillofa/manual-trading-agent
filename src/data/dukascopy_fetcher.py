@@ -32,6 +32,8 @@ DUKASCOPY_BASE_URL = "https://datafeed.dukascopy.com/datafeed"
 
 # Point values for converting integer prices to decimals.
 # JPY pairs use 3 decimal places (1000), others use 5 (100000).
+# Metals (XAUUSD/XAGUSD) on Dukascopy use 1000 (empirically verified 2026-06: gold ~4450,
+# silver ~73 with pv=1000 on recent M1 bi5). Indices will require their own verified values.
 POINT_VALUES: dict[str, int] = {}
 JPY_PAIRS = {
     "USDJPY",
@@ -49,6 +51,9 @@ JPY_PAIRS = {
     "ZARJPY",
 }
 
+# Metals use pv=1000 on Dukascopy (see _point_value and Phase 0.2 verification).
+METALS: set[str] = {"XAUUSD", "XAGUSD"}
+
 
 class DukascopyDataQualityError(Exception):
     """Raised when data quality gates fail (e.g., >5% weekdays with 0 bars)."""
@@ -61,6 +66,8 @@ class DukascopyDataQualityError(Exception):
 def _point_value(symbol: str) -> int:
     sym = symbol.upper().replace("/", "")
     if sym in JPY_PAIRS or sym.endswith("JPY"):
+        return 1000
+    if sym in METALS:
         return 1000
     return 100000
 

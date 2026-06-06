@@ -54,6 +54,34 @@ JPY_PAIRS = {
 # Metals use pv=1000 on Dukascopy (see _point_value and Phase 0.2 verification).
 METALS: set[str] = {"XAUUSD", "XAGUSD"}
 
+# Index instrument symbols (Dukascopy folder names for the public bi5 feed).
+# Sourced from Dukascopy range-of-markets + empirical probe (Phase 0.4).
+# Common forms: USA500.IDXUSD, USATECH.IDXUSD, DEU.IDX (or DEU40), etc.
+# The gate is relaxed for these because they observe exchange holidays (US, EU, JP).
+INDEXES: set[str] = {
+    "USA500",
+    "US500",
+    "USA500.IDXUSD",
+    "US500.IDXUSD",
+    "USATECH",
+    "USATECH100",
+    "USATECH.IDXUSD",
+    "DEU40",
+    "DEU.IDX",
+    "GER40",
+    "DEU40.IDXUSD",
+    "GBR100",
+    "UK100",
+    "GBR100.IDXUSD",
+    "JPN225",
+    "JP225",
+    "JPN225.IDXUSD",
+}
+
+# Verified point values for indices (populated after empirical probe + price sanity check,
+# exactly as done for metals). Keys should be the *normalized* uppercased symbol (no /).
+INDEX_POINT_VALUES: dict[str, int] = {}
+
 
 class DukascopyDataQualityError(Exception):
     """Raised when data quality gates fail (e.g., >5% weekdays with 0 bars)."""
@@ -69,6 +97,12 @@ def _point_value(symbol: str) -> int:
         return 1000
     if sym in METALS:
         return 1000
+    if sym in INDEX_POINT_VALUES:
+        return INDEX_POINT_VALUES[sym]
+    if sym in INDEXES:
+        # Will be replaced by the empirically verified value from probe (Phase 0.4).
+        # Using 100 as a common default for many index CFDs until verification.
+        return 100
     return 100000
 
 
@@ -369,22 +403,26 @@ def download_dukascopy_data(
     end_date: datetime,
     progress_callback=None,
     strict: bool = True,
+    max_weekday_zero_rate: float | None = None,
 ) -> tuple[pd.DataFrame, FetchSummary]:
     """Download M1 candle data from Dukascopy with structured logging.
 
     Args:
-        symbol: Forex pair (e.g., "EURUSD", "EUR/USD")
+        symbol: Instrument (e.g. "EURUSD", "XAUUSD", "USA500").
         start_date: Start date (timezone-aware or naive)
         end_date: End date
         progress_callback: Optional callback(fraction) for progress
-        strict: If True, raises DukascopyDataQualityError if >5% weekdays have 0 bars
+        strict: If True, applies the weekday zero-bar quality gate.
+        max_weekday_zero_rate: Override for the allowed fraction of weekdays with
+            zero bars (instrument-aware). If None, uses 0.05 for FX/metals and
+            ~0.18 for known indices (they have exchange holidays that are
+            legitimate zero-bar weekdays). See Phase 0.4.
 
     Returns:
-        Tuple of (DataFrame with columns: datetime, open, high, low, close, volume,
-                  FetchSummary with detailed fetch statistics)
+        Tuple of (DataFrame ..., FetchSummary ...)
 
     Raises:
-        DukascopyDataQualityError: If strict=True and >5% weekdays have 0 bars
+        DukascopyDataQualityError: If strict and rate exceeds the (instrument) threshold.
     """
     start = start_date.replace(tzinfo=None) if start_date.tzinfo else start_date
     end = end_date.replace(tzinfo=None) if end_date.tzinfo else end_date
@@ -436,12 +474,16 @@ def download_dukascopy_data(
         total_weekdays=total_weekdays,
     )
 
-    # Data quality gate
-    if strict and summary.weekday_zero_bar_rate > 0.05:
+    # Data quality gate (instrument-aware for indices)
+    if max_weekday_zero_rate is None:
+        sym_norm = symbol.upper().replace("/", "")
+        max_weekday_zero_rate = 0.18 if sym_norm in INDEXES else 0.05
+
+    if strict and summary.weekday_zero_bar_rate > max_weekday_zero_rate:
         raise DukascopyDataQualityError(
             f"Data quality gate failed: {summary.weekday_zero_bar_rate:.1%} of weekdays "
             f"({weekday_zero_bar_days}/{total_weekdays}) returned 0 bars. "
-            f"Threshold: 5%. Outcomes: {outcomes}",
+            f"Threshold: {max_weekday_zero_rate:.0%}. Outcomes: {outcomes}",
             summary,
         )
 
@@ -484,26 +526,27 @@ def get_multi_timeframe_data_dukascopy(
     timeframes: list[str] | None = None,
     progress_callback=None,
     strict: bool = True,
+    max_weekday_zero_rate: float | None = None,
 ) -> tuple[dict[str, pd.DataFrame], FetchSummary]:
     """Download M1 data from Dukascopy and resample to multiple timeframes.
 
     Args:
-        symbol: Forex pair (e.g., "EURUSD")
-        start_date: Start date
-        end_date: End date
-        timeframes: Target timeframes (default: ["h1", "m30", "m15"])
-        progress_callback: Optional progress callback
-        strict: If True, raises DukascopyDataQualityError if >5% weekdays have 0 bars
-
-    Returns:
-        Tuple of (dict mapping timeframe key to DataFrame with DatetimeIndex,
-                  FetchSummary with detailed fetch statistics)
+        symbol: Instrument code.
+        start_date / end_date: range
+        timeframes: e.g. ["d1", "h4"]
+        strict / max_weekday_zero_rate: forwarded to download_dukascopy_data
+            (instrument-aware relaxed gate for indices).
     """
     if timeframes is None:
         timeframes = ["h1", "m30", "m15"]
 
     m1_data, summary = download_dukascopy_data(
-        symbol, start_date, end_date, progress_callback, strict=strict
+        symbol,
+        start_date,
+        end_date,
+        progress_callback,
+        strict=strict,
+        max_weekday_zero_rate=max_weekday_zero_rate,
     )
     if m1_data.empty:
         return {}, summary

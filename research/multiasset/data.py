@@ -29,6 +29,23 @@ CACHE_ROOT.mkdir(parents=True, exist_ok=True)
 # Dukascopy has more; start here and backfill as needed for a given experiment.
 DEFAULT_START = datetime(2018, 1, 1, tzinfo=UTC)  # ~8+ years as of 2026
 
+# Canonical symbols for the multi-asset momentum universe (gross-first breadth).
+# Metals (XAU/XAG) + the five indices we target for diversification.
+# FX majors daily are added in the gross path (step 5 of the sequence).
+METALS = ("XAUUSD", "XAGUSD")
+INDEX_UNIVERSE = (
+    "USA500",
+    "USATECH",
+    "DEU40",
+    "GBR100",
+    "JPN225",
+)  # normalized names; dukascopy_fetcher.INDEXES contains the actual feed variants + .IDXUSD forms
+
+
+def _is_index(symbol: str) -> bool:
+    s = symbol.upper().replace("/", "")
+    return s in INDEX_UNIVERSE or any(s in idx for idx in INDEX_UNIVERSE)  # tolerant match
+
 
 FREQ = {
     "m1": "1min",
@@ -74,11 +91,10 @@ def fetch_and_cache(
     force: bool = False,
     strict: bool = False,
 ) -> dict[str, pd.DataFrame]:
-    """Download (if needed) M1, resample to requested TFs, write parquet caches.
+    """Download (if needed) M1, resample to requested TFs, write cache files.
 
     Returns the requested frames (DatetimeIndex, OHLCV). Idempotent unless force=True.
-    For metals the 5% weekday gate is usually fine (strict=False recommended for long windows
-    with holidays/partial days).
+    Uses relaxed weekday-zero gate for indices (0.4).
     """
     sym = _sym(symbol)
     start = start or DEFAULT_START
@@ -89,15 +105,21 @@ def fetch_and_cache(
         end = end.replace(tzinfo=UTC)
 
     result: dict[str, pd.DataFrame] = {}
+    is_idx = _is_index(sym)
+    # Indices get a relaxed quality gate (holidays are expected zeros).
+    dl_max_rate = 0.20 if is_idx else None
+
     for tf in timeframes:
         cpath = _cache_path(sym, tf)
         if cpath.exists() and not force:
-            df = pd.read_parquet(cpath)
+            df = pd.read_pickle(cpath)
             result[tf] = df
             continue
 
-        # Need fresh M1 then resample
-        m1, _summary = download_dukascopy_data(sym, start, end, strict=strict)
+        # Need fresh M1 then resample (instrument-aware gate)
+        m1, _summary = download_dukascopy_data(
+            sym, start, end, strict=strict, max_weekday_zero_rate=dl_max_rate
+        )
         if m1.empty:
             result[tf] = pd.DataFrame()
             continue
@@ -116,8 +138,8 @@ def fetch_and_cache(
         df = df.sort_index()
 
         cpath.parent.mkdir(parents=True, exist_ok=True)
-        # Use pickle (reliable, no native engine). Parquet can replace when the
-        # research venv has a compatible pyarrow (see import error history 2026-06).
+        # Use pickle (reliable, no native engine). Parquet is the aspirational format
+        # per the execution plan; pickle is the working backend in this venv.
         df.to_pickle(cpath)
         result[tf] = df
 
@@ -164,12 +186,15 @@ def cache_info(symbol: str) -> dict[str, object]:
 
 
 if __name__ == "__main__":
-    # Convenience: python -m research.multiasset.data  (populates a practical window for metals)
+    # Convenience entrypoint for gross-first data prep.
+    # Examples:
+    #   python -m research.multiasset.data --symbols XAUUSD,XAGUSD --start 2016-01-01 --force
+    #   python -m research.multiasset.data --symbols USA500,DEU40,GBR100 --start 2018-01-01 --force
     import argparse
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--symbols", default="XAUUSD,XAGUSD")
-    ap.add_argument("--start", default="2022-01-01")
+    ap.add_argument("--start", default="2018-01-01")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
 
@@ -179,5 +204,8 @@ if __name__ == "__main__":
         print(f"Populating cache for {s} from {start_dt.date()} (force={args.force}) ...")
         frames = fetch_and_cache(s, start=start_dt, force=args.force, strict=False)
         for tf, df in frames.items():
-            print(f"  {tf}: {len(df)} bars, span {df.index.min()}..{df.index.max()}")
-    print("Done. Use research/multiasset/data.py:cache_info() or load_cached().")
+            if df is not None and not df.empty and hasattr(df.index, "min"):
+                print(f"  {tf}: {len(df)} bars, span {df.index.min()}..{df.index.max()}")
+            else:
+                print(f"  {tf}: empty")
+    print("Done. Use research/multiasset/data.py:cache_info() or load_cached() for verification.")

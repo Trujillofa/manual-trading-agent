@@ -62,7 +62,8 @@ def _is_index(symbol: str) -> bool:
 def _fetch_index_yf(symbol: str, start: datetime, end: datetime) -> pd.DataFrame:
     """Fallback daily OHLC via yfinance for indices when Dukascopy bi5 path is empty.
 
-    Returns a DataFrame with datetime index and open/high/low/close/volume (volume may be 0).
+    Returns a DataFrame with a 'datetime' column + lowercase open/high/low/close/volume
+    (to match the shape expected by the dukascopy m1 path and _resample_ohlc).
     """
     import yfinance as yf  # already a project dep
 
@@ -70,15 +71,30 @@ def _fetch_index_yf(symbol: str, start: datetime, end: datetime) -> pd.DataFrame
     df = yf.download(ticker, start=start.date(), end=end.date(), progress=False, auto_adjust=False)
     if df is None or df.empty:
         return pd.DataFrame()
-    df = df.rename(columns=str.lower)
+
+    # yfinance (esp. with recent pandas) often returns MultiIndex columns
+    # e.g. level0 = Open/High/... , level1 = ticker. Flatten to simple columns.
+    if isinstance(df.columns, pd.MultiIndex):
+        # take the price field (level 0), lower it
+        df.columns = [str(c[0]).lower() for c in df.columns]
+    else:
+        df.columns = [str(c).lower() for c in df.columns]
+
     if "adj close" in df.columns and "close" not in df.columns:
         df = df.rename(columns={"adj close": "close"})
-    df = df[["open", "high", "low", "close", "volume"]].dropna(how="all")
-    df.index = pd.to_datetime(df.index, utc=True)
+
+    # Select only the columns we care about (volume may be missing or 0 for indices)
+    wanted = ["open", "high", "low", "close", "volume"]
+    present = [c for c in wanted if c in df.columns]
+    df = df[present].dropna(how="all")
+
+    # Normalize index to tz-aware datetime named 'datetime', then reset to column
+    # (the caller / _resample_ohlc expects a 'datetime' column like dukascopy m1 output)
+    idx = pd.to_datetime(df.index, utc=True)
+    df = df.copy()
+    df.index = idx
     df.index.name = "datetime"
-    return (
-        df.reset_index()
-    )  # the rest of the pipeline expects a 'datetime' column like dukascopy output
+    return df.reset_index()
 
 
 FREQ = {

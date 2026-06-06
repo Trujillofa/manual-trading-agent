@@ -13,10 +13,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from research.evaluate import IS_FRAC, MIN_OOS_PF, MIN_TRADES, evaluate_config
 from research.strategy_config import CONFIG
+
+# Agent-proof guard (see autosearch.py and docs/research/FX_DIRECTIONAL_TA_NEGATIVE_RESULT_2026-06.md).
+_NEGATIVE_RESULT_REPORT = (
+    Path(__file__).resolve().parent.parent
+    / "docs"
+    / "research"
+    / "FX_DIRECTIONAL_TA_NEGATIVE_RESULT_2026-06.md"
+)
 
 
 def _print_block(cfg: dict) -> None:
@@ -43,7 +52,25 @@ def _print_block(cfg: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run one autoresearch trading experiment")
     parser.add_argument("--config", type=str, default=None, help="JSON config override")
+    parser.add_argument(
+        "--override-negative-result",
+        type=str,
+        default=None,
+        help="Path to the negative-result report to bypass the FX-majors directional TA stop (see the 2026-06 locked finding).",
+    )
     args = parser.parse_args()
+
+    if args.override_negative_result is None:
+        if _NEGATIVE_RESULT_REPORT.exists():
+            print(
+                f"STOP: FX-majors directional TA negative result locked (2026-06). "
+                f"See {_NEGATIVE_RESULT_REPORT}. Use --override-negative-result to bypass only for qualifying re-entry criteria."
+            )
+            sys.exit(2)
+    else:
+        if not Path(args.override_negative_result).exists():
+            print("ERROR: --override-negative-result file does not exist.")
+            sys.exit(2)
 
     cfg = dict(CONFIG)
     if args.config:

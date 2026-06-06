@@ -1,5 +1,17 @@
 # autoresearch (trading) — find a robustly profitable config
 
+> **STOP — FX Majors Directional TA (M15/H1 OHLC) NEGATIVE RESULT (2026-06)**
+>
+> After three full-365d gross-vs-net diagnostics (ORB M15, trend-pullback M15, H1 re-test) + live sparsity evidence:
+> gross PF consistently ~1.0–1.07 (no accessible edge before costs). Net destroyed by friction.
+> **Do not restart FX-majors directional-TA search on this data/family.**
+>
+> See: `docs/research/FX_DIRECTIONAL_TA_NEGATIVE_RESULT_2026-06.md`
+> Re-open **only** on explicit falsifiable criteria in that report (different instrument, different edge source, or non-OHLC data).
+> Any FX-majors OHLC directional TA run here requires `--override-negative-result <path-to-report>` (autosearch / run_experiment).
+>
+> The durable value of this repo is the harness, unified evaluator, audit discipline, and the honesty of the negative result — not profitable alerts.
+
 Adapted from Karpathy's autoresearch. Instead of minimizing `val_bpb` on a
 pinned validation shard, we **maximize a held-out-validated profitability
 `score`** on Dukascopy M1 with realistic costs. The judge is out-of-sample, so

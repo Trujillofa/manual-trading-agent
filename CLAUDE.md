@@ -44,6 +44,8 @@ docker compose up -d                 # runs scan every 15min + telegram-poll
 
 **Multi-timeframe RSI forex scanner** that alerts via Telegram when RSI aligns across 1h/30m/15m timeframes.
 
+**2026-06 Locked Finding (FX Directional TA):** After full-365d gross-vs-net diagnostics on ORB and trend-pullback families (M15 + H1), gross PF ~1.0–1.07 with no accessible edge before realistic costs. Live strict MTF variant is extremely sparse (same no-edge family). See `docs/research/FX_DIRECTIONAL_TA_NEGATIVE_RESULT_2026-06.md` and `research/program.md` (STOP banner + re-entry criteria). This line of research is terminated for FX majors on OHLC TA. The durable value is the unified evaluator, honest harness, audit, and the discipline. Future profitability work requires new instrument/edge/data per the re-entry rules. Agent-proof guards exist in autosearch/run_experiment.
+
 ### Signal Pipeline (scan command)
 
 ```

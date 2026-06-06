@@ -1,5 +1,7 @@
 # Manual Trading Agent — Operator Guide
 
+**2026-06 Status Note:** Rigorous full-history diagnostics found no accessible gross edge for the core FX-majors directional MTF/TA families on M15 or H1 (gross PF ~1.0–1.07 before costs; live variant extremely sparse). See `docs/research/FX_DIRECTIONAL_TA_NEGATIVE_RESULT_2026-06.md`. The system operates as a **structured scanner + research/audit instrument** and selective manual-alert aid (Branch B posture). Alerts are explainable but come from a family with no validated positive expectancy. Invest in the tool for watchlist discipline and future qualifying research (per re-entry criteria in the report), not as a source of proven edge.
+
 ## Purpose
 This bot is a **manual trading decision assistant** for forex pairs. It is not meant to blindly auto-execute based on one indicator. It scans, classifies, ranks, and explains setups so the operator can understand what is happening.
 

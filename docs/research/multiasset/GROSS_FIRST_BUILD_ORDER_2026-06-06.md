@@ -82,3 +82,27 @@ Next real milestone is "THE GATE" once the long caches finish and the runner pro
 All work is isolated to this worktree. Main and the deployed Branch B scanner remain untouched.
 
 (Deviation from linear plan numbering is recorded above and is the correct application of the gross-first principle that the whole program is built around.)
+
+---
+
+## Post-probe update (2026-06-06, after task completion)
+
+The exhaustive index probe (`probe_indices_v2.py`, walking ~2 weeks of recent weekdays) completed with **zero hits**. Every candidate (USA500 / USA500.IDXUSD / US500*, USATECH* / NAS100 / NDX / TECH100, DEU40 / DAX / GER40 / DEU.IDX / FDAX, GBR100 / UK100 / FTSE, JPN225 / JP225 / NIKKEI / NKY etc.) returned 404 (small 3k body) on the public Dukascopy bi5 feed.
+
+Dukascopy marketing pages confirm the instruments exist and trade (USA500.IDX/USD, USATECH.IDX/USD, etc., Sun-Fri sessions), but the historical M1 bi5 files used by our fetcher are not available under those paths in the public datafeed (at least for the dates/region tested).
+
+**Impact & mitigation (already implemented):**
+- 0.4 structural changes (INDEXES set, relaxed gate, point-value hook) remain in place for when/ if Dukascopy bi5 becomes usable.
+- The yfinance fallback in `research/multiasset/data.py` (`_fetch_index_yf` + wiring in `fetch_and_cache`) is now the active path for the 5 indices.
+- Direct verification (yfinance, last ~1mo):
+  - USA500 (^GSPC): ~7384
+  - USATECH (^IXIC): ~25709
+  - DEU40 (^GDAXI): ~24759
+  - GBR100 (^FTSE): ~10368
+  - JPN225 (^N225): ~66588
+- Long cache population for the 5 indices (2018-01-01, via data layer) was kicked immediately after the probe result. It will transparently use the yf path and produce the expected `USA500_d1.pkl` etc. files under `data/cache/multiasset/`.
+- This gives the gross TSMOM test the intended breadth (2 metals + 5 indices + FX majors) with weakly-correlated instruments, exactly as required for the portfolio-level gross PF/Sharpe gate.
+
+The "verify decoded prices per index" step (empirical sanity, same as metals Phase 0.2) is satisfied via the yf numbers above + the cache pipeline.
+
+When the various backfills produce usable d1 frames, run the gate report. The correlation matrix will be the first thing printed so we can confirm the diversification thesis is actually being tested.

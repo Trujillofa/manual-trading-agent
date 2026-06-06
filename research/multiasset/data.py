@@ -22,6 +22,18 @@ from src.data.dukascopy_fetcher import (
     download_dukascopy_data,
 )
 
+# yfinance ticker map for indices when Dukascopy public bi5 path returns no data.
+# Used only as a breadth fallback for the gross-first diagnostic.
+YFINANCE_INDEX_MAP = {
+    "USA500": "^GSPC",  # S&P 500
+    "US500": "^GSPC",
+    "USATECH": "^IXIC",  # Nasdaq (or ^NDX for Nasdaq-100; ^IXIC is more liquid in yf)
+    "USATECH100": "^NDX",
+    "DEU40": "^GDAXI",  # DAX
+    "GBR100": "^FTSE",  # FTSE 100
+    "JPN225": "^N225",  # Nikkei 225
+}
+
 CACHE_ROOT = Path("data") / "cache" / "multiasset"
 CACHE_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -45,6 +57,28 @@ INDEX_UNIVERSE = (
 def _is_index(symbol: str) -> bool:
     s = symbol.upper().replace("/", "")
     return s in INDEX_UNIVERSE or any(s in idx for idx in INDEX_UNIVERSE)  # tolerant match
+
+
+def _fetch_index_yf(symbol: str, start: datetime, end: datetime) -> pd.DataFrame:
+    """Fallback daily OHLC via yfinance for indices when Dukascopy bi5 path is empty.
+
+    Returns a DataFrame with datetime index and open/high/low/close/volume (volume may be 0).
+    """
+    import yfinance as yf  # already a project dep
+
+    ticker = YFINANCE_INDEX_MAP.get(symbol.upper().replace("/", ""), symbol)
+    df = yf.download(ticker, start=start.date(), end=end.date(), progress=False, auto_adjust=False)
+    if df is None or df.empty:
+        return pd.DataFrame()
+    df = df.rename(columns=str.lower)
+    if "adj close" in df.columns and "close" not in df.columns:
+        df = df.rename(columns={"adj close": "close"})
+    df = df[["open", "high", "low", "close", "volume"]].dropna(how="all")
+    df.index = pd.to_datetime(df.index, utc=True)
+    df.index.name = "datetime"
+    return (
+        df.reset_index()
+    )  # the rest of the pipeline expects a 'datetime' column like dukascopy output
 
 
 FREQ = {
@@ -120,6 +154,9 @@ def fetch_and_cache(
         m1, _summary = download_dukascopy_data(
             sym, start, end, strict=strict, max_weekday_zero_rate=dl_max_rate
         )
+        if m1.empty and is_idx:
+            # yfinance fallback for index breadth (gross gate needs diversified bets)
+            m1 = _fetch_index_yf(sym, start, end)
         if m1.empty:
             result[tf] = pd.DataFrame()
             continue

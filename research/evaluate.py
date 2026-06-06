@@ -49,6 +49,7 @@ from scripts.run_donchian_backtest import (  # noqa: E402
 from src.scanner.evaluator import (  # noqa: E402  # the pure live entry (R2)
     evaluate_entry,
     evaluate_session_breakout,
+    evaluate_trend_pullback,
 )
 
 # --- fixed constants (the contract; do not tune these to flatter a config) ---
@@ -520,6 +521,21 @@ def backtest_live_entry(
         e = (entry or "mtf_rsi").lower()
         if e in ("session_orb", "session", "orb", "session_breakout"):
             dec = evaluate_session_breakout(
+                pair,
+                data_1h,
+                data_30m,
+                data_15m,
+                active_signal_state=call_active,
+                alignment_state=alignment_state,
+                now_utc=now_utc,
+                spread_quote=spread_q,
+                news_blocked=False,
+                spread_filter_enabled=False,
+                bars_aligned=None,
+                overrides=overrides,
+            )
+        elif e in ("trend_pullback", "trend_pullback_momentum", "pullback", "trend"):
+            dec = evaluate_trend_pullback(
                 pair,
                 data_1h,
                 data_30m,

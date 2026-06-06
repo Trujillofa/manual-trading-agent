@@ -36,6 +36,7 @@ import pandas as pd
 
 from src.config import get_settings
 from src.indicators.atr import calculate_atr
+from src.indicators.ema import calculate_ema
 from src.indicators.high_low import (
     previous_rolling_highest_high,
     previous_rolling_lowest_low,
@@ -748,4 +749,175 @@ def evaluate_session_breakout(
         "or_high": or_h,
         "or_low": or_l,
         "bars_since_or": bars_since_or,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Hypothesis #2 (Move 1): Trend-pullback momentum (ADX > 25 regime only)
+# Pure entry function with identical contract to evaluate_entry / session_orb
+# so it drops straight into the unified driver + full gross/net diagnostic.
+#
+# Thesis (per brief): Trade *with* the trend (ADX>25), enter on pullbacks to
+# EMA / prior structure. Opposite of the exhausted mean-reversion family.
+# Higher frequency in trending FX majors.
+# ---------------------------------------------------------------------------
+
+
+def evaluate_trend_pullback(
+    pair: str,
+    data_1h: pd.DataFrame,
+    data_30m: pd.DataFrame,
+    data_15m: pd.DataFrame,
+    active_signal_state: dict | None = None,
+    alignment_state: dict | None = None,
+    spread_quote: dict | None = None,
+    news_blocked: bool | None = None,
+    now_utc: datetime | None = None,
+    bars_aligned: int | None = None,
+    spread_filter_enabled: bool = True,
+    overrides: dict | None = None,
+) -> dict[str, Any]:
+    """Pure trend-pullback momentum entry (hypothesis #2).
+
+    Only fires in trending regimes (ADX(1h) > threshold, default 25).
+    Trend direction from +DI/-DI.
+    Pullback to fast EMA in the direction of slow EMA / structure.
+    Reclaim = entry trigger.
+
+    Returns the standard contract for seam compatibility.
+    Tunables via overrides: adx_threshold, ema_fast/slow, tp_atr_mult, sl_atr_mult, etc.
+    """
+    ov = dict(overrides or {})
+    if data_15m is None or getattr(data_15m, "empty", True) or len(data_15m) < 30:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": ["insufficient data"],
+            "profile": "trend_pullback",
+        }
+
+    if news_blocked:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": ["news blocked"],
+            "profile": "trend_pullback",
+        }
+
+    # Determine now
+    if now_utc is None:
+        last = data_15m.index[-1]
+        now_utc = last.to_pydatetime() if isinstance(last, pd.Timestamp) else last
+    if getattr(now_utc, "tzinfo", None) is None:
+        now_utc = now_utc.replace(tzinfo=UTC)
+
+    # --- Trend filter on 1h (stronger regime signal)
+    from src.indicators.adx import calculate_adx_full
+
+    adx_threshold = float(ov.get("adx_threshold", 25.0))
+    h1_highs = data_1h["high"].astype(float).tolist()[-60:] if len(data_1h) > 0 else []
+    h1_lows = data_1h["low"].astype(float).tolist()[-60:] if len(data_1h) > 0 else []
+    h1_closes = data_1h["close"].astype(float).tolist()[-60:] if len(data_1h) > 0 else []
+
+    adx_res = calculate_adx_full(h1_highs, h1_lows, h1_closes, 14) if len(h1_closes) >= 30 else None
+    if adx_res is None:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": ["insufficient ADX data"],
+            "profile": "trend_pullback",
+        }
+    adx_val, plus_di, minus_di = adx_res
+    if adx_val < adx_threshold:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": [f"weak trend (ADX {adx_val:.0f} < {adx_threshold})"],
+            "profile": "trend_pullback",
+        }
+
+    is_bull = plus_di > minus_di
+
+    # --- 15m EMAs for pullback (fast) in direction of slow
+    closes15 = data_15m["close"].astype(float).tolist()
+    highs15 = data_15m["high"].astype(float).tolist()
+    lows15 = data_15m["low"].astype(float).tolist()
+
+    ema_fast_p = int(ov.get("ema_fast", 20))
+    ema_slow_p = int(ov.get("ema_slow", 50))
+    ema_fast = calculate_ema(closes15, ema_fast_p)
+    ema_slow = calculate_ema(closes15, ema_slow_p)
+
+    ema_f = ema_fast[-1] if ema_fast and ema_fast[-1] is not None else None
+    ema_s = ema_slow[-1] if ema_slow and ema_slow[-1] is not None else None
+    if ema_f is None or ema_s is None:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": ["insufficient EMA data"],
+            "profile": "trend_pullback",
+        }
+
+    cur_close = closes15[-1]
+    cur_low = lows15[-1]
+    cur_high = highs15[-1]
+
+    # Pullback + reclaim logic
+    fired = False
+    direction = None
+    if is_bull:
+        # Bull trend: price generally above slow EMA, pullback touches fast EMA, reclaim
+        if cur_close > ema_s and cur_low <= ema_f and cur_close > ema_f:
+            # Additional structure: not too extended (optional simple guard)
+            fired = True
+            direction = "BUY"
+    else:
+        if cur_close < ema_s and cur_high >= ema_f and cur_close < ema_f:
+            fired = True
+            direction = "SELL"
+
+    if not fired:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": ["no pullback reclaim in trend"],
+            "profile": "trend_pullback",
+        }
+
+    # ATR TP/SL (trend entries often get a bit more room)
+    atr = calculate_atr(highs15[-22:], lows15[-22:], closes15[-22:], 14)
+    if atr is None or atr <= 0:
+        return {
+            "fired": False,
+            "direction": None,
+            "no_trade_reasons": ["low ATR"],
+            "profile": "trend_pullback",
+        }
+
+    tp_mult = float(ov.get("tp_atr_mult", 2.0))  # room for trends
+    sl_mult = float(ov.get("sl_atr_mult", 1.0))
+
+    entry = cur_close
+    risk = sl_mult * atr
+    rew = tp_mult * atr
+
+    if direction == "BUY":
+        tp = entry + rew
+        sl = entry - risk
+    else:
+        tp = entry - rew
+        sl = entry + risk
+
+    return {
+        "fired": True,
+        "direction": direction,
+        "entry": float(entry),
+        "tp": float(tp),
+        "sl": float(sl),
+        "atr": float(atr),
+        "no_trade_reasons": [],
+        "confidence": 0.6,
+        "profile": f"trend_pullback_{'bull' if is_bull else 'bear'}",
+        "adx": float(adx_val),
+        "trend": "bull" if is_bull else "bear",
     }

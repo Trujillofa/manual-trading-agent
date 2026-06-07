@@ -7,8 +7,8 @@
 ## Universe & Data (full intended breadth per locked plan)
 - **Metals:** XAUUSD, XAGUSD — Dukascopy bi5, long backfill from 2016-01-01 (~3780–3790 trading days to 2026-06).
 - **Indices (the 5 targeted for diversification):** USA500, USATECH, DEU40, GBR100, JPN225 — 2018-01-01 to 2026-06-05 via yfinance fallback (Dukascopy public bi5 feed returned 404 for all variants despite confirmed trading hours on Dukascopy site; ~2054–2138 daily bars / ~8.4 years).
-- **FX majors (daily):** EURUSD, GBPUSD (long from 2018 kicks; other majors like USDJPY/AUDUSD/USDCAD not fully populated in the long runs available at gate time).
-- **Total for this gate run:** 9 instruments, 3810 trading days overlap (driven by 2016 metals start), using daily closes.
+- **FX majors (daily):** EURUSD + GBPUSD full long d1+h4 (2018-01-01 → 2026-06, ~3065 trading days). USDJPY d1 only (2018-01-01 → 2026-06, 3068 bars); no h4. AUDUSD/USDCAD/USDCHF/NZDUSD: not populated (the dedicated long FX backfill task was terminated by the 10-hour max_runtime limit after partially writing USDJPY d1).
+- **Total for this gate run:** 10 instruments, 3810 trading days overlap (driven by 2016 metals start), using daily closes.
 
 **Note on data source for indices:** Public Dukascopy bi5 M1 (the high-quality path used for FX/metals) was unavailable for these CFD indices in exhaustive probes (all 404). yfinance daily closes were used as the fallback to satisfy the "full breadth" requirement for the gross test. This is lower-frequency but appropriate and high-quality for daily momentum evaluation.
 
@@ -25,32 +25,33 @@
 This matches the "minimal gross path" in the execution plan and the "gross-first decision gate" for Hypothesis #1.
 
 ## Results
-**Loaded:** 3810 days across 9 instruments (XAUUSD, XAGUSD, USA500, USATECH, DEU40, GBR100, JPN225, EURUSD, GBPUSD).
+**Loaded:** 3810 days across 10 instruments (XAUUSD, XAGUSD, USA500, USATECH, DEU40, GBR100, JPN225, EURUSD, GBPUSD, USDJPY).
 
 ### Portfolio Gross Metrics (252-bar lookback)
 - Days (after returns): 3809
-- Final equity: 1.150
-- Gross PF: **1.042**
-- Sharpe (annualized): **0.176**
-- MAR: **0.079**
-- Max DD: 17.10%
-- Ann. return (approx CAGR): 1.35%
+- Final equity: 1.113
+- Gross PF: **1.036**
+- Sharpe (annualized): **0.150**
+- MAR: **0.061**
+- Max DD: 16.89%
+- Ann. return (approx CAGR): 1.03%
 
 ### Correlation Matrix (daily instrument returns)
 ```
-         XAUUSD  XAGUSD  USA500  USATECH  DEU40  GBR100  JPN225  EURUSD  GBPUSD
-XAUUSD     1.00    0.78    0.10     0.10   0.08    0.07    0.05    0.37    0.33
-XAGUSD     0.78    1.00    0.19     0.20   0.13    0.12    0.06    0.33    0.32
-USA500     0.10    0.19    1.00     0.95   0.52    0.47    0.13    0.16    0.25
-USATECH    0.10    0.20    0.95     1.00   0.47    0.37    0.10    0.15    0.24
-DEU40      0.08    0.13    0.52     0.47   1.00    0.80    0.33    0.13    0.22
-GBR100     0.07    0.12    0.47     0.37   0.80    1.00    0.31    0.09    0.08
-JPN225     0.05    0.06    0.13     0.10   0.33    0.31    1.00    0.07    0.07
-EURUSD     0.37    0.33    0.16     0.15   0.13    0.09    0.07    1.00    0.70
-GBPUSD     0.33    0.32    0.25     0.24   0.22    0.08    0.07    0.70    1.00
+         XAUUSD  XAGUSD  USA500  USATECH  DEU40  GBR100  JPN225  EURUSD  GBPUSD  USDJPY
+XAUUSD     1.00    0.78    0.10     0.10   0.08    0.07    0.05    0.37    0.33   -0.34
+XAGUSD     0.78    1.00    0.19     0.20   0.13    0.12    0.06    0.33    0.32   -0.21
+USA500     0.10    0.19    1.00     0.95   0.52    0.47    0.13    0.16    0.25    0.08
+USATECH    0.10    0.20    0.95     1.00   0.47    0.37    0.10    0.15    0.24    0.08
+DEU40      0.08    0.13    0.52     0.47   1.00    0.80    0.33    0.13    0.22    0.03
+GBR100     0.07    0.12    0.47     0.37   0.80    1.00    0.31    0.09    0.08    0.06
+JPN225     0.05    0.06    0.13     0.10   0.33    0.31    1.00    0.07    0.07    0.01
+EURUSD     0.37    0.33    0.16     0.15   0.13    0.09    0.07    1.00    0.70   -0.45
+GBPUSD     0.33    0.32    0.25     0.24   0.22    0.08    0.07    0.70    1.00   -0.38
+USDJPY    -0.34   -0.21    0.08     0.08   0.03    0.06    0.01   -0.45   -0.38    1.00
 ```
 
-**Mean pairwise correlation (excl. diagonal):** **0.27**
+**Mean pairwise correlation (excl. diagonal):** **0.19**
 
 - Metals cluster (XAU/XAG): 0.78 (expected).
 - US Tech/500: 0.95.
@@ -69,7 +70,7 @@ Per the execution plan (Phase 1 gross-first diagnostic and the decision tree in 
 
 **Verdict: PIVOT or STOP for daily TSMOM.**
 
-This is the honest gross-first outcome on ~8–10+ years across a diversified (low-corr) 9-instrument book. Even before any swap/spread/commission, the strategy delivers essentially flat-to-modest positive PnL with high drawdown risk and no meaningful edge.
+This is the honest gross-first outcome on ~8–10+ years across a diversified (low-corr) 10-instrument book (metals + 5 indices + 3 FX majors with available long data). Even before any swap/spread/commission, the strategy delivers essentially flat-to-modest positive PnL with high drawdown risk and no meaningful edge.
 
 ## Anti-Overfit / Plan Fidelity Notes
 - Gross-first strictly observed (no costs model built or tuned against).
@@ -91,4 +92,4 @@ Caches (parquet/pickle under `data/cache/multiasset/`) are gitignored and were p
 
 ---
 
-*Gross PF 1.042 / Sharpe 0.176 on 8–10y diversified book (metals + indices + FX majors daily) is the kill switch. TSMOM daily does not clear it.*
+*Gross PF 1.036 / Sharpe 0.150 on 8–10y diversified book (metals + 5 indices + available FX majors) is the kill switch. TSMOM daily does not clear it.*

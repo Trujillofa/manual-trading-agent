@@ -32,6 +32,7 @@ research is **terminated** (locked + agent-guarded). The system's honest posture
 - Code: `main` @ latest (all of the above, committed + pushed).
 - Prod (Hetzner, `acca11b`): deployed, healthy, running as the Branch B scanner/alerter.
 - Promotion-table P&L numbers in older docs: **retired** (came from divergent engines).
+- 2026-06 research (isolated worktree `research-multiasset-momentum`): daily TSMOM on metals (2016+ Dukascopy), 5 indices (2018+ via yfinance fallback), core FX majors. Gross-first gate on long data (~10y effective, 10 instruments, 252-bar lookback, inv-vol sizing): gross PF 1.036, Sharpe 0.15. No accessible edge before costs/friction. Lane closed; negative result archived on the research branch (detailed report + harness). No production promotion or further TSMOM tuning.
 
 ## Key evidence (the diagnostic table)
 | Entry | TF | Trades | Gross PF | Net PF |
@@ -48,3 +49,4 @@ a new data adapter + cost model — see the new-program plan.
 ## Do NOT
 Restart FX-majors OHLC directional TA (guarded). Cite retired promotion numbers.
 Tune costs or parameters of a ~1.0 gross base. Run correlated 4th TA variants.
+Extend or retune a daily TSMOM result that failed the gross gate at PF ≈ 1.03–1.04 / weak Sharpe (this lane is archived).

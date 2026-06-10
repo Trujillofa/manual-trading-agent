@@ -29,6 +29,28 @@ from pathlib import Path
 from typing import Any
 
 AUDIT_PATH = Path("logs/signal_audit.jsonl")
+OBSERVATION_WINDOW_PATH = Path("logs/observation_window_start.txt")
+
+
+def _parse_ts(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _load_observation_start() -> datetime | None:
+    if not OBSERVATION_WINDOW_PATH.exists():
+        return None
+    for line in OBSERVATION_WINDOW_PATH.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("Start UTC:"):
+            continue
+        raw_value = line.split(":", 1)[1].strip()
+        timestamp = raw_value.split()[0]
+        return _parse_ts(timestamp)
+    return None
 
 
 def load_audit(days: int | None = None) -> list[dict[str, Any]]:
@@ -57,9 +79,11 @@ def load_audit(days: int | None = None) -> list[dict[str, Any]]:
 def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     total_scans = sum(1 for r in rows if r.get("kind") == "scan_telemetry")
     entries = [r for r in rows if r.get("state") == "entry" or r.get("kind") == "signal"]
-    outcomes = [r for r in rows if r.get("state") == "outcome" or r.get("kind") == "alert_outcome"]
+    outcomes = [
+        r for r in rows if r.get("state") == "outcome" or r.get("kind") == "alert_outcome"
+    ]
 
-    # Blockers from telemetry
+    # Blockers from telemetry (explicit ones set in payload)
     blocker_counts: Counter[str] = Counter()
     news_blocks = 0
     for r in rows:
@@ -76,8 +100,56 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     sl_first = sum(1 for o in outcomes if o.get("outcome") in ("sl", "sl_zone_first"))
     invalidated = sum(1 for o in outcomes if "invalidat" in str(o.get("outcome", "")).lower())
 
-    fav = [float(o.get("max_favorable_pips", 0)) for o in outcomes if o.get("max_favorable_pips") is not None]
-    adv = [float(o.get("max_adverse_pips", 0)) for o in outcomes if o.get("max_adverse_pips") is not None]
+    fav = [
+        float(o.get("max_favorable_pips", 0))
+        for o in outcomes
+        if o.get("max_favorable_pips") is not None
+    ]
+    adv = [
+        float(o.get("max_adverse_pips", 0))
+        for o in outcomes
+        if o.get("max_adverse_pips") is not None
+    ]
+
+    # Explain neutral scans that have useful context but no explicit no-trade reasons.
+    practical_blocker_counts: Counter[str] = Counter()
+    for r in rows:
+        if r.get("kind") != "scan_telemetry" or r.get("state") == "entry":
+            continue
+        context = r.get("context", {})
+        if not isinstance(context, dict):
+            context = {}
+
+        rsi_1h = context.get("rsi_1h")
+        rsi_30m = context.get("rsi_30m")
+        rsi_15m = context.get("rsi_15m")
+        if all(v is not None for v in (rsi_1h, rsi_30m, rsi_15m)):
+            r1 = float(rsi_1h)
+            r30 = float(rsi_30m)
+            r15 = float(rsi_15m)
+            all_oversold = r1 < 30 and r30 < 30 and r15 < 30
+            all_overbought = r1 > 70 and r30 > 70 and r15 > 70
+            if not (all_oversold or all_overbought):
+                practical_blocker_counts["mtf_rsi_not_aligned"] += 1
+
+        is_ranging = context.get("is_ranging")
+        adx = context.get("adx_1h")
+        if is_ranging is False or (adx is not None and float(adx) >= 25):
+            practical_blocker_counts["adx_trending_context"] += 1
+
+    # Merge practical into main blocker_counts for reporting (they are additional context)
+    for k, v in practical_blocker_counts.items():
+        blocker_counts[k] += v
+
+    observation_start = _load_observation_start()
+    rows_since_window = []
+    if observation_start:
+        rows_since_window = [
+            r
+            for r in rows
+            if (row_ts := _parse_ts(str(r.get("ts", "")))) is not None
+            and row_ts >= observation_start
+        ]
 
     return {
         "window_days": "all" if not any(r.get("ts") for r in rows) else "filtered",
@@ -93,6 +165,12 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_adv_pips": round(sum(adv) / len(adv), 1) if adv else 0,
         "median_fav_pips": round(sorted(fav)[len(fav)//2], 1) if fav else 0,
         "median_adv_pips": round(sorted(adv)[len(adv)//2], 1) if adv else 0,
+        "observation_start": observation_start.isoformat() if observation_start else None,
+        "rows_since_window_start": len(rows_since_window),
+        "telemetry_since_window_start": sum(
+            1 for r in rows_since_window if r.get("kind") == "scan_telemetry"
+        ),
+        "latest_ts": max((r.get("ts") for r in rows if r.get("ts")), default=None),
     }
 
 
@@ -103,6 +181,12 @@ def print_table(stats: dict[str, Any]) -> None:
     print(f"Scans (with telemetry):  {stats['total_scans_with_telemetry']}")
     print(f"Fired signals:           {stats['fired_signals']}")
     print(f"Resolved outcomes:       {stats['resolved_outcomes']}")
+    if stats.get("observation_start"):
+        print(f"Observation start:       {stats['observation_start']}")
+        print(f"Rows since start:        {stats['rows_since_window_start']}")
+        print(f"Telemetry since start:   {stats['telemetry_since_window_start']}")
+    if stats.get("latest_ts"):
+        print(f"Latest row:              {stats['latest_ts']}")
     print()
     print("Outcomes:")
     total_out = stats['resolved_outcomes'] or 1

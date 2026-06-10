@@ -1,0 +1,8 @@
+Branch B 2-week Observation Window - Clean operational start (post-restart)
+Start UTC: 2026-06-10T15:55:57.501569+00:00
+Duration: 2 weeks from the above timestamp
+Do not tune strategy rules. Collect via:
+.venv/bin/python -m scripts.summarize_alerts --days 14 --format table
+Human labels (take/skip/unclear) can be added to audit rows or a sidecar file.
+
+Previous marker from 2026-06-07T12:00:00Z was pre-data and is superseded.

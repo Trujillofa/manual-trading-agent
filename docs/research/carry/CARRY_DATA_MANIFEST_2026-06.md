@@ -155,6 +155,7 @@ Only after this manifest is satisfied:
 1. Add a static broker-swap sample under `research/new_edge/carry/data/` or a documented fetcher.
 2. Add a normalizer that converts swap into account-currency daily value.
 3. Add a portfolio simulator that separates price P&L from swap P&L.
-4. Emit the required result artifact with a KEEP / DISCARD verdict.
+4. Copy `CARRY_RESULTS_TEMPLATE.md` to `CARRY_RESULTS_YYYY-MM-DD.md` and fill every section.
+5. Emit the required result artifact with a KEEP / DISCARD / BLOCKED verdict.
 
 Do not connect this to Telegram, live scanner, or paper trading until the research verdict passes.

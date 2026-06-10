@@ -255,6 +255,7 @@ Data prerequisite:
 
 Required output:
 
+- `docs/research/carry/CARRY_RESULTS_TEMPLATE.md` copied to a dated result file,
 - `docs/research/carry/CARRY_RESULTS_YYYY-MM-DD.md`
 - gross vs net table,
 - IS/OOS split,

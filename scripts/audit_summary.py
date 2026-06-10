@@ -16,8 +16,9 @@ import argparse
 import collections
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Summarize recent audit for monitoring.")
@@ -30,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     )
     return p.parse_args()
 
+
 def main() -> None:
     args = parse_args()
     audit_path = Path(args.audit)
@@ -40,7 +42,7 @@ def main() -> None:
         print(f"ERROR: audit file not found at {args.audit} or prod default", file=sys.stderr)
         sys.exit(2)
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=args.days)
+    cutoff = datetime.now(UTC) - timedelta(days=args.days)
     state_ctr: collections.Counter[str] = collections.Counter()
     block_ctr: collections.Counter[str] = collections.Counter()
     entry_count = 0

@@ -23,8 +23,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from collections import Counter
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +36,7 @@ def load_audit(days: int | None = None) -> list[dict[str, Any]]:
         return []
     cutoff = None
     if days:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
 
     rows: list[dict[str, Any]] = []
     with AUDIT_PATH.open() as f:

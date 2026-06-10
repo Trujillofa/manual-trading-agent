@@ -219,6 +219,9 @@ class TelegramNotifier:
             adx_text = f"\nADX: `{adx:.1f}` | +DI: `{plus_di:.1f}` | -DI: `{minus_di:.1f}`{warn}"
 
         # Build message with entry/TP/SL if provided
+        news_text = "\nNews: `clear` (no 3-star block)"
+        invalidation_hint = "\nInvalidate on: 15m RSI cross of 50 or close back through 20-bar extreme"
+
         if entry is not None and tp is not None and sl is not None:
             pip_mult = 100 if "JPY" in pair else 10000
             tp_pips = abs(tp - entry) * pip_mult
@@ -236,6 +239,8 @@ class TelegramNotifier:
                 f"20-bar Range:\n"
                 f"  High: `{hh:.5f}`\n"
                 f"  Low: `{ll:.5f}`"
+                f"{news_text}"
+                f"{invalidation_hint}"
                 f"{pattern_text}"
                 f"{div_text}"
             )
@@ -252,6 +257,8 @@ class TelegramNotifier:
                 f"20-bar Range:\n"
                 f"  High: `{hh:.5f}`\n"
                 f"  Low: `{ll:.5f}`"
+                f"{news_text}"
+                f"{invalidation_hint}"
                 f"{pattern_text}"
                 f"{div_text}"
             )

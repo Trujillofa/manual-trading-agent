@@ -1,5 +1,11 @@
 # New Profitability Program — Plan (2026-06, rev. metals/indices/FX)
 
+> **Superseded status note (2026-06):** The daily multi-asset TSMOM lane described
+> here has since been run and closed after a negative gross-first result. Keep this
+> file as historical planning context. Use
+> [`PROFITABILITY_PLAN_2026-06.md`](PROFITABILITY_PLAN_2026-06.md) for the current
+> next profitability program.
+
 A *new research program* to keep looking for profitability, satisfying the
 falsifiable re-entry criteria from the FX negative result
 ([report](FX_DIRECTIONAL_TA_NEGATIVE_RESULT_2026-06.md)). Runs in an **isolated

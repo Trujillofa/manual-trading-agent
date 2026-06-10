@@ -3,7 +3,7 @@
 Single-page summary of the profitability investigation, what was built, the
 honest conclusion, and what is reusable. For the detailed negative result see
 [`docs/research/FX_DIRECTIONAL_TA_NEGATIVE_RESULT_2026-06.md`](research/FX_DIRECTIONAL_TA_NEGATIVE_RESULT_2026-06.md);
-for the next search see [`docs/research/NEW_PROGRAM_PLAN.md`](research/NEW_PROGRAM_PLAN.md).
+for the next search see [`docs/research/PROFITABILITY_PLAN_2026-06.md`](research/PROFITABILITY_PLAN_2026-06.md).
 
 ## Goal
 Make the manual-trading-agent a *reliably profitable* system (originally: MTF RSI
@@ -44,7 +44,7 @@ research is **terminated** (locked + agent-guarded). The system's honest posture
 ## What's reusable for the next attempt
 The harness, evaluator pattern, costed driver, IS/OOS judge, gross-first diagnostic,
 and the *discipline* (fail-fast, OOS-gated, anti-overfit). A new market/edge only needs
-a new data adapter + cost model — see the new-program plan.
+a new data adapter + cost model — see the profitability plan.
 
 ## Do NOT
 Restart FX-majors OHLC directional TA (guarded). Cite retired promotion numbers.

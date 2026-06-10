@@ -249,6 +249,10 @@ Initial deliverables:
 
 Reason: it is the cleanest break from failed OHLC directional TA and needs the least new market data.
 
+Data prerequisite:
+
+- `docs/research/carry/CARRY_DATA_MANIFEST_2026-06.md`
+
 Required output:
 
 - `docs/research/carry/CARRY_RESULTS_YYYY-MM-DD.md`

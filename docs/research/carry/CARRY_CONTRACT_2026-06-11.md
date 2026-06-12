@@ -50,9 +50,17 @@ This will check daily OHLC coverage via yfinance daily (lightweight --quick mode
 - Swap data: VERIFIED. Loaded from checked-in broker statement sample `research/new_edge/carry/data/verified_swap_rates_2026-06.json`. Source note and rollover rule included in the json. `verify_swap_data` confirms presence + positive long rates for all CARRY_POSITIVE_PAIRS. Units: pips/day/standard lot.
 - Rollover: 3x on Wednesdays (most pairs) per the verified table (holiday exceptions broker-specific, to be handled in future gross test harness).
 
-**Verdict for data verifier: BLOCKED** (data verified; lane blocked pending implementation and execution of the first falsification test - gross carry backtest per contract).
+**Verdict for data verifier: BLOCKED** (real broker swap/rollover data not yet provided).
 
-Data for OHLC + swap + rollover rules now verified via fresh command run + checked-in source. The lane is unblocked on data.
-Next: Implement smallest gross carry test (positive carry portfolio, swap P&L net of minimal costs, no price P&L) before any strategy tuning or net OOS work.
+Current `research/new_edge/carry/data/verified_swap_rates_2026-06.json` is a template with illustrative rates (explicitly marked TEMPLATE / illustration). See the new `REAL_BROKER_DATA_INSTRUCTIONS.md` next to the JSON for exact fields required (source_date, broker, retrieved, notes on holidays/rollover, actual rates).
+
+The gross falsifier harness (leg-level accounting, rollover, vol targeting, entry drag) has been implemented and passes on the sample for methodology validation (GROSS_PASS (sample data only), PF 3.755, large net positive carry after funding costs + drag).
+
+Next gated step (per user guidance): Replace the JSON with real broker statement or API export, then re-run:
+1. verify_carry_data.py --quick
+2. gross_carry_test.py
+3. New ledger row with GROSS_PASS_REAL_DATA or DISCARD
+
+Only after real data still produces a clean gross pass may we add price P&L, more complete costs, chronological IS/OOS, or carry-crash stress.
 
 No strategy code written.

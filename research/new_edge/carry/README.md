@@ -3,7 +3,7 @@
 This is the first lane in the Grok-driven new edge program per GROK_RESEARCH_LOOP_ENGINEERING.md and PROFITABILITY_PLAN_2026-06.md.
 
 ## Status
-Contract written 2026-06-11. Data verified (fresh --quick + checked-in sample swap rates). Gross falsifier run 2026-06-12: GROSS_PASS (sample data only) with very large positive carry PF on illustration rates (net ~$81.8k after $22 drag over ~2708 days). Real broker statement/API data still required to unblock beyond sample. No strategy logic yet.
+Contract written 2026-06-11. Data gate active: verified_swap_rates_2026-06.json is now a proper TEMPLATE with real-data schema (source_date, broker, etc.). Gross falsifier + leg-level accounting implemented and validated on sample (GROSS_PASS (sample data only), PF 3.755 after correcting for leg-level funding costs). Real broker statement or API data must replace the rates + metadata before any GROSS_PASS_REAL_DATA, price P&L, IS/OOS, or carry-crash work. See REAL_BROKER_DATA_INSTRUCTIONS.md and re-run both scripts after replacement. No strategy logic yet.
 
 ## Structure
 - docs/research/carry/ : contracts, results, manifests

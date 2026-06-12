@@ -20,7 +20,7 @@ docs/profitability-plan-2026-06
 - Capital ref: $100,000; pip value ref: $10.0; lot notional ref: $100,000.
 - Period actually simulated: 2016-01-01 to 2026-05-29 (2708 trading days).
 
-**Sample data caveat (per source JSON and user review):** This is a sample-data gross carry falsifier only. The rates produce a "plausible positive carry" shape but are not live broker verified for this run. Any GROSS_PASS is illustrative of the method and the premise on these numbers; real rates from broker statements or API must replace the JSON and the test re-run before the lane can advance past sample.
+**Real data gate (per CARRY_CONTRACT and user guidance):** Current run uses the template/placeholder rates in the JSON. The lane remains blocked on data until the JSON is replaced with actual broker statement or API export (filled source_date, broker, retrieved, notes, and accurate rates). Only a subsequent run with is_real_data=True will produce GROSS_PASS_REAL_DATA (or DISCARD). Any GROSS_PASS (sample) is purely for validating the gross falsifier skeleton and leg-level accounting.
 
 ## Legs and sizing (constant lots from full-sample vol)
 Long legs (top by long carry): ['USD/TRY', 'EUR/TRY', 'GBP/TRY', 'USD/ZAR']
@@ -70,6 +70,6 @@ Lots (signed for short legs):
 ## Verdict after gross falsifier
 GROSS_PASS (sample data only)
 
-Gross positive on sample verified rates (illustration only). Real broker statement/API rates + re-verify required before any IS/OOS or promotion consideration.
+Gross positive on sample rates (illustration/template only). Real broker statement/API data (with filled source_date, broker, actual rates) must replace the JSON and the test re-run before claiming GROSS_PASS_REAL_DATA or advancing to price P&L / IS/OOS / carry-crash stress.
 
-This run used the checked-in sample swap table as input source (per explicit scope). Do not start stat-arb. Real broker data is the next unblock if this step passes on sample.
+This run used the *template* swap rates. Replace the JSON with real broker data and re-run both verifier and gross test to obtain GROSS_PASS_REAL_DATA (or DISCARD). Only then consider price P&L, additional costs, chronological IS/OOS, or carry-crash stress tests.

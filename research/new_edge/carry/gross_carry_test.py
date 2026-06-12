@@ -40,6 +40,9 @@ CARRY_POSITIVE_PAIRS = [
 
 
 def load_verified_swap_rates(path: str = "research/new_edge/carry/data/verified_swap_rates_2026-06.json") -> dict[str, Any]:
+    """Load swap rates. The JSON is a template; real broker data (with source_date, broker, etc.) must replace it
+    before the lane can claim anything beyond sample methodology validation.
+    """
     with open(path) as f:
         return json.load(f)
 
@@ -99,6 +102,17 @@ def main() -> None:
     swap_data = load_verified_swap_rates()
     rates = swap_data["rates"]
     pairs = list(rates.keys())
+
+    # Real data gate (same logic as verifier)
+    src = swap_data.get("source", "")
+    src_date = swap_data.get("source_date", "")
+    brk = swap_data.get("broker", "")
+    is_real_data = not (
+        "TEMPLATE" in src or
+        "illustration" in src.lower() or
+        src_date.startswith("YYYY") or
+        not brk or "replace" in brk.lower()
+    )
 
     print("Fetching daily closes (yfinance) and computing vols...")
     closes = get_aligned_daily_closes(pairs, start, end)
@@ -204,21 +218,16 @@ def main() -> None:
 
     # Verdict per user spec for this gross step
     if net_carry > 0 and carry_pf > 1.0:
-        verdict = "GROSS_PASS (on sample data)"
-        failure = "N/A"
+        base_verdict = "GROSS_PASS"
     else:
-        verdict = "DISCARD"
-        failure = "Gross carry (net of entry drag) <=0 or PF<=1.0 on sample rates."
+        base_verdict = "DISCARD"
 
-    # Because source JSON explicitly says "for illustration only", treat as sample falsifier
-    # Even on GROSS_PASS we flag it.
-    if "illustration" in swap_data.get("source", "").lower():
-        if verdict.startswith("GROSS_PASS"):
-            verdict = "GROSS_PASS (sample data only)"
-            failure = "Gross positive on sample verified rates (illustration only). Real broker statement/API rates + re-verify required before any IS/OOS or promotion consideration."
-        else:
-            verdict = "BLOCKED"
-            failure = "Sample data produced weak/negative gross. Additionally, source is illustration only."
+    if is_real_data:
+        verdict = base_verdict + "_REAL_DATA"
+        failure = "N/A" if base_verdict == "GROSS_PASS" else "Gross carry (net of leg-level funding + drag) <=0 or PF<=1.0 even with real broker data."
+    else:
+        verdict = base_verdict + " (sample data only)"
+        failure = "Gross positive on sample rates (illustration/template only). Real broker statement/API data (with filled source_date, broker, actual rates) must replace the JSON and the test re-run before claiming GROSS_PASS_REAL_DATA or advancing to price P&L / IS/OOS / carry-crash stress." if base_verdict == "GROSS_PASS" else "Sample data produced weak/negative gross. Additionally, source is still template/illustration."
 
     manifest = f"""# Carry Gross Falsifier Results - 2026-06-12 (sample data)
 
@@ -242,7 +251,7 @@ docs/profitability-plan-2026-06
 - Capital ref: ${CAPITAL:,.0f}; pip value ref: ${PIP_VALUE}; lot notional ref: ${LOT_NOTIONAL:,.0f}.
 - Period actually simulated: {data_start} to {data_end} ({len(index)} trading days).
 
-**Sample data caveat (per source JSON and user review):** This is a sample-data gross carry falsifier only. The rates produce a "plausible positive carry" shape but are not live broker verified for this run. Any GROSS_PASS is illustrative of the method and the premise on these numbers; real rates from broker statements or API must replace the JSON and the test re-run before the lane can advance past sample.
+**Real data gate (per CARRY_CONTRACT and user guidance):** Current run uses the template/placeholder rates in the JSON. The lane remains blocked on data until the JSON is replaced with actual broker statement or API export (filled source_date, broker, retrieved, notes, and accurate rates). Only a subsequent run with is_real_data=True will produce GROSS_PASS_REAL_DATA (or DISCARD). Any GROSS_PASS (sample) is purely for validating the gross falsifier skeleton and leg-level accounting.
 
 ## Legs and sizing (constant lots from full-sample vol)
 Long legs (top by long carry): {long_legs}
@@ -287,7 +296,7 @@ Lots (signed for short legs):
 
 {failure}
 
-This run used the checked-in sample swap table as input source (per explicit scope). Do not start stat-arb. Real broker data is the next unblock if this step passes on sample.
+This run used the *template* swap rates. Replace the JSON with real broker data and re-run both verifier and gross test to obtain GROSS_PASS_REAL_DATA (or DISCARD). Only then consider price P&L, additional costs, chronological IS/OOS, or carry-crash stress tests.
 """
 
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
@@ -298,7 +307,7 @@ This run used the checked-in sample swap table as input source (per explicit sco
     print(f"Gross PF (carry): {carry_pf:.3f}")
     print(f"Net carry after drag: ${net_carry:,.2f}")
     print(f"Verdict: {verdict}")
-    print("Sample caveat applies (see JSON source and results file).")
+    print("Real-data gate: JSON must be replaced with actual broker statement/API (source_date + broker filled, rates from live export) before GROSS_PASS_REAL_DATA. Re-run verifier + this test after replacement.")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,11 @@
 {
-  "source": "Verified from broker statement sample (OANDA/cTrader style) 2026-06-11. For illustration only; in real use, replace with actual broker API or statement data and re-verify.",
-  "rollover_rule": "3x swap on Wednesdays for most pairs (exceptions for holidays, broker specific).",
+  "source": "TEMPLATE - REPLACE WITH ACTUAL BROKER DATA. Example was OANDA/cTrader style statement export dated 2026-06-11. For real use: export your current long/short swap rates (or pull via broker API), record the exact source_date, broker, and any notes on how rates are quoted (per standard lot, account currency, etc.). Then re-run verifier and gross test.",
+  "source_date": "YYYY-MM-DD (replace with date of statement or API snapshot)",
+  "broker": "OANDA / cTrader / IB / your-broker (replace)",
+  "retrieved": "statement export / API / manual (replace)",
   "units": "pips per day per standard lot (positive = receive when long the pair)",
+  "rollover_rule": "3x swap on Wednesdays for most pairs (exceptions for holidays, broker specific). Record any exceptions here.",
+  "notes": "Positive values in 'long' mean you receive financing when long the pair. 'short' is what you receive (usually negative = pay) when short the pair. Triple-swap (or other) on Wed or specific days must be applied in the test harness. Holidays may suppress or adjust rollover - document your broker's calendar if known. These example rates are for methodology validation only; they do not represent live broker conditions.",
   "rates": {
     "AUD/JPY": {"long": 1.75, "short": -2.35},
     "NZD/JPY": {"long": 1.45, "short": -2.05},

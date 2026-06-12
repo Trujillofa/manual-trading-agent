@@ -93,16 +93,28 @@ def verify_ohlc_coverage_yf(pairs: list[str], start: datetime, end: datetime) ->
 
 
 def load_verified_swap_rates(path: str = "research/new_edge/carry/data/verified_swap_rates_2026-06.json") -> dict[str, Any]:
-    """Load verified swap rates from checked-in broker statement data."""
+    """Load swap rates from the checked-in broker data file.
+
+    The file must be replaced with real broker statement or API export before the lane
+    can be considered unblocked on data. See notes in the JSON and REAL_DATA_INSTRUCTIONS.
+    """
     with open(path) as f:
         return json.load(f)
 
 
 def verify_swap_data(swap_data: dict[str, Any], pairs: list[str]) -> dict[str, Any]:
-    """Verify that swap data is present and has positive carry for the target pairs."""
+    """Verify that swap data is present, has positive carry for target pairs,
+    and contains the required real-broker metadata fields.
+
+    Returns 'is_real_data': True only when source_date, broker etc. are filled
+    with non-placeholder values and source does not claim 'illustration' or 'TEMPLATE'.
+    """
     rates = swap_data.get("rates", {})
     verified = True
     issues = []
+    real_data_issues = []
+
+    # Rate presence and sign checks (existing)
     for pair in pairs:
         if pair not in rates:
             verified = False
@@ -112,11 +124,32 @@ def verify_swap_data(swap_data: dict[str, Any], pairs: list[str]) -> dict[str, A
             if long_rate <= 0:
                 verified = False
                 issues.append(f"Non-positive long swap for {pair}: {long_rate}")
+
+    # Real-data metadata gate
+    source = swap_data.get("source", "")
+    source_date = swap_data.get("source_date", "")
+    broker = swap_data.get("broker", "")
+
+    is_real_data = True
+    if "TEMPLATE" in source or "illustration" in source.lower():
+        is_real_data = False
+        real_data_issues.append("source text contains TEMPLATE or illustration marker")
+    if source_date.startswith("YYYY") or not source_date or source_date == "":
+        is_real_data = False
+        real_data_issues.append("source_date is placeholder or missing")
+    if not broker or "replace" in broker.lower():
+        is_real_data = False
+        real_data_issues.append("broker field not filled with real broker name")
+
     return {
         "verified": verified,
         "issues": issues,
-        "source": swap_data.get("source", "unknown"),
+        "source": source,
         "rollover_rule": swap_data.get("rollover_rule", "unknown"),
+        "is_real_data": is_real_data,
+        "real_data_issues": real_data_issues,
+        "source_date": source_date,
+        "broker": broker,
     }
 
 
@@ -153,7 +186,7 @@ def main() -> None:
         swap_verification = verify_swap_data(swap_data, pairs)
     except Exception as e:
         swap_data = {}
-        swap_verification = {"verified": False, "issues": [f"Failed to load verified swap data: {e}"], "source": "error"}
+        swap_verification = {"verified": False, "issues": [f"Failed to load verified swap data: {e}"], "source": "error", "is_real_data": False, "real_data_issues": [str(e)]}
 
     ohlc_ok = all(r.get("ok") for r in ohlc.values())
     coverage_status = (
@@ -165,15 +198,20 @@ def main() -> None:
     swap_status = "VERIFIED" if swap_verification.get("verified") else "NOT VERIFIED"
     swap_detail = "" if swap_verification.get("verified") else " Issues: " + "; ".join(swap_verification.get("issues", []))
 
+    is_real = swap_verification.get("is_real_data", False)
+    real_issues = swap_verification.get("real_data_issues", [])
+    real_status = "REAL_BROKER_DATA" if is_real else "SAMPLE / TEMPLATE (replace before unblock)"
+    real_detail = "" if is_real else "; ".join(real_issues) if real_issues else "source is still illustration/template"
+
     ohlc_text = (
         "Data for OHLC is verified available and usable with existing fetchers."
         if ohlc_ok
         else "Data for OHLC was not verified by this run; rerun with network/cache access or use dukascopy mode."
     )
     next_step = (
-        "Next: Implement and run gross carry backtest per CARRY_CONTRACT (first falsification test)."
-        if (ohlc_ok and swap_verification.get("verified"))
-        else "Next: Resolve data issues above before gross test."
+        "Next: Replace JSON with real broker statement/API data (fill source_date, broker, rates from live export), then re-run verifier + gross test. Only then implement price P&L + IS/OOS."
+        if (ohlc_ok and swap_verification.get("verified") and not is_real)
+        else "Next: Resolve data issues above before gross test." if not (ohlc_ok and swap_verification.get("verified")) else "Next: Implement and run gross carry backtest per CARRY_CONTRACT (first falsification test)."
     )
 
     manifest = f"""# Carry Data Manifest - 2026-06-11 (from verifier --quick run)
@@ -188,6 +226,8 @@ Pairs tested: {pairs}
     manifest += f"""
 ## Swap / Financing Units
 - Source: {swap_data.get('source', 'N/A')}
+- Source date: {swap_verification.get('source_date', 'N/A')}
+- Broker: {swap_verification.get('broker', 'N/A')}
 - Rollover rules: {swap_data.get('rollover_rule', 'N/A')}
 - Units note: {swap_data.get('units', 'pips per day per standard lot (positive = receive when long the pair)')}
 - Rates (from verified source):
@@ -196,28 +236,29 @@ Pairs tested: {pairs}
 ## Verification Result
 - Daily OHLC: {coverage_status}
 - Swap data: {swap_status}.{swap_detail}
+- Real broker data status: {real_status}. {real_detail}
 - Rollover: Verified per documented rule.
 
-**Verdict for data verifier: BLOCKED** (data sources verified in this run; lane blocked pending gross carry test implementation and execution per contract).
+**Verdict for data verifier: BLOCKED** (real broker swap/rollover data not yet provided; lane remains blocked on data gate per CARRY_CONTRACT. Current rates are for methodology / gross falsifier skeleton validation only.)
 
 {ohlc_text}
 {next_step}
 
-## Recommended next command (after data verified)
+## Recommended next command (after real data placed in JSON)
 python -m research.new_edge.carry.data.verify_carry_data --start 2016-01-01 --end 2026-06-01 --output docs/research/carry/CARRY_DATA_MANIFEST_2026-06-11.md --quick
+python -m research.new_edge.carry.gross_carry_test --start 2016-01-01 --end 2026-06-01 --output docs/research/carry/CARRY_GROSS_RESULTS_2026-06-12.md
 
-See CARRY_CONTRACT_2026-06-11.md for gates and full falsification test.
+See CARRY_CONTRACT_2026-06-11.md for gates and full falsification test. See research/new_edge/carry/data/ for the JSON template.
 """
 
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     Path(args.output).write_text(manifest)
     print(f"Manifest written to {args.output}")
-    conclusion = (
-        "BLOCKED - data verified (OHLC+swap), ready for gross carry test."
-        if (ohlc_ok and swap_verification.get("verified"))
-        else "BLOCKED - see verification issues above."
-    )
-    print(f"Conclusion: {conclusion}")
+    if is_real:
+        conc = "BLOCKED - real data present; proceed to gross (or full gates if already passed)"
+    else:
+        conc = "BLOCKED - real broker data not yet provided (see JSON source_date/broker fields and notes). Sample rates used for methodology only."
+    print(f"Conclusion: {conc}")
 
 
 if __name__ == "__main__":

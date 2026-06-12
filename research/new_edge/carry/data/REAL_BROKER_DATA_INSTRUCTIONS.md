@@ -38,3 +38,29 @@ At that point the next work is:
 Do not start stat-arb or other lanes until this one has a clean real-data gross + subsequent gated results.
 
 The current sample rates are useful only to prove the gross falsifier harness and leg-level accounting work correctly.
+## Fetching real rates from the live cTrader account on Hetzner
+
+The cleanest way to obtain real forward-looking swap rates (instead of realized swaps from deal history) is to use the narrow research utility added to the ctrader-trading-agent source:
+
+1. Make sure the change is on the Hetzner box (git pull or scp the new research/fetch_broker_swaps.py into /opt/ctrader-trading-agent/research/ if the source tree is deployed there, or rebuild the image).
+
+2. On Hetzner (via ssh):
+
+   ssh <your-hetzner>
+   cd /opt/ctrader-trading-agent
+   .venv/bin/python research/fetch_broker_swaps.py \
+       --pairs AUDJPY,NZDJPY,AUDUSD,NZDUSD,USDTRY,USDZAR,EURTRY,GBPTRY \
+       --output /tmp/carry_swaps_$(date +%F).json
+
+3. The script will use the agent's existing auth state / credentials if available, or you can pass --access-token / --account-id.
+
+4. scp the /tmp/*.json back to your workstation and use its contents (the "rates" + the top-level metadata) to replace the content of
+   research/new_edge/carry/data/verified_swap_rates_2026-06.json (or save as a dated file and update the load path).
+
+5. Then locally re-run:
+   .venv/bin/python -m research.new_edge.carry.data.verify_carry_data --quick ...
+   .venv/bin/python -m research.new_edge.carry.gross_carry_test ...
+
+6. Append a new ledger row. If the real numbers still produce positive leg-level net carry after funding costs + drag and PF > 1, you can mark GROSS_PASS_REAL_DATA and proceed to the next gated steps (price P&L, full costs, IS/OOS, carry-crash stress).
+
+The utility calls the proper symbol detail request (ProtoOASymbolByIdReq) so the long/short values are the broker's current financing schedule, exactly what the carry premise needs.

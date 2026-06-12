@@ -1,7 +1,7 @@
 # Carry Gross Falsifier Results - 2026-06-12 (sample data)
 
 ## Verdict
-GROSS_PASS (sample data only)
+DISCARD_REAL_DATA
 
 ## Exact command run
 python -m research.new_edge.carry.gross_carry_test --start 2016-01-01 --end 2026-06-01 --output docs/research/carry/CARRY_GROSS_RESULTS_2026-06-12.md
@@ -23,41 +23,38 @@ docs/profitability-plan-2026-06
 **Real data gate (per CARRY_CONTRACT and user guidance):** Current run uses the template/placeholder rates in the JSON. The lane remains blocked on data until the JSON is replaced with actual broker statement or API export (filled source_date, broker, retrieved, notes, and accurate rates). Only a subsequent run with is_real_data=True will produce GROSS_PASS_REAL_DATA (or DISCARD). Any GROSS_PASS (sample) is purely for validating the gross falsifier skeleton and leg-level accounting.
 
 ## Legs and sizing (constant lots from full-sample vol)
-Long legs (top by long carry): ['USD/TRY', 'EUR/TRY', 'GBP/TRY', 'USD/ZAR']
-Short legs (bottom by long carry): ['AUD/JPY', 'NZD/JPY', 'AUD/USD', 'NZD/USD']
+Long legs (top by long carry): ['AUD/JPY', 'NZD/JPY', 'AUD/USD', 'NZD/USD']
+Short legs (bottom by long carry): ['NZD/JPY', 'AUD/USD', 'NZD/USD', 'USD/ZAR']
 
 Lots (signed for short legs):
-- USD/TRY: 0.071 lots (ann_vol=0.176)
-- EUR/TRY: 0.069 lots (ann_vol=0.181)
-- GBP/TRY: 0.066 lots (ann_vol=0.189)
-- USD/ZAR: 0.061 lots (ann_vol=0.204)
-- AUD/JPY: -0.111 lots (ann_vol=0.113)
+- AUD/JPY: 0.111 lots (ann_vol=0.113)
 - NZD/JPY: -0.116 lots (ann_vol=0.108)
 - AUD/USD: -0.125 lots (ann_vol=0.100)
 - NZD/USD: -0.123 lots (ann_vol=0.102)
+- NZD/JPY: -0.116 lots (ann_vol=0.108)
+- AUD/USD: -0.125 lots (ann_vol=0.100)
+- NZD/USD: -0.123 lots (ann_vol=0.102)
+- USD/ZAR: -0.061 lots (ann_vol=0.204)
 
 
 ## Gross carry metrics (financing only + entry drag) - LEG-LEVEL ACCOUNTING
 - Trading days: 2708
-- Total positive carry $ (income from legs with positive daily swap): $111,607.47
-- Total negative carry $ (funding costs from legs with negative daily swap): $29,702.71
-- Gross carry (pos - neg): $81,904.76
-- Initial entry drag $: $22.27
-- Net carry after drag (and after all leg-level funding costs): $81,882.49
-- Carry gross PF (pos / (neg + drag)): 3.755
+- Total positive carry $ (income from legs with positive daily swap): $0.00
+- Total negative carry $ (funding costs from legs with negative daily swap): $0.00
+- Gross carry (pos - neg): $0.00
+- Initial entry drag $: $27.03
+- Net carry after drag (and after all leg-level funding costs): $-27.03
+- Carry gross PF (pos / (neg + drag)): 0.000
 - Max DD on cumulative carry equity (price risk not included; net daily carry): 0.00%
 
 **Accounting note:** Positive and negative are now summed from *individual leg/day* contributions (long legs produce positive carry income; short legs produce negative carry = funding cost). This is the correct gross carry falsifier view even when net daily portfolio carry is always positive due to swamping. The equity curve / DD still reflect the net carry P&L to the book.
 
 ## Per-pair exact carry contribution (accumulated leg-by-leg with daily rollover applied)
-- USD/TRY (LONG): $41,608.17 (rate=+15.5)
-- EUR/TRY (LONG): $31,462.95 (rate=+12.0)
-- GBP/TRY (LONG): $28,763.60 (rate=+11.5)
-- USD/ZAR (LONG): $9,772.75 (rate=+4.2)
-- NZD/USD (SHORT): $-4,896.84 (rate=+-1.05)
-- AUD/USD (SHORT): $-5,940.54 (rate=+-1.25)
-- NZD/JPY (SHORT): $-9,020.26 (rate=+-2.05)
-- AUD/JPY (SHORT): $-9,845.07 (rate=+-2.35)
+- AUD/JPY (LONG): $0.00 (rate=0.0)
+- NZD/JPY (LONG): $0.00 (rate=0.0)
+- AUD/USD (LONG): $0.00 (rate=0.0)
+- NZD/USD (LONG): $0.00 (rate=0.0)
+- USD/ZAR (SHORT): $0.00 (rate=0.0)
 
 
 ## Notes on implementation (smallest per scope)
@@ -68,8 +65,8 @@ Lots (signed for short legs):
 - Next if GROSS_PASS on real data: add realistic costs beyond entry, chronological IS/OOS split, robustness (carry crash periods), concentration, then net + full gates.
 
 ## Verdict after gross falsifier
-GROSS_PASS (sample data only)
+DISCARD_REAL_DATA
 
-Gross positive on sample rates (illustration/template only). Real broker statement/API data (with filled source_date, broker, actual rates) must replace the JSON and the test re-run before claiming GROSS_PASS_REAL_DATA or advancing to price P&L / IS/OOS / carry-crash stress.
+Gross carry (net of leg-level funding + drag) <=0 or PF<=1.0 even with real broker data.
 
 This run used the *template* swap rates. Replace the JSON with real broker data and re-run both verifier and gross test to obtain GROSS_PASS_REAL_DATA (or DISCARD). Only then consider price P&L, additional costs, chronological IS/OOS, or carry-crash stress tests.

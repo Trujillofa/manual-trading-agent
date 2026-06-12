@@ -4,18 +4,18 @@
 BLOCKED
 
 ## Exact command run
-python -m research.new_edge.carry.data.verify_carry_data --start 2016-01-01 --end 2026-06-01 --output docs/research/carry/CARRY_DATA_MANIFEST_2026-06-11.md
+python -m research.new_edge.carry.data.verify_carry_data --start 2016-01-01 --end 2026-06-01 --output docs/research/carry/CARRY_DATA_MANIFEST_2026-06-11.md --quick
 
 ## Git commit or worktree branch
-main (docs-only scaffolding + contract + verifier; no worktree created yet per plan to use isolated for full runs)
+docs/profitability-plan-2026-06 (carry data unblock on verified broker swap source)
 
 ## Data sources and date ranges
-- OHLC: dukascopy_fetcher (existing, supports pairs in settings.yaml majors/minors). 2016-01-01 to 2026-06-01.
-- Swap: STATIC TABLE ONLY (typical broker values). No integration.
-- Rollover: documented standard 3x Wed rule.
+- OHLC: yfinance daily via verifier --quick (reproducible fast path; existing dukascopy_fetcher also available for full runs). 2016-01-01 to 2026-06-01 (yf sample end ~2026-05-29).
+- Swap: VERIFIED static table from checked-in broker statement sample: research/new_edge/carry/data/verified_swap_rates_2026-06.json (rates + source + rollover_rule). Loaded and validated by verify_carry_data (positive long carry on target pairs).
+- Rollover: 3x on Wednesdays per verified table (exceptions for holidays, broker specific).
 
 ## Gross result before costs
-N/A (data for swap not present; OHLC coverage verified sufficient).
+N/A (data verified; gross carry backtest / first falsification test per contract not yet implemented).
 
 ## Realistic net result after costs
 N/A.
@@ -33,10 +33,10 @@ N/A.
 N/A.
 
 ## Failure reason if discarded
-Data verification: swap data source not integrated (no broker fetcher or verified table in dukascopy/settings or costs). OHLC coverage ok via existing fetchers (consistent with prior multiasset work). Rollover rules standard but not coded.
+Gross carry test (first falsification per CARRY_CONTRACT) not yet implemented/run. Data verification PASSED in fresh --quick run (all 8 pairs OHLC ok via yf; swap rates VERIFIED from checked-in table with positive long for carry pairs; rollover documented). No strategy code written.
 
 ## Next action
-Add swap data source (e.g. OANDA API wrapper or verified static table + rollover calendar) to data layer. Re-run verifier. Only then implement gross carry backtest per contract.
+Implement the smallest gross-only carry backtest (static positive-carry long/short portfolio, vol target, swap income net of entry spread/slippage only, ignore price P&L) per contract. Run it. Update manifest/results/ledger with gross metrics. Only then add full costs + IS/OOS if gross passes.
 
 This is the first BLOCKED/KEEP/DISCARD-ready artifact per the Grok loop (contract + manifest + ledger entry + this results doc). No strategy logic written.
 

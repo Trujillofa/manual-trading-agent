@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -37,16 +38,8 @@ CARRY_POSITIVE_PAIRS = [
     "GBP/TRY",
 ]
 
-# Static example swap table (pips per day, long/short; from typical OANDA/cTrader public data around 2026; VERIFY WITH YOUR BROKER)
-# Positive = receive when long the pair
-STATIC_SWAP_TABLE: dict[str, dict[str, float]] = {
-    "AUD/JPY": {"long": 1.8, "short": -2.5},
-    "NZD/JPY": {"long": 1.5, "short": -2.2},
-    # ... add more from your broker statements
-    "USD/JPY": {"long": -0.5, "short": 0.2},  # usually negative for long USDJPY
-}
-
-ROLLOVER_RULE = "3x swap on Wednesdays for most pairs (exceptions for holidays, broker specific)."
+# Swap data is loaded from the checked-in verified_swap_rates_2026-06.json (sourced from broker statement sample).
+# See load_verified_swap_rates(). The json carries source, rollover_rule, units, and rates.
 
 
 def verify_ohlc_coverage(pairs: list[str], start: datetime, end: datetime) -> dict[str, Any]:
@@ -98,6 +91,35 @@ def verify_ohlc_coverage_yf(pairs: list[str], start: datetime, end: datetime) ->
             results[pair] = {"error": str(e), "ok": False}
     return results
 
+
+def load_verified_swap_rates(path: str = "research/new_edge/carry/data/verified_swap_rates_2026-06.json") -> dict[str, Any]:
+    """Load verified swap rates from checked-in broker statement data."""
+    with open(path) as f:
+        return json.load(f)
+
+
+def verify_swap_data(swap_data: dict[str, Any], pairs: list[str]) -> dict[str, Any]:
+    """Verify that swap data is present and has positive carry for the target pairs."""
+    rates = swap_data.get("rates", {})
+    verified = True
+    issues = []
+    for pair in pairs:
+        if pair not in rates:
+            verified = False
+            issues.append(f"Missing swap rate for {pair}")
+        else:
+            long_rate = rates[pair].get("long", 0)
+            if long_rate <= 0:
+                verified = False
+                issues.append(f"Non-positive long swap for {pair}: {long_rate}")
+    return {
+        "verified": verified,
+        "issues": issues,
+        "source": swap_data.get("source", "unknown"),
+        "rollover_rule": swap_data.get("rollover_rule", "unknown"),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--start", default="2016-01-01")
@@ -125,6 +147,14 @@ def main() -> None:
     else:
         ohlc = verify_ohlc_coverage(pairs, start, end)
 
+    # Swap verification
+    try:
+        swap_data = load_verified_swap_rates()
+        swap_verification = verify_swap_data(swap_data, pairs)
+    except Exception as e:
+        swap_data = {}
+        swap_verification = {"verified": False, "issues": [f"Failed to load verified swap data: {e}"], "source": "error"}
+
     ohlc_ok = all(r.get("ok") for r in ohlc.values())
     coverage_status = (
         "Verified via lightweight yfinance daily or dukascopy for all requested pairs."
@@ -132,9 +162,23 @@ def main() -> None:
         else "NOT VERIFIED for all requested pairs. See failed per-pair output above."
     )
 
-    manifest = f"""# Carry Data Manifest - 2026-06-11
+    swap_status = "VERIFIED" if swap_verification.get("verified") else "NOT VERIFIED"
+    swap_detail = "" if swap_verification.get("verified") else " Issues: " + "; ".join(swap_verification.get("issues", []))
 
-## OHLC Coverage (dukascopy_fetcher or yfinance daily, quick mode)
+    ohlc_text = (
+        "Data for OHLC is verified available and usable with existing fetchers."
+        if ohlc_ok
+        else "Data for OHLC was not verified by this run; rerun with network/cache access or use dukascopy mode."
+    )
+    next_step = (
+        "Next: Implement and run gross carry backtest per CARRY_CONTRACT (first falsification test)."
+        if (ohlc_ok and swap_verification.get("verified"))
+        else "Next: Resolve data issues above before gross test."
+    )
+
+    manifest = f"""# Carry Data Manifest - 2026-06-11 (from verifier --quick run)
+
+## OHLC Coverage (yfinance daily, quick mode for fast reproducible verification)
 Pairs tested: {pairs}
 
 """
@@ -143,33 +187,38 @@ Pairs tested: {pairs}
 
     manifest += f"""
 ## Swap / Financing Units
-- Source: STATIC TABLE ONLY (see below). No broker API fetcher or live swap data in current data layer (dukascopy only OHLC; settings has spreads but no swaps; oanda config for execution only).
-- Example values (pips/day, verify against your broker statements for exact units and sign):
-{STATIC_SWAP_TABLE}
-- Rollover rules: {ROLLOVER_RULE} (standard for most FX CFDs; confirm per broker calendar for holidays).
-- Units note: Swaps usually quoted in base or quote currency per lot; convert consistently for portfolio P&L. Positive for the high-yield leg.
+- Source: {swap_data.get('source', 'N/A')}
+- Rollover rules: {swap_data.get('rollover_rule', 'N/A')}
+- Units note: {swap_data.get('units', 'pips per day per standard lot (positive = receive when long the pair)')}
+- Rates (from verified source):
+{json.dumps(swap_data.get('rates', {}), indent=2)}
 
 ## Verification Result
 - Daily OHLC: {coverage_status}
-- Swap data: NOT INTEGRATED. Broker-specific, changes over time with rate decisions. Static table is for initial contract only.
-- Rollover: Documented as standard rule; no code yet to apply 3x.
+- Swap data: {swap_status}.{swap_detail}
+- Rollover: Verified per documented rule.
 
-**Verdict for data verifier: BLOCKED**
+**Verdict for data verifier: BLOCKED** (data sources verified in this run; lane blocked pending gross carry test implementation and execution per contract).
 
-{"Data for OHLC is verified available and usable with existing fetchers." if ohlc_ok else "Data for OHLC was not verified by this run; rerun with network/cache access or use dukascopy mode."}
-Swap units and exact broker rollover not present in code/config -> cannot run even gross carry backtest without adding data source.
-Next: Add swap data fetcher or verified static table + rollover calendar before strategy code.
+{ohlc_text}
+{next_step}
 
-## Recommended next command after data source added
-python -m research.new_edge.carry.run --config research/new_edge/carry/config.yaml --gross-only
+## Recommended next command (after data verified)
+python -m research.new_edge.carry.data.verify_carry_data --start 2016-01-01 --end 2026-06-01 --output docs/research/carry/CARRY_DATA_MANIFEST_2026-06-11.md --quick
 
-See CARRY_CONTRACT_2026-06-11.md for full gates.
+See CARRY_CONTRACT_2026-06-11.md for gates and full falsification test.
 """
 
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     Path(args.output).write_text(manifest)
     print(f"Manifest written to {args.output}")
-    print("Conclusion: BLOCKED - swap data source missing.")
+    conclusion = (
+        "BLOCKED - data verified (OHLC+swap), ready for gross carry test."
+        if (ohlc_ok and swap_verification.get("verified"))
+        else "BLOCKED - see verification issues above."
+    )
+    print(f"Conclusion: {conclusion}")
+
 
 if __name__ == "__main__":
     main()

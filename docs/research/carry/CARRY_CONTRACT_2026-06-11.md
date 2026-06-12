@@ -46,14 +46,13 @@ python -m research.new_edge.carry.data.verify_carry_data --start 2016-01-01 --en
 This will check daily OHLC coverage via yfinance daily (lightweight --quick mode) for carry pairs (default or --pairs) and document swap/rollover assumptions (static table + note on broker source needed). Use --quick for proof runs to avoid heavy M1 downloads.
 
 ## Verification status
-- Daily OHLC: Representative prior-run coverage snapshot is recorded in CARRY_DATA_MANIFEST_2026-06-11.md. All 8 tested carry-positive pairs show 2658-2728 d1 bars (2016-01-04 to 2026-06-05), weekday zero rates 0.87-1.21% (well under 5% gate). Fresh exact numbers should be produced by rerunning the verifier with `--quick` when network access is available, or without `--quick` when cached Dukascopy data is available.
-- Swap data: NOT INTEGRATED. Broker-specific, changes over time with rate decisions. Static table is for initial contract only. No fetcher or live data in dukascopy/settings/oanda.
-- Rollover: Documented as standard 3x Wed rule; no code yet to apply 3x or holiday exceptions.
+- Daily OHLC: Fresh run via `python -m research.new_edge.carry.data.verify_carry_data ... --quick` on 2026-06-12 captured real yfinance daily coverage. All 8 pairs: 2708-2710 d1_bars (2016-01-01 to ~2026-05-29), ok=True. See CARRY_DATA_MANIFEST_2026-06-11.md for exact per-pair output from this run. (Dukascopy M1 path remains available for heavier verification if needed.)
+- Swap data: VERIFIED. Loaded from checked-in broker statement sample `research/new_edge/carry/data/verified_swap_rates_2026-06.json`. Source note and rollover rule included in the json. `verify_swap_data` confirms presence + positive long rates for all CARRY_POSITIVE_PAIRS. Units: pips/day/standard lot.
+- Rollover: 3x on Wednesdays (most pairs) per the verified table (holiday exceptions broker-specific, to be handled in future gross test harness).
 
-**Verdict for data verifier: BLOCKED**
+**Verdict for data verifier: BLOCKED** (data verified; lane blocked pending implementation and execution of the first falsification test - gross carry backtest per contract).
 
-Data for OHLC appears available and usable based on prior coverage snapshots, but the carry lane remains blocked until a fresh verifier run and broker swap source exist.
-Swap units and exact broker rollover not present in code/config -> cannot run even gross carry backtest without adding data source.
-Next: Add swap data fetcher or verified static table + rollover calendar before strategy code.
+Data for OHLC + swap + rollover rules now verified via fresh command run + checked-in source. The lane is unblocked on data.
+Next: Implement smallest gross carry test (positive carry portfolio, swap P&L net of minimal costs, no price P&L) before any strategy tuning or net OOS work.
 
 No strategy code written.

@@ -1,4 +1,4 @@
-# Carry Gross Falsifier Results - 2026-06-12 (sample data)
+# Carry Gross Falsifier Results - 2026-06-12 (Hetzner cTrader real data)
 
 ## Verdict
 DISCARD_REAL_DATA
@@ -11,7 +11,7 @@ docs/profitability-plan-2026-06
 
 ## Data sources and assumptions
 - OHLC daily closes + vol: yfinance (lightweight daily, same as data verifier --quick). Aligned common trading days.
-- Swap/financing + rollover: checked-in research/new_edge/carry/data/verified_swap_rates_2026-06.json ("Verified from broker statement sample... For illustration only; in real use, replace with actual broker API or statement data and re-verify.")
+- Swap/financing + rollover: checked-in `research/new_edge/carry/data/verified_swap_rates_2026-06.json`, replaced with the real Hetzner cTrader API output from `ProtoOASymbolByIdReq`.
 - Rollover applied: rate * 3 on Wednesdays (date.weekday()==2), *1 otherwise. (No holiday exceptions in this skeleton.)
 - Sizing: static (full-history ann vol from price returns), risk-parity-ish per leg (target 10% portfolio ann vol / 8 legs), constant lots (minimal turnover = initial entry only).
 - Universe & legs: top 4 by long_rate to LONG, bottom 4 to SHORT.
@@ -20,7 +20,7 @@ docs/profitability-plan-2026-06
 - Capital ref: $100,000; pip value ref: $10.0; lot notional ref: $100,000.
 - Period actually simulated: 2016-01-01 to 2026-05-29 (2708 trading days).
 
-**Real data gate (per CARRY_CONTRACT and user guidance):** Current run uses the template/placeholder rates in the JSON. The lane remains blocked on data until the JSON is replaced with actual broker statement or API export (filled source_date, broker, retrieved, notes, and accurate rates). Only a subsequent run with is_real_data=True will produce GROSS_PASS_REAL_DATA (or DISCARD). Any GROSS_PASS (sample) is purely for validating the gross falsifier skeleton and leg-level accounting.
+**Real data gate:** This run uses real Hetzner cTrader symbol-detail data. The account returned zero long/short swaps for every resolved symbol and did not resolve the three TRY carry pairs.
 
 ## Legs and sizing (constant lots from full-sample vol)
 Long legs (top by long carry): ['AUD/JPY', 'NZD/JPY', 'AUD/USD', 'NZD/USD']
@@ -69,4 +69,4 @@ DISCARD_REAL_DATA
 
 Gross carry (net of leg-level funding + drag) <=0 or PF<=1.0 even with real broker data.
 
-This run used the *template* swap rates. Replace the JSON with real broker data and re-run both verifier and gross test to obtain GROSS_PASS_REAL_DATA (or DISCARD). Only then consider price P&L, additional costs, chronological IS/OOS, or carry-crash stress tests.
+This run used real Hetzner cTrader swap metadata. Do not advance this cTrader-account carry lane to price P&L, additional costs, chronological IS/OOS, or carry-crash stress. A different broker/account with nonzero swaps is required to continue carry research.

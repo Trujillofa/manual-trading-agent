@@ -37,29 +37,31 @@ Lots (signed for short legs):
 - NZD/USD: -0.123 lots (ann_vol=0.102)
 
 
-## Gross carry metrics (financing only + entry drag)
+## Gross carry metrics (financing only + entry drag) - LEG-LEVEL ACCOUNTING
 - Trading days: 2708
-- Total positive carry $: $81,904.76
-- Total negative carry $: $0.00
+- Total positive carry $ (income from legs with positive daily swap): $111,607.47
+- Total negative carry $ (funding costs from legs with negative daily swap): $29,702.71
 - Gross carry (pos - neg): $81,904.76
 - Initial entry drag $: $22.27
-- Net carry after drag: $81,882.49
-- Carry gross PF (pos / (neg + drag)): 3677.087
-- Max DD on cumulative carry equity (price risk not included): 0.00%
+- Net carry after drag (and after all leg-level funding costs): $81,882.49
+- Carry gross PF (pos / (neg + drag)): 3.755
+- Max DD on cumulative carry equity (price risk not included; net daily carry): 0.00%
 
-## Per-pair approximate carry contribution (full period, no avg rollover adjustment for simplicity; directionally indicative)
-- USD/TRY (LONG): $29,729.53 (rate=+15.5)
-- EUR/TRY (LONG): $22,480.65 (rate=+12.0)
-- GBP/TRY (LONG): $20,551.93 (rate=+11.5)
-- USD/ZAR (LONG): $6,982.75 (rate=+4.2)
-- NZD/USD (SHORT): $-3,498.85 (rate=+-1.05)
-- AUD/USD (SHORT): $-4,244.59 (rate=+-1.25)
-- NZD/JPY (SHORT): $-6,445.08 (rate=+-2.05)
-- AUD/JPY (SHORT): $-7,034.42 (rate=+-2.35)
+**Accounting note:** Positive and negative are now summed from *individual leg/day* contributions (long legs produce positive carry income; short legs produce negative carry = funding cost). This is the correct gross carry falsifier view even when net daily portfolio carry is always positive due to swamping. The equity curve / DD still reflect the net carry P&L to the book.
+
+## Per-pair exact carry contribution (accumulated leg-by-leg with daily rollover applied)
+- USD/TRY (LONG): $41,608.17 (rate=+15.5)
+- EUR/TRY (LONG): $31,462.95 (rate=+12.0)
+- GBP/TRY (LONG): $28,763.60 (rate=+11.5)
+- USD/ZAR (LONG): $9,772.75 (rate=+4.2)
+- NZD/USD (SHORT): $-4,896.84 (rate=+-1.05)
+- AUD/USD (SHORT): $-5,940.54 (rate=+-1.25)
+- NZD/JPY (SHORT): $-9,020.26 (rate=+-2.05)
+- AUD/JPY (SHORT): $-9,845.07 (rate=+-2.35)
 
 
 ## Notes on implementation (smallest per scope)
-- Daily loop over aligned trading days applies rollover and accrues carry $.
+- Daily loop over aligned trading days applies rollover and accrues carry $ *per leg* for separate pos/neg tracking.
 - Ranks and lots fixed (static portfolio) => turnover drag only at t=0.
 - If daily vol targeting + rebalance were used, turnover drag would be higher (future refinement after this falsifier).
 - No optimization, no filters, no OOS split (gross-first diagnostic only).

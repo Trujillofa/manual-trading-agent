@@ -149,6 +149,9 @@ def main() -> None:
         initial_drag += short_lots[p] * COST_PIPS * PIP_VALUE
 
     # Simulate daily carry (gross, price P&L ignored)
+    # IMPORTANT: track POSITIVE carry and NEGATIVE carry (funding costs) at *leg level*,
+    # not from net daily portfolio carry. This prevents swamping and gives a defensible PF
+    # (gross income from positive-carry legs / gross funding costs from negative-carry legs + drag).
     index = closes.index
     total_pos = 0.0
     total_neg = 0.0
@@ -156,6 +159,7 @@ def main() -> None:
     cum = 0.0
     peak = 0.0
     max_dd = 0.0
+    leg_carry_totals: dict[str, float] = {p: 0.0 for p in pairs}
 
     for dt in index:
         is_wed = dt.weekday() == 2  # Wednesday
@@ -163,17 +167,25 @@ def main() -> None:
         day_carry = 0.0
         for p in long_legs:
             rate = rates[p]["long"]
-            day_carry += long_lots[p] * rate * rollover * PIP_VALUE
+            leg_c = long_lots[p] * rate * rollover * PIP_VALUE
+            day_carry += leg_c
+            if leg_c > 0:
+                total_pos += leg_c
+            else:
+                total_neg += abs(leg_c)
+            leg_carry_totals[p] += leg_c
         for p in short_legs:
             rate = rates[p]["short"]
-            day_carry += short_lots[p] * rate * rollover * PIP_VALUE
+            leg_c = short_lots[p] * rate * rollover * PIP_VALUE
+            day_carry += leg_c
+            if leg_c > 0:
+                total_pos += leg_c
+            else:
+                total_neg += abs(leg_c)
+            leg_carry_totals[p] += leg_c
 
         daily_carry_series.append((dt, day_carry))
-        if day_carry > 0:
-            total_pos += day_carry
-        else:
-            total_neg += abs(day_carry)
-
+        # cum / DD still use *net* day_carry (the actual carry P&L to the book)
         cum += day_carry
         peak = max(peak, cum)
         if peak > 0:
@@ -184,16 +196,8 @@ def main() -> None:
     net_carry = gross_carry - initial_drag
     carry_pf = total_pos / (total_neg + initial_drag) if (total_neg + initial_drag) > 0 else float("inf")
 
-    # Per-pair total carry contrib (approx using average rollover ~1.14 for 5/7 but use simple sum for accuracy would require per-day; use mean for summary)
-    # For exact we can re-compute but for report use the leg totals
-    pair_contrib = {}
-    for p in long_legs:
-        # Rough: use observed avg rollover from series or 1.0 for illustration; exact would re-loop
-        pair_contrib[p] = long_lots[p] * rates[p]["long"] * PIP_VALUE * len(index)   # approx no rollover avg
-    for p in short_legs:
-        pair_contrib[p] = short_lots[p] * rates[p]["short"] * PIP_VALUE * len(index)
-
-    # Adjust for real rollover would be higher positive for longs; here approx is conservative for pass decision
+    # Use exact leg-level accumulated carry (with daily rollover) for per-pair reporting
+    pair_contrib = leg_carry_totals
 
     data_start = str(index.min().date())
     data_end = str(index.max().date())
@@ -251,17 +255,19 @@ Lots (signed for short legs):
 
     manifest += f"""
 
-## Gross carry metrics (financing only + entry drag)
+## Gross carry metrics (financing only + entry drag) - LEG-LEVEL ACCOUNTING
 - Trading days: {len(index)}
-- Total positive carry $: ${total_pos:,.2f}
-- Total negative carry $: ${total_neg:,.2f}
+- Total positive carry $ (income from legs with positive daily swap): ${total_pos:,.2f}
+- Total negative carry $ (funding costs from legs with negative daily swap): ${total_neg:,.2f}
 - Gross carry (pos - neg): ${gross_carry:,.2f}
 - Initial entry drag $: ${initial_drag:,.2f}
-- Net carry after drag: ${net_carry:,.2f}
+- Net carry after drag (and after all leg-level funding costs): ${net_carry:,.2f}
 - Carry gross PF (pos / (neg + drag)): {carry_pf:.3f}
-- Max DD on cumulative carry equity (price risk not included): {max_dd*100:.2f}%
+- Max DD on cumulative carry equity (price risk not included; net daily carry): {max_dd*100:.2f}%
 
-## Per-pair approximate carry contribution (full period, no avg rollover adjustment for simplicity; directionally indicative)
+**Accounting note:** Positive and negative are now summed from *individual leg/day* contributions (long legs produce positive carry income; short legs produce negative carry = funding cost). This is the correct gross carry falsifier view even when net daily portfolio carry is always positive due to swamping. The equity curve / DD still reflect the net carry P&L to the book.
+
+## Per-pair exact carry contribution (accumulated leg-by-leg with daily rollover applied)
 """
     for p, contrib in sorted(pair_contrib.items(), key=lambda x: -x[1]):
         leg_type = "LONG" if p in long_legs else "SHORT"
@@ -270,7 +276,7 @@ Lots (signed for short legs):
     manifest += f"""
 
 ## Notes on implementation (smallest per scope)
-- Daily loop over aligned trading days applies rollover and accrues carry $.
+- Daily loop over aligned trading days applies rollover and accrues carry $ *per leg* for separate pos/neg tracking.
 - Ranks and lots fixed (static portfolio) => turnover drag only at t=0.
 - If daily vol targeting + rebalance were used, turnover drag would be higher (future refinement after this falsifier).
 - No optimization, no filters, no OOS split (gross-first diagnostic only).

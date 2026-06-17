@@ -13,10 +13,15 @@ from typing import Any
 import httpx
 
 from src.news.news_checker import NewsChecker
+from src.notifications.telegram_security import (
+    format_telegram_poll_error,
+    log_telegram_poll_error,
+)
 
 OFFSET_PATH = Path("/app/logs/telegram_update_offset.json")
 SCAN_LOG_PATH = Path("/app/logs/scan.log")
 HEARTBEAT_PATH = Path("/app/logs/telegram_heartbeat.json")
+POLL_LOCK_PATH = Path("/app/logs/telegram_poll.lock")
 logger = logging.getLogger(__name__)
 
 
@@ -63,11 +68,14 @@ class TelegramCommandHandler:
 
     async def get_updates(self) -> list[dict[str, Any]]:
         client = await self._get_client()
-        response = await client.get(
-            f"{self.base_url}/getUpdates",
-            params={"offset": self.offset, "timeout": 20, "limit": 20},
-        )
-        response.raise_for_status()
+        try:
+            response = await client.get(
+                f"{self.base_url}/getUpdates",
+                params={"offset": self.offset, "timeout": 20, "limit": 20},
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(format_telegram_poll_error(exc, self.bot_token)) from None
         payload = response.json()
         if not payload.get("ok"):
             return []
@@ -292,7 +300,7 @@ class TelegramCommandHandler:
                 for update in updates:
                     await self.handle_update(update)
             except Exception as exc:
-                logger.exception("Telegram polling loop failed")
-                self._write_heartbeat("error", str(exc))
+                log_telegram_poll_error(exc, self.bot_token)
+                self._write_heartbeat("error", format_telegram_poll_error(exc, self.bot_token))
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 30)

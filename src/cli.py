@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import json
 import os
 import sys
 import time
@@ -1263,17 +1264,44 @@ async def run_telegram_poll() -> None:
     if not settings.telegram.enabled:
         print("Telegram disabled in settings")
         return
+    if not settings.telegram.poll_enabled:
+        print("Telegram command polling disabled (TELEGRAM_POLL_ENABLED=false)")
+        return
     token = settings.telegram.bot_token
     chat_id = settings.telegram.chat_id
     if not token or not chat_id:
         print("Telegram token/chat_id missing")
         return
 
-    from src.notifications.telegram_commands import TelegramCommandHandler
+    from src.notifications.telegram_commands import (
+        HEARTBEAT_PATH,
+        POLL_LOCK_PATH,
+        TelegramCommandHandler,
+    )
+    from src.notifications.telegram_security import TelegramPollLock
 
-    handler = TelegramCommandHandler(token, chat_id)
-    print("[TELEGRAM] Polling commands...")
-    await handler.run_forever()
+    lock = TelegramPollLock(POLL_LOCK_PATH)
+    if not lock.acquire():
+        print("[TELEGRAM] Another telegram-poll process already holds getUpdates lock; exiting")
+        HEARTBEAT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        HEARTBEAT_PATH.write_text(
+            json.dumps(
+                {
+                    "status": "error",
+                    "updated_at": datetime.now(UTC).isoformat(),
+                    "error": "duplicate local telegram-poll process",
+                }
+            ),
+            encoding="utf-8",
+        )
+        return
+
+    try:
+        handler = TelegramCommandHandler(token, chat_id)
+        print("[TELEGRAM] Polling commands...")
+        await handler.run_forever()
+    finally:
+        lock.release()
 
 
 async def run_healthcheck() -> None:

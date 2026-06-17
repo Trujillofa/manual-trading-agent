@@ -96,7 +96,12 @@ class TelegramNotifier:
                     return False
 
         except Exception as e:
-            logger.error(f"Error sending Telegram message: {e}")
+            from src.notifications.telegram_security import redact_telegram_secrets
+
+            logger.error(
+                "Error sending Telegram message: %s",
+                redact_telegram_secrets(str(e), self._bot_token),
+            )
             return False
 
     # Alias for compatibility

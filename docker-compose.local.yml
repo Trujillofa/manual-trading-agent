@@ -1,0 +1,9 @@
+# Local dev only — NOT auto-loaded by Docker Compose.
+# Hetzner prod already polls the shared bot token; disable local getUpdates to avoid 409.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+services:
+  manual-trading-agent:
+    environment:
+      - TELEGRAM_POLL_ENABLED=false

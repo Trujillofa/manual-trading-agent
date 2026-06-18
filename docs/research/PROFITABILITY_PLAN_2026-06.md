@@ -305,6 +305,7 @@ discussion.
 
 1. Let the current Branch B Hetzner observation window collect data.
 2. In parallel, create the isolated `research-new-edge-program` worktree.
-3. Build the carry/swap data manifest first.
-4. Do not write strategy logic until the data and cost model are documented.
-5. Run one hypothesis at a time and write KEEP/DISCARD results before moving on.
+3. Use [`GROK_RESEARCH_LOOP_ENGINEERING.md`](GROK_RESEARCH_LOOP_ENGINEERING.md) as the outer loop for Grok-driven research.
+4. Build the carry/swap lane contract and data verifier first.
+5. Do not write strategy logic until the data and cost model are documented.
+6. Run one hypothesis at a time and write KEEP/DISCARD/BLOCKED results before moving on.

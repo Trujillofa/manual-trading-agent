@@ -1,0 +1,1 @@
+"""Event calendar data verification."""

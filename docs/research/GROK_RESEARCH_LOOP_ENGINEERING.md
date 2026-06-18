@@ -91,7 +91,8 @@ Schema (one JSON object per line):
 - Daily multi-asset TSMOM: CLOSED (gross edge ~1.03–1.04, weak Sharpe)
 - Carry / swap / funding (Hetzner cTrader): CLOSED / DISCARD (all resolved pairs returned 0.0 swap)
 - FX stat-arb pairs (daily prototype): DISCARD (gross pass on EUR/GBP + AUD/NZD, but OOS net PF < 1.20 and OOS trades < 30)
-- Next open lane: Event / Calendar (pending calendar data proof)
+- Event / Calendar: BLOCKED (no historical feed; live XML schema incompatible with NewsChecker; no actual field)
+- Next action: source verified historical calendar archive before any event strategy/backtest
 
 ## How to Start a New Lane
 1. Create the worktree if needed: `./scripts/worktree-create.sh research-new-edge-program main`

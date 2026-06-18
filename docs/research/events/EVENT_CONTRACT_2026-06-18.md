@@ -68,11 +68,11 @@ python -m research.new_edge.events.data.verify_event_data \
 
 ## Verification status
 
-**BLOCKED** (2026-06-18). See `docs/research/events/EVENT_DATA_MANIFEST_2026-06-18.md`.
+**DATA_PASS** (2026-06-19). See `docs/research/events/EVENT_DATA_MANIFEST_2026-06-19.md`.
 
-- No historical calendar feed (faireconomy `thisweek` only).
-- Live XML schema incompatible with `NewsChecker` (`<country>` vs `<currency>`, date format mismatch).
-- No `<actual>` field in feed; surprise lanes require external historical archive.
-- Spread widening model documented (3× base + 1 pip slippage/side → ~14 pip round-trip conservative).
+- Pinned HF snapshot: 83,427 rows, 2007-01-01 → 2025-04-07 UTC, SHA256 verified.
+- Indicator-class high-impact events: 9,806 (actual/previous 99.8%, forecast 96.8%).
+- Live faireconomy XML still incompatible with `NewsChecker` (production lockout separate fix).
+- **Actual is label-only** after `datetime_utc`; never for pre-release decision logic.
 
-No event strategy or backtest until manifest passes.
+Next: smallest gross-first event falsifier (avoidance or post-release drift). Still no optimization.

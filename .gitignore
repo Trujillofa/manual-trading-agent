@@ -54,3 +54,7 @@ results/
 research/results.tsv
 research/best_config.json
 research/run.log
+
+# Pinned research snapshots (provenance JSON is tracked; bulk CSV is local-only)
+research/new_edge/events/data/pinned/*.csv
+research/new_edge/events/data/pinned/*.parquet

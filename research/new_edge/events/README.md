@@ -9,11 +9,17 @@ Macro event timing edge — data proof phase only.
 ## Commands
 
 ```bash
-# Data proof (no strategy/backtest until this passes)
+# Pin HF snapshot (once; CSV is gitignored)
+python -m research.new_edge.events.data.pin_hf_calendar --tag 2026-06-18
+
+# Data proof (pinned historical snapshot — primary path)
 python -m research.new_edge.events.data.verify_event_data \
-  --output docs/research/events/EVENT_DATA_MANIFEST_2026-06-18.md
+  --input research/new_edge/events/data/pinned/forex_factory_calendar_hf_2026-06-18.csv \
+  --provenance research/new_edge/events/data/pinned/forex_factory_calendar_hf_2026-06-18.provenance.json \
+  --output docs/research/events/EVENT_DATA_MANIFEST_2026-06-19.md
 ```
 
 ## Status
 
-See `research/new_edge/research_ledger.jsonl` for latest verdict.
+**DATA_PASS** (2026-06-19). See ledger + `docs/research/events/EVENT_DATA_MANIFEST_2026-06-19.md`.
+Next: gross-first falsifier only (no optimization yet).

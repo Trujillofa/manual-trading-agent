@@ -16,6 +16,7 @@ from src.config import get_settings
 from src.dashboard.report import run_dashboard as _dashboard_run
 from src.dashboard.report import run_healthcheck as _healthcheck_run
 from src.data.fetcher import DataFetcher
+from src.evaluation.branch_b_audit import record_branch_b_scan_decision_signal
 from src.indicators.adx import calculate_adx_full
 from src.indicators.atr import calculate_atr
 from src.indicators.candlestick import (
@@ -233,6 +234,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
         rsi_1h: float | None = None
         rsi_30m: float | None = None
         rsi_15m_val: float | None = None
+        entry_signal_id: str | None = None
         try:
             # Fetch multi-timeframe data
             symbol = pair.replace("/", "")
@@ -859,6 +861,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     # Track for outcome notification
                     pip_mult = 100.0 if "JPY" in pair else 10000.0
                     signal_id = now_utc.isoformat()
+                    entry_signal_id = signal_id
                     pending_trades.append(
                         {
                             "signal_id": signal_id,
@@ -902,30 +905,61 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     near_direction if near_distance <= 4.0 or remaining == 1 else None
                 )
 
-            _append_audit_log(
-                _build_scan_telemetry_payload(
-                    ts=now_utc.isoformat(),
-                    scan_run_id=scan_run_id,
-                    pair=pair,
-                    state=telemetry_state,
-                    direction=telemetry_direction,
-                    aligned=telemetry_aligned,
-                    breakout_pending=breakout_pending,
-                    entry_triggered=telemetry_entry_triggered,
-                    bars_aligned=bars_aligned,
-                    confirm_bars=confirm_bars,
-                    within_confirm_window=within_confirm_window,
-                    spread_pips=spread_pips,
-                    max_spread_pips=max_spread_for_pair,
-                    spread_source=spread_source,
-                    adx_1h=adx_1h,
-                    is_ranging=is_ranging,
-                    rsi_1h=rsi_1h,
-                    rsi_30m=rsi_30m,
-                    rsi_15m=rsi_15m_val,
-                    no_trade_reasons=telemetry_reasons,
-                    is_shadow=is_shadow,
-                )
+            telemetry_payload = _build_scan_telemetry_payload(
+                ts=now_utc.isoformat(),
+                scan_run_id=scan_run_id,
+                pair=pair,
+                state=telemetry_state,
+                direction=telemetry_direction,
+                aligned=telemetry_aligned,
+                breakout_pending=breakout_pending,
+                entry_triggered=telemetry_entry_triggered,
+                bars_aligned=bars_aligned,
+                confirm_bars=confirm_bars,
+                within_confirm_window=within_confirm_window,
+                spread_pips=spread_pips,
+                max_spread_pips=max_spread_for_pair,
+                spread_source=spread_source,
+                adx_1h=adx_1h,
+                is_ranging=is_ranging,
+                rsi_1h=rsi_1h,
+                rsi_30m=rsi_30m,
+                rsi_15m=rsi_15m_val,
+                no_trade_reasons=telemetry_reasons,
+                is_shadow=is_shadow,
+            )
+            _append_audit_log(telemetry_payload)
+            entry_tp_pips: float | None = None
+            entry_sl_pips: float | None = None
+            if entry_val is not None and tp_val is not None and sl_val is not None:
+                pip_mult = 100.0 if "JPY" in pair else 10000.0
+                entry_tp_pips = abs(float(tp_val) - float(entry_val)) * pip_mult
+                entry_sl_pips = abs(float(sl_val) - float(entry_val)) * pip_mult
+            record_branch_b_scan_decision_signal(
+                ts=now_utc,
+                pair=pair,
+                scan_run_id=scan_run_id,
+                telemetry_state=telemetry_state,
+                direction=telemetry_direction,
+                telemetry_payload=telemetry_payload,
+                data_1h=data_1h,
+                data_30m=data_30m,
+                data_15m=data_15m,
+                signal_reasons=signal_reasons if telemetry_state == "entry" else None,
+                no_trade_reasons=telemetry_reasons if telemetry_state == "blocked" else None,
+                signal_id=entry_signal_id,
+                entry_ref_price=float(entry_val) if entry_val is not None else None,
+                tp_pips=entry_tp_pips,
+                sl_pips=entry_sl_pips,
+                confidence=signal_confidence,
+                profile=_profile_label(profile),
+                missing_timeframes=missing_timeframes,
+                distance=float(near_distance),
+                breakout_pending=breakout_pending,
+                bars_aligned=bars_aligned,
+                confirm_bars=confirm_bars,
+                news_blocked=news_blocked,
+                is_shadow=is_shadow,
             )
 
         except Exception as exc:

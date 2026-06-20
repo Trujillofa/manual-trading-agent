@@ -1,5 +1,6 @@
 """Forex DecisionSignal evaluation infrastructure (observability-only)."""
 
+from src.evaluation.branch_b_audit import record_branch_b_scan_decision_signal
 from src.evaluation.branch_b_decision_signal import (
     BranchBScanContext,
     BranchBScanContextError,
@@ -33,6 +34,7 @@ __all__ = [
     "normalize_fx_symbol",
     "normalize_utc_timestamp",
     "parse_decision_signal_jsonl_line",
+    "record_branch_b_scan_decision_signal",
     "record_decision_signal",
     "validate_decision_signal",
     "validate_decision_signal_jsonl",

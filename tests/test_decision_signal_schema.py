@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from src.evaluation.decision_signal_schema import (
     ENGINE_VERSION,
     parse_decision_signal_jsonl_line,
+    record_decision_signal,
     validate_decision_signal,
     validate_decision_signal_jsonl,
 )
@@ -217,3 +218,92 @@ def test_validate_jsonl_missing_file(tmp_path: Path) -> None:
     report = validate_decision_signal_jsonl(tmp_path / "missing.jsonl")
     assert not report.ok
     assert report.errors[0].line_no == 0
+
+
+def test_record_valid_decision_signal_appends_one_row(tmp_path: Path) -> None:
+    audit = tmp_path / "signal_audit.jsonl"
+    record_decision_signal(_valid_signal(), path=audit)
+
+    lines = [line for line in audit.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(lines) == 1
+
+    report = validate_decision_signal_jsonl(audit)
+    assert report.ok
+    assert report.validated_signals == 1
+
+
+def test_record_invalid_decision_signal_raises_and_does_not_write(tmp_path: Path) -> None:
+    audit = tmp_path / "signal_audit.jsonl"
+    audit.write_text(
+        json.dumps({"kind": "scan_telemetry", "ts": "2026-06-20T08:00:00Z"}) + "\n",
+        encoding="utf-8",
+    )
+    before = audit.read_text(encoding="utf-8")
+
+    with pytest.raises(ValidationError):
+        record_decision_signal(_valid_signal(symbol="NOT_A_PAIR"), path=audit)
+
+    assert audit.read_text(encoding="utf-8") == before
+
+
+def test_record_multiple_appends_preserve_order(tmp_path: Path) -> None:
+    audit = tmp_path / "signal_audit.jsonl"
+    first = _valid_signal(
+        signal_id="11111111-1111-4111-8111-111111111111",
+        ts="2026-06-20T08:15:00Z",
+    )
+    second = _valid_signal(
+        signal_id="22222222-2222-4222-8222-222222222222",
+        ts="2026-06-20T09:15:00Z",
+    )
+
+    record_decision_signal(first, path=audit)
+    record_decision_signal(second, path=audit)
+
+    rows = [
+        json.loads(line) for line in audit.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
+    assert [row["signal_id"] for row in rows] == [first["signal_id"], second["signal_id"]]
+
+
+def test_record_preserves_mixed_audit_log_compatibility(tmp_path: Path) -> None:
+    audit = tmp_path / "signal_audit.jsonl"
+    audit.write_text(
+        "\n".join(
+            [
+                json.dumps({"kind": "scan_telemetry", "ts": "2026-06-20T08:00:00Z"}),
+                json.dumps(
+                    {"pair": "EUR/USD", "direction": "BUY", "timestamp": "2026-06-19T12:00:00Z"}
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    record_decision_signal(_valid_signal(), path=audit)
+
+    report = validate_decision_signal_jsonl(audit)
+    assert report.ok
+    assert report.validated_signals == 1
+    assert report.skipped_rows == 2
+
+
+def test_record_utc_timestamps_serialize_consistently(tmp_path: Path) -> None:
+    audit = tmp_path / "signal_audit.jsonl"
+    payload = _valid_signal(
+        ts="2026-06-20T08:15:00+00:00",
+        expires_at="2026-06-21T08:15:00+00:00",
+    )
+    dq = dict(payload["data_quality"])  # type: ignore[arg-type]
+    blocks = dict(dq["blocks"])  # type: ignore[index]
+    blocks["ohlc_m15"] = {"status": "available", "latest_bar_ts": "2026-06-20T08:00:00+00:00"}
+    dq["blocks"] = blocks
+    payload["data_quality"] = dq
+
+    record_decision_signal(payload, path=audit)
+
+    row = json.loads(audit.read_text(encoding="utf-8").strip())
+    assert row["ts"] == "2026-06-20T08:15:00Z"
+    assert row["expires_at"] == "2026-06-21T08:15:00Z"
+    assert row["data_quality"]["blocks"]["ohlc_m15"]["latest_bar_ts"] == "2026-06-20T08:00:00Z"

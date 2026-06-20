@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ENGINE_VERSION = "forex-decision-signal-v1"
 KIND_DECISION_SIGNAL = "decision_signal"
+DEFAULT_SIGNAL_AUDIT_PATH = Path("logs/signal_audit.jsonl")
 
 Direction = Literal["BUY", "SELL"]
 Action = Literal["watch", "avoid", "alert"]
@@ -75,7 +76,9 @@ class DataQuality(BaseModel):
 
     @field_validator("blocks")
     @classmethod
-    def blocks_use_known_keys(cls, value: dict[str, DataQualityBlock]) -> dict[str, DataQualityBlock]:
+    def blocks_use_known_keys(
+        cls, value: dict[str, DataQualityBlock]
+    ) -> dict[str, DataQualityBlock]:
         unknown = sorted(set(value) - _DATA_QUALITY_BLOCK_KEYS)
         if unknown:
             raise ValueError(f"unknown data_quality.blocks keys: {', '.join(unknown)}")
@@ -157,6 +160,47 @@ def validate_decision_signal(record: dict[str, Any]) -> DecisionSignalRecord:
     return DecisionSignalRecord.model_validate(record)
 
 
+def _iso_timestamp_to_utc_z(value: str) -> str:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    normalized = _require_utc_datetime(parsed, field_name="timestamp")
+    text = normalized.strftime("%Y-%m-%dT%H:%M:%S")
+    if normalized.microsecond:
+        frac = f"{normalized.microsecond:06d}".rstrip("0")
+        text = f"{text}.{frac}"
+    return f"{text}Z"
+
+
+def decision_signal_to_json(record: DecisionSignalRecord) -> str:
+    """Serialize a validated DecisionSignalRecord to a single JSONL row."""
+    payload = record.model_dump(mode="json", exclude_none=True)
+    payload["ts"] = _iso_timestamp_to_utc_z(payload["ts"])
+    if "expires_at" in payload:
+        payload["expires_at"] = _iso_timestamp_to_utc_z(payload["expires_at"])
+
+    blocks = payload.get("data_quality", {}).get("blocks", {})
+    for block in blocks.values():
+        if isinstance(block, dict) and isinstance(block.get("latest_bar_ts"), str):
+            block["latest_bar_ts"] = _iso_timestamp_to_utc_z(block["latest_bar_ts"])
+
+    return json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+
+
+def record_decision_signal(
+    record: dict[str, Any] | DecisionSignalRecord,
+    *,
+    path: Path = DEFAULT_SIGNAL_AUDIT_PATH,
+) -> DecisionSignalRecord:
+    """Validate and append one decision_signal row to the audit JSONL log."""
+    validated = (
+        record if isinstance(record, DecisionSignalRecord) else validate_decision_signal(record)
+    )
+    line = decision_signal_to_json(validated)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(line + "\n")
+    return validated
+
+
 def parse_decision_signal_jsonl_line(line: str, *, line_no: int = 1) -> DecisionSignalRecord:
     """Parse one JSONL line as a decision_signal record."""
     stripped = line.strip()
@@ -198,12 +242,12 @@ def validate_decision_signal_jsonl(
             try:
                 payload = json.loads(stripped)
             except json.JSONDecodeError as exc:
-                report.errors.append(
-                    JsonlLineValidationError(line_no, f"invalid JSON: {exc.msg}")
-                )
+                report.errors.append(JsonlLineValidationError(line_no, f"invalid JSON: {exc.msg}"))
                 continue
             if not isinstance(payload, dict):
-                report.errors.append(JsonlLineValidationError(line_no, "record must be a JSON object"))
+                report.errors.append(
+                    JsonlLineValidationError(line_no, "record must be a JSON object")
+                )
                 continue
             if payload.get("kind") != KIND_DECISION_SIGNAL:
                 if skip_non_signal_rows:

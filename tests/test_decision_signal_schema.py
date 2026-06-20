@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -57,6 +58,43 @@ def test_contract_example_record_validates() -> None:
     assert record.action == "alert"
     assert record.engine_version == ENGINE_VERSION
     assert record.data_quality.overall_level == "good"
+    assert record.ts.tzinfo == UTC
+
+
+def test_ts_with_z_suffix_passes() -> None:
+    record = validate_decision_signal(_valid_signal(ts="2026-06-20T08:15:00Z"))
+    assert record.ts.tzinfo == UTC
+
+
+def test_ts_with_utc_offset_passes() -> None:
+    record = validate_decision_signal(_valid_signal(ts="2026-06-20T08:15:00+00:00"))
+    assert record.ts.tzinfo == UTC
+
+
+def test_naive_ts_fails() -> None:
+    with pytest.raises(ValidationError):
+        validate_decision_signal(_valid_signal(ts="2026-06-20T08:15:00"))
+
+
+def test_non_utc_ts_fails() -> None:
+    with pytest.raises(ValidationError):
+        validate_decision_signal(_valid_signal(ts="2026-06-20T08:15:00+02:00"))
+
+
+def test_expires_at_with_z_passes() -> None:
+    record = validate_decision_signal(_valid_signal(expires_at="2026-06-21T08:15:00Z"))
+    assert record.expires_at is not None
+    assert record.expires_at.tzinfo == UTC
+
+
+def test_naive_expires_at_fails() -> None:
+    with pytest.raises(ValidationError):
+        validate_decision_signal(_valid_signal(expires_at="2026-06-21T08:15:00"))
+
+
+def test_non_utc_expires_at_fails() -> None:
+    with pytest.raises(ValidationError):
+        validate_decision_signal(_valid_signal(expires_at="2026-06-21T08:15:00-05:00"))
 
 
 def test_symbol_normalizes_to_uppercase() -> None:
@@ -132,6 +170,7 @@ def test_parse_jsonl_line_round_trip() -> None:
     record = parse_decision_signal_jsonl_line(line, line_no=3)
     assert str(record.signal_id) == payload["signal_id"]
     assert record.ts.isoformat().startswith("2026-06-20T08:15:00")
+    assert record.ts.tzinfo == UTC
 
 
 def test_parse_jsonl_line_reports_line_number_on_error() -> None:

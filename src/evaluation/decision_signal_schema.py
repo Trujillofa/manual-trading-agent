@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
@@ -45,6 +45,14 @@ _DATA_QUALITY_BLOCK_KEYS = frozenset(
     }
 )
 _SYMBOL_RE = re.compile(r"^[A-Z]{3}/[A-Z]{3}$")
+
+
+def _require_utc_datetime(value: datetime, *, field_name: str) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{field_name} must be timezone-aware ISO 8601 UTC")
+    if value.utcoffset().total_seconds() != 0:
+        raise ValueError(f"{field_name} must use UTC (Z or +00:00 offset)")
+    return value.astimezone(UTC)
 
 
 class DataQualityBlock(BaseModel):
@@ -95,6 +103,18 @@ class DecisionSignalRecord(BaseModel):
     tp_pips: float | None = None
     sl_pips: float | None = None
     invalidation: str | None = None
+
+    @field_validator("ts")
+    @classmethod
+    def ts_is_utc(cls, value: datetime) -> datetime:
+        return _require_utc_datetime(value, field_name="ts")
+
+    @field_validator("expires_at")
+    @classmethod
+    def expires_at_is_utc(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return value
+        return _require_utc_datetime(value, field_name="expires_at")
 
     @field_validator("symbol")
     @classmethod

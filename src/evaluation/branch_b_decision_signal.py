@@ -11,7 +11,11 @@ from datetime import UTC, datetime
 from typing import Any, Literal, NotRequired, TypedDict
 from uuid import UUID, uuid4
 
-from src.evaluation.decision_signal_schema import ENGINE_VERSION, KIND_DECISION_SIGNAL
+from src.evaluation.decision_signal_schema import (
+    ENGINE_VERSION,
+    KIND_DECISION_SIGNAL,
+    validate_decision_signal,
+)
 
 BranchBScanState = Literal[
     "entry",
@@ -388,4 +392,5 @@ def build_branch_b_decision_signal(context: BranchBScanContext) -> dict[str, Any
     if context.get("invalidation"):
         payload["invalidation"] = context["invalidation"]
 
-    return payload
+    validated = validate_decision_signal(payload)
+    return validated.model_dump()

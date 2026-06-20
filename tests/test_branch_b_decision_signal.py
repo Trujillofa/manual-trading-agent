@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+from pydantic import ValidationError
 
 from src.evaluation.branch_b_decision_signal import (
     BranchBScanContextError,
@@ -239,3 +240,11 @@ def test_generates_signal_id_when_missing() -> None:
     context.pop("signal_id")
     payload = build_branch_b_decision_signal(context)
     UUID(str(payload["signal_id"]))
+
+
+def test_rejects_invalid_data_quality_block_status() -> None:
+    context = _base_context(
+        ohlc_m15={"status": "bad_status", "bar_count": 120},
+    )
+    with pytest.raises(ValidationError):
+        build_branch_b_decision_signal(context)

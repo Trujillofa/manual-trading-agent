@@ -1,8 +1,11 @@
 # Vol-Regime Range Compression Breakout Results — 2026-06-19
 
-## Lane verdict: **GROSS_PASS**
+## Lane verdict: **DISCARD** (closed 2026-06-20)
 
-Reason: N/A
+Reason: Gross edge too small to survive 6-pip round-trip costs and OOS net gate (OOS net PF 0.782 < 1.20).
+
+- Gross stage: **GROSS_PASS**
+- Final lane status: **DISCARD** — do not retune compression percentile, persistence, entry window, hold, pairs, or timeframe.
 
 ## Command
 ```bash
@@ -28,6 +31,10 @@ python -m research.new_edge.vol_regime.range_compression_breakout_test --start 2
 - Win rate: 51.3%
 - Total gross pips: 7437.9
 - Avg gross pips/trade: 1.97
+
+## Pooled net stats (6.0 pip round-trip)
+- Net PF: 0.802
+- Total net pips: -15230.1
 
 ## Net + IS/OOS (after gross pass)
 - Split time (70% entries): 2023-04-17T12:00:00+00:00
@@ -67,5 +74,8 @@ python -m research.new_edge.vol_regime.range_compression_breakout_test --start 2
 - No parameter sweeps; single contract parameter set.
 - Closed lanes (TA, TSMOM, carry, stat-arb, event drift) not reopened.
 
-## Next step
-Gross passed but net/OOS failed. Lane falsified after costs or OOS gates.
+## Closure
+
+Lane closed after PR #10 merge (`545fef0`). Recorded in `docs/research/CLOSED_RESEARCH_LANES.md`.
+Do not retune compression percentile, persistence, entry window, 24-bar hold, universe, or H1 timeframe.
+Microstructure / execution-quality research is deferred and must not be used to rescue this signal.

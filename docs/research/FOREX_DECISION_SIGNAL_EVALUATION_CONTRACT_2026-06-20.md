@@ -131,8 +131,8 @@ Branch B already surfaces advisory TP/SL in Telegram. These are optional and nev
 Rules (adapted from DSA lifecycle discipline):
 
 - Terminal states (`expired`, `invalidated`, `closed`) must not revert to `active`.
-- A new opposing `active` signal for the same `(symbol, direction)` should mark the prior
-  `active` signal `invalidated` and record the invalidation reason in `metadata`.
+- A new opposing `active` signal for the same symbol and opposite direction should mark the
+  prior `active` signal `invalidated` and record the invalidation reason in `metadata`.
 - Dedup key (best-effort): `(source, symbol, action, direction, ts_bucket_15m)` for scan-origin
   signals; `(source_ref)` when available.
 

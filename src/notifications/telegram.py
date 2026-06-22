@@ -184,8 +184,9 @@ class TelegramNotifier:
         adx: float | None = None,
         plus_di: float | None = None,
         minus_di: float | None = None,
+        ema_context: str | None = None,
     ) -> None:
-        """Send signal alert with enhanced pattern/divergence info."""
+        """Send signal alert with enhanced pattern/divergence/EMA info."""
         emoji = "🟢" if direction == "BUY" else "🔴"
 
         # Build pattern info
@@ -263,6 +264,90 @@ class TelegramNotifier:
                 f"{div_text}"
             )
 
+        if ema_context:
+            message += f"\n\n{ema_context}"
+
+        _ = await self.send(message)
+
+    async def send_ema_crossover(
+        self,
+        pair: str,
+        direction: str,
+        fast_ema: float,
+        slow_ema: float,
+        fast_period: int,
+        slow_period: int,
+        timeframe: str,
+    ) -> None:
+        """Send EMA crossover signal (Golden Cross or Death Cross)."""
+        if direction == "bullish":
+            emoji = "🟢"
+            cross_label = "Golden Cross"
+        else:
+            emoji = "🔴"
+            cross_label = "Death Cross"
+
+        message = (
+            f"{emoji} *EMA Crossover* — {cross_label}\n\n"
+            f"Pair: `{pair}`\n"
+            f"Timeframe: `{timeframe}`\n"
+            f"EMA({fast_period}): `{fast_ema:.5f}`\n"
+            f"EMA({slow_period}): `{slow_ema:.5f}`"
+        )
+        _ = await self.send(message)
+
+    async def send_ema_price_touch(
+        self,
+        pair: str,
+        price: float,
+        ema_value: float,
+        ema_period: int,
+        timeframe: str,
+        touch_type: str,
+        distance_pips: float,
+    ) -> None:
+        """Send price-EMA touch/break notification."""
+        if touch_type == "cross_above":
+            emoji = "🟢"
+            desc = f"Price crossed *above* EMA({ema_period})"
+        elif touch_type == "cross_below":
+            emoji = "🔴"
+            desc = f"Price crossed *below* EMA({ema_period})"
+        elif touch_type == "above":
+            emoji = "📊"
+            desc = f"Price touching EMA({ema_period}) from above"
+        else:
+            emoji = "📊"
+            desc = f"Price touching EMA({ema_period}) from below"
+
+        message = (
+            f"{emoji} *EMA Price Touch*\n\n"
+            f"Pair: `{pair}`\n"
+            f"Timeframe: `{timeframe}`\n"
+            f"{desc}\n"
+            f"Price: `{price:.5f}`\n"
+            f"EMA({ema_period}): `{ema_value:.5f}`\n"
+            f"Distance: `{distance_pips:.1f}` pips"
+        )
+        _ = await self.send(message)
+
+    async def send_ema_slope(
+        self,
+        pair: str,
+        ema_period: int,
+        slope_direction: str,
+        current_value: float,
+        timeframe: str,
+    ) -> None:
+        """Send EMA slope/direction notification."""
+        emoji = "📈" if slope_direction == "rising" else "📉"
+        message = (
+            f"{emoji} *EMA Slope*\n\n"
+            f"Pair: `{pair}`\n"
+            f"Timeframe: `{timeframe}`\n"
+            f"EMA({ema_period}) is `{slope_direction.upper()}`\n"
+            f"Current: `{current_value:.5f}`"
+        )
         _ = await self.send(message)
 
     async def send_scan_error(self, pair: str, error: str) -> None:

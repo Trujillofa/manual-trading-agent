@@ -89,6 +89,12 @@ strategy:
     slope_enabled: false
     touch_threshold_pips: 1.0
     max_signals_per_pair: 3
+    # EMA trend-alignment confidence modifier (scales RSI signal confidence,
+    # not a gate). Default off — no effect on existing signals until enabled.
+    confidence_modifier_enabled: false
+    confidence_ref_period: 200
+    confidence_boost: 1.10
+    confidence_dampen: 0.85
 
 risk:
   # TP/SL: fixed-dollar values per AGENTS.md (~$500 TP, ~$1800 SL)

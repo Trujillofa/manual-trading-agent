@@ -134,10 +134,23 @@ class EMAConfig:
     slope_enabled: bool = True
     touch_threshold_pips: float = 1.0
     max_signals_per_pair: int = 3
+    # EMA trend-alignment confidence modifier (recommendation #1).
+    # Not a gate: scales an existing RSI signal's confidence up when the
+    # macro EMA trend agrees with the signal direction, down when it opposes.
+    confidence_modifier_enabled: bool = False
+    confidence_ref_period: int = 200
+    confidence_boost: float = 1.10
+    confidence_dampen: float = 0.85
 
     def __post_init__(self) -> None:
         if self.fast_period <= 0:
             raise ValueError("ema.fast_period must be > 0")
+        if self.confidence_ref_period <= 0:
+            raise ValueError("ema.confidence_ref_period must be > 0")
+        if self.confidence_boost < 1.0:
+            raise ValueError("ema.confidence_boost must be >= 1.0")
+        if not 0 < self.confidence_dampen <= 1.0:
+            raise ValueError("ema.confidence_dampen must be in (0, 1]")
         if self.slow_period <= 0:
             raise ValueError("ema.slow_period must be > 0")
         if self.medium_period <= 0:

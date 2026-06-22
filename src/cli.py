@@ -166,6 +166,20 @@ def create_parser() -> argparse.ArgumentParser:
         default=0.85,
         help="Confidence multiplier when no curl detected for confidence variant (default: 0.85)",
     )
+    enhanced_backtest_parser.add_argument(
+        "--ema-confidence",
+        action="store_true",
+        help="Enable EMA trend-alignment confidence modifier (boost when price agrees with EMA-ref trend, dampen when counter)",
+    )
+    enhanced_backtest_parser.add_argument(
+        "--ema-confidence-ref", type=int, default=200, help="EMA period for trend reference (default: 200)"
+    )
+    enhanced_backtest_parser.add_argument(
+        "--ema-confidence-boost", type=float, default=1.10, help="Confidence multiplier when trend-aligned (default: 1.10)"
+    )
+    enhanced_backtest_parser.add_argument(
+        "--ema-confidence-dampen", type=float, default=0.85, help="Confidence multiplier when trend-counter (default: 0.85)"
+    )
 
     subparsers.add_parser("telegram-poll", help="Poll Telegram commands (e.g. /watchlist)")
     subparsers.add_parser("healthcheck", help="Check scanner and Telegram runtime health")
@@ -249,7 +263,12 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
         try:
             # Fetch multi-timeframe data (extended windows for EMA-200 support)
             symbol = pair.replace("/", "")
-            ema_enabled = settings.strategy.ema.enabled
+            # Widen windows when EMA alerts OR the EMA confidence modifier is on
+            # (EMA-200 on 1h needs >=200 bars).
+            ema_enabled = (
+                settings.strategy.ema.enabled
+                or settings.strategy.ema.confidence_modifier_enabled
+            )
             period_1h = "30d" if ema_enabled else "5d"
             period_30m = "7d" if ema_enabled else "3d"
             period_15m = "4d" if ema_enabled else "2d"
@@ -1399,6 +1418,10 @@ async def run_enhanced_backtest(
     rsi_ma_variant: str = "curl",
     rsi_ma_distance_max: float = 15.0,
     rsi_ma_confidence_mod: float = 0.85,
+    use_ema_confidence: bool = False,
+    ema_confidence_ref_period: int = 200,
+    ema_confidence_boost: float = 1.10,
+    ema_confidence_dampen: float = 0.85,
 ) -> None:
     """Run enhanced backtest with realistic TP/SL simulation."""
     from src.backtest.enhanced_engine import EnhancedBacktestEngine
@@ -1439,7 +1462,16 @@ async def run_enhanced_backtest(
             rsi_ma_variant=rsi_ma_variant,
             rsi_ma_distance_max=rsi_ma_distance_max,
             rsi_ma_confidence_mod=rsi_ma_confidence_mod,
+            use_ema_confidence=use_ema_confidence,
+            ema_confidence_ref_period=ema_confidence_ref_period,
+            ema_confidence_boost=ema_confidence_boost,
+            ema_confidence_dampen=ema_confidence_dampen,
         )
+        if use_ema_confidence:
+            print(
+                f"  EMA confidence: enabled (ref=EMA{ema_confidence_ref_period}, "
+                f"boost={ema_confidence_boost}, dampen={ema_confidence_dampen})"
+            )
 
         result = engine.run(pair, data, verbose=False)
 
@@ -1546,6 +1578,10 @@ def main() -> int:
             rsi_ma_variant=getattr(args, "rsi_ma_variant", "curl"),
             rsi_ma_distance_max=getattr(args, "rsi_ma_distance_max", 15.0),
             rsi_ma_confidence_mod=getattr(args, "rsi_ma_confidence_mod", 0.85),
+            use_ema_confidence=getattr(args, "ema_confidence", False),
+            ema_confidence_ref_period=getattr(args, "ema_confidence_ref", 200),
+            ema_confidence_boost=getattr(args, "ema_confidence_boost", 1.10),
+            ema_confidence_dampen=getattr(args, "ema_confidence_dampen", 0.85),
         ),
         "telegram-poll": run_telegram_poll,
         "healthcheck": run_healthcheck,

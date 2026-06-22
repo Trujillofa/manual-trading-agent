@@ -15,6 +15,7 @@ services:
     #   TELEGRAM_CHAT_ID=...
     environment:
       - TZ=America/Bogota
+      - TELEGRAM_POLL_ENABLED=${TELEGRAM_POLL_ENABLED:-true}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -23,12 +24,13 @@ services:
       - ./results:/app/results
     ports:
       - "9090:9090"  # Prometheus metrics (optional, for future use)
-    # Run scan every 15 minutes + poll Telegram commands continuously
+    # Run scan every 15 minutes + poll Telegram commands continuously.
+    # Local dev with prod token: use docker-compose.local.yml (see that file).
     entrypoint:
       [
         "/bin/sh",
         "-c",
-        "python -u -m src.cli telegram-poll >> /app/logs/telegram.log 2>&1 & while true; do echo '===' $(date) '===' >> /app/logs/scan.log; python -u -m src.cli scan >> /app/logs/scan.log 2>&1; sleep 900; done",
+        "if [ \"$${TELEGRAM_POLL_ENABLED:-true}\" = \"true\" ]; then python -u -m src.cli telegram-poll >> /app/logs/telegram.log 2>&1 & fi; while true; do echo '===' $$(date) '===' >> /app/logs/scan.log; python -u -m src.cli scan >> /app/logs/scan.log 2>&1; sleep 900; done",
       ]
     healthcheck:
       test: ["CMD", "python", "-m", "src.cli", "healthcheck"]

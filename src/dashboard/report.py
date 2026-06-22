@@ -29,12 +29,24 @@ def _healthcheck_status(now_utc: datetime | None = None) -> tuple[bool, str]:
     if scan_age > SCAN_HEALTH_MAX_AGE_SECONDS:
         return False, f"scan log stale ({scan_age:.0f}s old)"
 
-    if settings.telegram.enabled and settings.telegram.is_configured:
-        telegram_age = _path_age_seconds(_telegram_heartbeat_path(), current_time)
+    if (
+        settings.telegram.enabled
+        and settings.telegram.is_configured
+        and settings.telegram.poll_enabled
+    ):
+        heartbeat_path = _telegram_heartbeat_path()
+        telegram_age = _path_age_seconds(heartbeat_path, current_time)
         if telegram_age is None:
             return False, "telegram heartbeat missing"
         if telegram_age > TELEGRAM_HEARTBEAT_MAX_AGE_SECONDS:
             return False, f"telegram heartbeat stale ({telegram_age:.0f}s old)"
+        try:
+            heartbeat = json.loads(heartbeat_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False, "telegram heartbeat unreadable"
+        if heartbeat.get("status") != "ok":
+            error = heartbeat.get("error") or heartbeat.get("status") or "unknown"
+            return False, f"telegram heartbeat error ({error})"
 
     return True, "ok"
 

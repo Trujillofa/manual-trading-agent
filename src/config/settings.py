@@ -264,6 +264,7 @@ class TelegramConfig:
     bot_token: str | None = None
     chat_id: str | None = None
     enabled: bool = True
+    poll_enabled: bool = True
 
     signal_notifications: bool = True
     near_setup_notifications: bool = True
@@ -278,6 +279,10 @@ class TelegramConfig:
             self.bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
         if not _is_non_empty_string(self.chat_id):
             self.chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+
+        poll_env = os.environ.get("TELEGRAM_POLL_ENABLED")
+        if poll_env is not None:
+            self.poll_enabled = poll_env.strip().lower() in {"1", "true", "yes", "on"}
 
     @property
     def is_configured(self) -> bool:
@@ -376,6 +381,7 @@ class Settings:
             "bot_token": telegram_data.get("bot_token"),
             "chat_id": telegram_data.get("chat_id"),
             "enabled": telegram_data.get("enabled", True),
+            "poll_enabled": telegram_data.get("poll_enabled", True),
             "signal_notifications": telegram_data.get("signal_notifications", True),
             "near_setup_notifications": telegram_data.get("near_setup_notifications", True),
             "aligned_pending_notifications": telegram_data.get(

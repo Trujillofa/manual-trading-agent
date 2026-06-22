@@ -21,6 +21,7 @@ venv/
 # Local configs
 .env
 .env.local
+docker-compose.override.yml
 
 # Testing
 .pytest_cache/

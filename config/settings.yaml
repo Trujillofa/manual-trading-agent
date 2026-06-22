@@ -79,7 +79,7 @@ strategy:
 
   # EMA analysis — disabled by default, runs alongside RSI when on
   ema:
-    enabled: false
+    enabled: true
     fast_period: 9
     slow_period: 21
     medium_period: 50

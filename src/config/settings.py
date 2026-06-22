@@ -123,6 +123,36 @@ class ConfirmationProfilesConfig:
 
 
 @dataclass
+class EMAConfig:
+    enabled: bool = False
+    fast_period: int = 9
+    slow_period: int = 21
+    medium_period: int = 50
+    long_period: int = 200
+    crossover_enabled: bool = True
+    price_touch_enabled: bool = True
+    slope_enabled: bool = True
+    touch_threshold_pips: float = 1.0
+    max_signals_per_pair: int = 3
+
+    def __post_init__(self) -> None:
+        if self.fast_period <= 0:
+            raise ValueError("ema.fast_period must be > 0")
+        if self.slow_period <= 0:
+            raise ValueError("ema.slow_period must be > 0")
+        if self.medium_period <= 0:
+            raise ValueError("ema.medium_period must be > 0")
+        if self.long_period <= 0:
+            raise ValueError("ema.long_period must be > 0")
+        if self.fast_period >= self.slow_period:
+            raise ValueError("ema.fast_period must be < ema.slow_period")
+        if self.touch_threshold_pips < 0:
+            raise ValueError("ema.touch_threshold_pips must be >= 0")
+        if self.max_signals_per_pair <= 0:
+            raise ValueError("ema.max_signals_per_pair must be > 0")
+
+
+@dataclass
 class StrategyConfig:
     rsi_period: int = 14
     rsi_overbought: float = 70.0
@@ -152,6 +182,7 @@ class StrategyConfig:
     confirmation_profiles: ConfirmationProfilesConfig = field(
         default_factory=ConfirmationProfilesConfig
     )
+    ema: EMAConfig = field(default_factory=EMAConfig)
 
     def __post_init__(self) -> None:
         if self.rsi_period <= 0:
@@ -383,13 +414,20 @@ class Settings:
         else:
             profiles_config = ConfirmationProfilesConfig()
 
+        # Build EMAConfig from strategy config
+        raw_ema = strategy_data.get("ema", {})
+        if not isinstance(raw_ema, dict):
+            raise ValueError("'strategy.ema' must be a YAML object")
+        ema_config = EMAConfig(**raw_ema)
+
         strategy_payload = {
             k: v
             for k, v in strategy_data.items()
-            if k not in {"pair_overrides", "confirmation_profiles"}
+            if k not in {"pair_overrides", "confirmation_profiles", "ema"}
         }
         strategy_payload["pair_overrides"] = pair_overrides_parsed
         strategy_payload["confirmation_profiles"] = profiles_config
+        strategy_payload["ema"] = ema_config
 
         return cls(
             trading=TradingConfig(**trading_payload),

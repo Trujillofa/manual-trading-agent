@@ -53,3 +53,16 @@ results/
 research/results.tsv
 research/best_config.json
 research/run.log
+
+# Local agent state and experiment artifacts
+.commandcode/
+
+# Claude local overrides
+.claude/settings.local.json
+
+# Browser automation session recordings
+pi-session-*.html
+
+# TradingView scripts (local experiments, not part of repo)
+*.pine
+scripts/run_tradingview_strategy_backtest.py

@@ -177,3 +177,18 @@ def _path_age_seconds(path: Path, now_utc: datetime) -> float | None:
         return None
     modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
     return max((now_utc - modified_at).total_seconds(), 0.0)
+
+
+def _ema_near_state_path() -> Path:
+    return _logs_dir() / "ema_near_state.json"
+
+
+def _load_ema_near_state() -> dict[str, NearStateRecord]:
+    path = _ema_near_state_path()
+    return cast(dict[str, NearStateRecord], _load_json_mapping(path))
+
+
+def _save_ema_near_state(state: dict[str, NearStateRecord]) -> None:
+    path = _ema_near_state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2), encoding="utf-8")

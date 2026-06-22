@@ -17,6 +17,7 @@ from src.indicators.candlestick import (
     detect_patterns,
     get_pattern_score,
 )
+from src.indicators.ema import calculate_ema
 from src.indicators.high_low import (
     rolling_highest_highs,
     rolling_lowest_lows,
@@ -114,6 +115,10 @@ class EnhancedBacktestEngine:
         rsi_ma_variant: str = "curl",
         rsi_ma_distance_max: float = 15.0,
         rsi_ma_confidence_mod: float = 0.85,
+        use_ema_confidence: bool = False,
+        ema_confidence_ref_period: int = 200,
+        ema_confidence_boost: float = 1.10,
+        ema_confidence_dampen: float = 0.85,
     ) -> None:
         self.initial_balance = initial_balance
         self.risk_per_trade = risk_per_trade
@@ -134,6 +139,10 @@ class EnhancedBacktestEngine:
         self.rsi_ma_variant = rsi_ma_variant
         self.rsi_ma_distance_max = rsi_ma_distance_max
         self.rsi_ma_confidence_mod = rsi_ma_confidence_mod
+        self.use_ema_confidence = use_ema_confidence
+        self.ema_confidence_ref_period = ema_confidence_ref_period
+        self.ema_confidence_boost = ema_confidence_boost
+        self.ema_confidence_dampen = ema_confidence_dampen
 
     def _calculate_rsi_column(self, data: pd.DataFrame, period: int = 14) -> pd.Series:
         """Calculate RSI column for dataframe."""
@@ -323,6 +332,11 @@ class EnhancedBacktestEngine:
             ma_period=self.rsi_ma_period,
         )
         data["rsi_ma"] = rsi_ma_series
+        # EMA trend reference for the confidence modifier (aligned to bars)
+        if self.use_ema_confidence:
+            data["ema_ref"] = calculate_ema(
+                data["close"].tolist(), self.ema_confidence_ref_period
+            )
         data["hh"] = rolling_highest_highs(data["high"].tolist(), lookback)
         data["ll"] = rolling_lowest_lows(data["low"].tolist(), lookback)
         # SMA: rolling mean with min_periods=sma_period so early bars are NaN
@@ -608,6 +622,21 @@ class EnhancedBacktestEngine:
                             ]
                             if not detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
                                 signal = SignalType.HOLD
+
+                # ── EMA trend-alignment confidence modifier ───────────────
+                # Not a gate: scales confidence by whether price is on the
+                # trend-aligned side of EMA(ref). Can cross the 0.4 entry
+                # threshold for weak signals if dampen is strong enough.
+                if signal != SignalType.HOLD and self.use_ema_confidence:
+                    ema_ref_now = data["ema_ref"].iloc[i]
+                    if not pd.isna(ema_ref_now):
+                        aligned = (
+                            signal == SignalType.BUY and close > ema_ref_now
+                        ) or (signal == SignalType.SELL and close < ema_ref_now)
+                        if aligned:
+                            confidence = min(1.0, confidence * self.ema_confidence_boost)
+                        else:
+                            confidence *= self.ema_confidence_dampen
 
                 # Only enter with sufficient confidence
                 if signal != SignalType.HOLD and confidence >= 0.4:

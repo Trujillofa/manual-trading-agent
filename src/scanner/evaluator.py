@@ -379,6 +379,31 @@ def evaluate_entry(
             else:
                 signal_confidence *= 0.85
 
+    # EMA trend-alignment confidence modifier (config-gated, default off).
+    # Scales confidence based on whether the macro EMA(ref) trend agrees with
+    # the signal direction. Not a gate — it never adds or removes a signal.
+    ema_cfg = getattr(settings.strategy, "ema", None)
+    if (
+        signal_direction
+        and ema_cfg is not None
+        and getattr(ema_cfg, "confidence_modifier_enabled", False)
+    ):
+        ref_period = int(ema_cfg.confidence_ref_period)
+        ema_ref = calculate_ema(close_1h_list, ref_period)
+        ema_ref_now = ema_ref[-1] if ema_ref else None
+        if ema_ref_now is not None:
+            trend_aligned = (signal_direction == "BUY" and close_price > ema_ref_now) or (
+                signal_direction == "SELL" and close_price < ema_ref_now
+            )
+            if trend_aligned:
+                signal_confidence = min(
+                    1.0, signal_confidence * float(ema_cfg.confidence_boost)
+                )
+                signal_reasons.append(f"EMA{ref_period} trend-aligned")
+            else:
+                signal_confidence *= float(ema_cfg.confidence_dampen)
+                signal_reasons.append(f"EMA{ref_period} trend-counter")
+
     # RSI-MA hard gate
     rsi_ma_gate_enabled = _eff(
         "rsi_ma_gate_enabled", getattr(settings.strategy, "rsi_ma_gate_enabled", True)

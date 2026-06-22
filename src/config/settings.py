@@ -125,6 +125,7 @@ class ConfirmationProfilesConfig:
 @dataclass
 class EMAConfig:
     enabled: bool = False
+    standalone_notifications_enabled: bool = False
     fast_period: int = 9
     slow_period: int = 21
     medium_period: int = 50
@@ -282,6 +283,8 @@ class TelegramConfig:
     signal_notifications: bool = True
     near_setup_notifications: bool = True
     aligned_pending_notifications: bool = True
+    setup_digest_notifications: bool = True
+    setup_digest_interval_minutes: int = 60
     scan_results: bool = True
 
     def __post_init__(self) -> None:
@@ -296,6 +299,8 @@ class TelegramConfig:
         poll_env = os.environ.get("TELEGRAM_POLL_ENABLED")
         if poll_env is not None:
             self.poll_enabled = poll_env.strip().lower() in {"1", "true", "yes", "on"}
+        if self.setup_digest_interval_minutes <= 0:
+            raise ValueError("telegram.setup_digest_interval_minutes must be greater than 0")
 
     @property
     def is_configured(self) -> bool:
@@ -399,6 +404,12 @@ class Settings:
             "near_setup_notifications": telegram_data.get("near_setup_notifications", True),
             "aligned_pending_notifications": telegram_data.get(
                 "aligned_pending_notifications", True
+            ),
+            "setup_digest_notifications": telegram_data.get(
+                "setup_digest_notifications", True
+            ),
+            "setup_digest_interval_minutes": telegram_data.get(
+                "setup_digest_interval_minutes", 60
             ),
             "scan_results": telegram_data.get("scan_results", True),
         }

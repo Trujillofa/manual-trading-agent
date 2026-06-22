@@ -80,6 +80,7 @@ strategy:
   # EMA analysis — disabled by default, runs alongside RSI when on
   ema:
     enabled: true
+    standalone_notifications_enabled: false
     fast_period: 9
     slow_period: 21
     medium_period: 50
@@ -124,6 +125,8 @@ telegram:
   enabled: true
   signal_notifications: true
   near_setup_notifications: false
-  aligned_pending_notifications: true
+  aligned_pending_notifications: false
+  setup_digest_notifications: true
+  setup_digest_interval_minutes: 60
   bot_token: "${TELEGRAM_BOT_TOKEN}"
   chat_id: "${TELEGRAM_CHAT_ID}"

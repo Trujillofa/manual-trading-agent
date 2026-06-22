@@ -83,3 +83,32 @@ def test_settings_resolve_telegram_placeholders_from_env(
 
     assert settings.telegram.bot_token == "env-token"
     assert settings.telegram.chat_id == "env-chat"
+
+
+def test_settings_loads_quiet_alert_defaults(tmp_path: Path) -> None:
+    config_path = tmp_path / "settings.yaml"
+    _write_yaml(
+        config_path,
+        """
+        trading:
+          majors: ["EUR/USD"]
+        strategy:
+          ema:
+            enabled: true
+        telegram:
+          enabled: true
+          near_setup_notifications: false
+          aligned_pending_notifications: false
+          setup_digest_notifications: true
+          setup_digest_interval_minutes: 45
+        """,
+    )
+
+    settings = Settings.load(config_path)
+
+    assert settings.strategy.ema.enabled is True
+    assert settings.strategy.ema.standalone_notifications_enabled is False
+    assert settings.telegram.near_setup_notifications is False
+    assert settings.telegram.aligned_pending_notifications is False
+    assert settings.telegram.setup_digest_notifications is True
+    assert settings.telegram.setup_digest_interval_minutes == 45

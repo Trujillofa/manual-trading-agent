@@ -192,3 +192,17 @@ def _save_ema_near_state(state: dict[str, NearStateRecord]) -> None:
     path = _ema_near_state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+def _setup_digest_state_path() -> Path:
+    return _logs_dir() / "setup_digest_state.json"
+
+
+def _load_setup_digest_state() -> dict[str, Any]:
+    return _load_json_mapping(_setup_digest_state_path())
+
+
+def _save_setup_digest_state(state: dict[str, Any]) -> None:
+    path = _setup_digest_state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2), encoding="utf-8")

@@ -45,6 +45,12 @@ from src.indicators.rsi import (
 )
 from src.indicators.sma import calculate_sma
 from src.news.news_checker import NewsChecker
+from src.notifications.digest import (
+    SetupCandidate,
+    build_setup_digest_message,
+    digest_fingerprint,
+    should_send_digest,
+)
 from src.notifications.telegram import TelegramNotifier
 from src.scanner.evaluator import evaluate_entry
 from src.scanner.gates import (
@@ -72,11 +78,13 @@ from src.scanner.state import (
     _load_ema_near_state,
     _load_near_setup_state,
     _load_pending_trades,
+    _load_setup_digest_state,
     _save_active_signal_state,
     _save_alignment_state,
     _save_ema_near_state,
     _save_near_setup_state,
     _save_pending_trades,
+    _save_setup_digest_state,
 )
 from src.scanner.telemetry import _build_scan_telemetry_payload
 
@@ -101,6 +109,7 @@ class NearCandidate(TypedDict):
     bullish_div: float | None
     bearish_div: float | None
     price: float
+    no_trade_reasons: list[str]
 
 
 def _parse_pairs(raw_pairs: str | None) -> list[str] | None:
@@ -734,34 +743,6 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 breakout_confirmed = False
                 breakout_pending = True
 
-            near_candidates.append(
-                {
-                    "pair": pair,
-                    "direction": near_direction,
-                    "distance": float(near_distance),
-                    "remaining": remaining,
-                    "missing_timeframes": missing_timeframes,
-                    "aligned": aligned,
-                    "breakout_pending": breakout_pending,
-                    "rsi_1h": float(rsi_1h),
-                    "rsi_30m": float(rsi_30m),
-                    "rsi_15m": float(rsi_15m_val),
-                    "rsi_5m": micro_context.get("rsi_5m"),
-                    "rsi_1m": micro_context.get("rsi_1m"),
-                    "rsi_ma_1h": rsi_ma_1h[-1] if rsi_ma_1h and rsi_ma_1h[-1] is not None else None,
-                    "rsi_ma_30m": rsi_ma_30m[-1]
-                    if rsi_ma_30m and rsi_ma_30m[-1] is not None
-                    else None,
-                    "rsi_ma_15m": rsi_ma_15m[-1]
-                    if rsi_ma_15m and rsi_ma_15m[-1] is not None
-                    else None,
-                    "patterns": [p.name for p in candle_patterns],
-                    "bullish_div": bullish_div.strength if bullish_div else None,
-                    "bearish_div": bearish_div.strength if bearish_div else None,
-                    "price": float(close_price),
-                }
-            )
-
             # Single authoritative call to the pure evaluator (R2 unification).
             # All MTF/RSI-MA/breakout/gate/Rule C/ATR TP/SL logic lives in evaluate_entry now.
             # We removed the prior ~110 lines of duplicate signal_direction + RSI-MA computation that
@@ -1023,6 +1004,35 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                         }
                     )
 
+            near_candidates.append(
+                {
+                    "pair": pair,
+                    "direction": near_direction,
+                    "distance": float(near_distance),
+                    "remaining": remaining,
+                    "missing_timeframes": missing_timeframes,
+                    "aligned": aligned,
+                    "breakout_pending": breakout_pending,
+                    "rsi_1h": float(rsi_1h),
+                    "rsi_30m": float(rsi_30m),
+                    "rsi_15m": float(rsi_15m_val),
+                    "rsi_5m": micro_context.get("rsi_5m"),
+                    "rsi_1m": micro_context.get("rsi_1m"),
+                    "rsi_ma_1h": rsi_ma_1h[-1] if rsi_ma_1h and rsi_ma_1h[-1] is not None else None,
+                    "rsi_ma_30m": rsi_ma_30m[-1]
+                    if rsi_ma_30m and rsi_ma_30m[-1] is not None
+                    else None,
+                    "rsi_ma_15m": rsi_ma_15m[-1]
+                    if rsi_ma_15m and rsi_ma_15m[-1] is not None
+                    else None,
+                    "patterns": [p.name for p in candle_patterns],
+                    "bullish_div": bullish_div.strength if bullish_div else None,
+                    "bearish_div": bearish_div.strength if bearish_div else None,
+                    "price": float(close_price),
+                    "no_trade_reasons": list(no_trade_reasons),
+                }
+            )
+
             # Collect EMA candidates for separate notifications (when no RSI signal)
             if ema_signals_this_pair and not signal_direction:
                 ema_candidates.append({
@@ -1121,6 +1131,47 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 f"  {pair}: {direction} | state={label} | gap={distance:.1f} RSI points | remaining_tf={remaining} | missing={missing or '-'} | "
                 f"1h={r1:.1f} 30m={r30:.1f} 15m={r15:.1f}"
             )
+
+        digest_notifications_enabled = getattr(
+            settings.telegram,
+            "setup_digest_notifications",
+            True,
+        )
+        if notifier and digest_notifications_enabled:
+            digest_candidates = [
+                SetupCandidate.from_mapping(cast(dict[str, object], candidate))
+                for candidate in ranked
+            ]
+            digest_message = build_setup_digest_message(
+                digest_candidates,
+                ema_candidates,
+                scanned_at=now_utc,
+            )
+            if digest_message:
+                digest_state = _load_setup_digest_state()
+                interval_seconds = int(
+                    getattr(settings.telegram, "setup_digest_interval_minutes", 60)
+                ) * 60
+                fingerprint = digest_fingerprint(
+                    [candidate for candidate in digest_candidates if candidate.watchable]
+                )
+                sent_at = int(digest_state.get("sent_at", 0))
+                previous = str(digest_state.get("fingerprint", ""))
+                if should_send_digest(
+                    previous_fingerprint=previous,
+                    current_fingerprint=fingerprint,
+                    sent_at=sent_at,
+                    now_ts=now_ts,
+                    interval_seconds=interval_seconds,
+                ):
+                    await notifier.send(digest_message)
+                    _save_setup_digest_state(
+                        {
+                            "fingerprint": fingerprint,
+                            "sent_at": now_ts,
+                            "kind": "setup_digest",
+                        }
+                    )
 
         near_notifications_enabled = getattr(settings.telegram, "near_setup_notifications", True)
         aligned_pending_notifications_enabled = getattr(
@@ -1272,7 +1323,12 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     ema_state_ttl = 7200  # 2 hours — fingerprints older than this are eligible for re-send
     ema_changed = False
 
-    if settings.strategy.ema.enabled and notifier and ema_candidates:
+    if (
+        settings.strategy.ema.enabled
+        and settings.strategy.ema.standalone_notifications_enabled
+        and notifier
+        and ema_candidates
+    ):
         for candidate in ema_candidates:
             pair = candidate["pair"]
             symbol = candidate["symbol"]

@@ -86,7 +86,7 @@ strategy:
     long_period: 200
     crossover_enabled: true
     price_touch_enabled: true
-    slope_enabled: true
+    slope_enabled: false
     touch_threshold_pips: 1.0
     max_signals_per_pair: 3
 

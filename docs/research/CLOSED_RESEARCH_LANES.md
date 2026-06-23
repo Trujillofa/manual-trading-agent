@@ -25,6 +25,63 @@ Re-opening without a new premise violates the fail-fast discipline.
   - Short summary also in main `docs/PROJECT_STATUS_2026-06.md`
 - **Rule**: Do not tune lookback, vol targets, rebalance, add filters, or "more variants" on this TSMOM construction. Gross PF near 1.0 before costs is the stop signal. Realistic friction only makes it worse.
 
+## 3. Carry / Swap / Funding (Hetzner cTrader Account)
+
+- **Status**: CLOSED_DISCARD (2026-06-12)
+- **Core Finding**: Real cTrader `ProtoOASymbolByIdReq` swap metadata returned `long=0.0` / `short=0.0` for all five resolved pairs on the Hetzner account. Gross carry falsifier net carry after entry drag was negative (-$27). The financing premise is absent on this account.
+- **References**:
+  - `docs/research/carry/CTRADER_CARRY_DISCARD_2026-06-12.md`
+  - `docs/research/carry/CARRY_GROSS_RESULTS_2026-06-12.md`
+  - Ledger row: `research/new_edge/research_ledger.jsonl` (lane `carry`, status `CLOSED_DISCARD`)
+- **Rule**: Do not continue carry research on this cTrader account. Reopen only with a different broker/account that provides verified nonzero long/short swaps.
+
+## 4. Daily FX Statistical Arbitrage (Pairs Z-Score)
+
+- **Status**: DISCARD (2026-06-18)
+- **Core Finding**: Gross pass on EUR/GBP and AUD/NZD spreads, but OOS promotion gates failed. Best spread AUD/NZD OOS net PF 1.128 < 1.20; EUR/GBP OOS net PF 0.191. CAD/AUD JPY gross PF 0.601.
+- **References**:
+  - `docs/research/stat_arb/STAT_ARB_RESULTS_2026-06-18.md`
+  - `docs/research/stat_arb/STAT_ARB_CONTRACT_2026-06-18.md`
+  - Ledger row: `research/new_edge/research_ledger.jsonl` (lane `stat_arb`, status `DISCARD`)
+- **Rule**: Do not retune z-score thresholds, lookbacks, spreads, or exit rules on this daily pairs prototype.
+
+## 5. Event Surprise Drift (Post-Release)
+
+- **Status**: DISCARD (2026-06-19)
+- **Core Finding**: Pinned HF calendar data proof passed (lane `events`, status `DATA_PASS`), but the post-release surprise-drift falsifier failed net/OOS gates. Gross PF 1.200; OOS net PF 0.375 < 1.20 after widened-spread cost model.
+- **References**:
+  - `docs/research/events/EVENT_DRIFT_RESULTS_2026-06-19.md`
+  - `docs/research/events/EVENT_DRIFT_CONTRACT_2026-06-19.md`
+  - `docs/research/events/EVENT_DATA_MANIFEST_2026-06-19.md`
+  - Ledger rows: `research/new_edge/research_ledger.jsonl` (lane `events`)
+- **Rule**: Do not retune entry delay, hold period, surprise thresholds, or event-family filters on this prototype. Calendar data proof remains valid; the drift signal does not.
+
+## 6. Volatility Regime / Range Compression Breakout (H1 FX Majors)
+
+- **Status**: DISCARD (2026-06-20; implementation merged in PR #10, commit `545fef0`)
+- **Core Finding**: Fixed H1 Donchian compression breakout on seven FX majors (2016-01-01 → 2026-06-01). Gross stage passed (pooled gross PF 1.114, 3778 trades, max year concentration 12.8%), but the edge is too small to survive 6-pip round-trip costs. Pooled costed net PF 0.802; OOS net PF 0.782 < 1.20 gate.
+- **References**:
+  - `docs/research/vol_regime/VOL_REGIME_RESULTS_2026-06-19.md`
+  - `docs/research/vol_regime/VOL_REGIME_CONTRACT_2026-06-19.md`
+  - `docs/research/vol_regime/VOL_REGIME_DATA_MANIFEST_2026-06-19.md`
+  - `research/new_edge/vol_regime/range_compression_breakout_test.py`
+  - Ledger row: `research/new_edge/research_ledger.jsonl` (lane `vol_regime`, status `DISCARD`)
+- **Rule**: Do not retune compression percentile, persistence, entry window (07:00-17:00 UTC), 24-bar hold, pairs, or H1 timeframe. This is not permission to reopen unconditional Donchian/ORB directional TA.
+
+## New Edge Program Lane Scoreboard (2026-06-20)
+
+| Lane | Status |
+|---|---|
+| FX directional TA | CLOSED |
+| Daily TSMOM | CLOSED |
+| Carry (Hetzner cTrader) | CLOSED_DISCARD |
+| Stat-arb (daily pairs) | DISCARD |
+| Event data proof (HF calendar) | DATA_PASS |
+| Event surprise drift | DISCARD |
+| Vol-regime compression breakout | DISCARD |
+
+**Deferred (not a standalone alpha lane):** Microstructure / execution-quality research should not proceed unless tied to an already-positive gross edge. It must not be used to rescue discarded signals.
+
 ## How to Record a New Closed Lane
 
 1. Write a clear negative-result document (one paragraph core finding + data/method summary + numbers + links).

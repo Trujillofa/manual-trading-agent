@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
 
 # Import existing data layer (absolute to avoid path issues)
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[5]))  # reach project root
 from src.data.dukascopy_fetcher import download_dukascopy_data

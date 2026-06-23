@@ -5,6 +5,7 @@ current evidence, not optimism:
 
 - FX majors directional OHLC technical analysis on M15/H1 is closed.
 - Daily multi-asset time-series momentum is closed.
+- The 2026 new-edge program (carry, stat-arb, event drift, vol-regime) has completed with no KEEP candidate.
 - Branch B is a selective manual-alert and observability tool, not a validated autonomous edge.
 
 The next program must therefore change the premise. More RSI thresholds, more confirmation variants,
@@ -57,6 +58,28 @@ retired because they came from divergent engines and do not match the unified li
 
 Planning implication: the next profitable attempt must use a new edge source, not another member of
 the same directional OHLC TA or daily TSMOM families.
+
+## New Edge Program Lane Scoreboard (2026-06-20)
+
+All ranked hypotheses from this plan were run under `research/new_edge/` with pre-written gates.
+No lane reached KEEP / paper-shadow promotion.
+
+| Lane | Status | Key result |
+|---|---|---|
+| FX directional TA | CLOSED | Gross PF ~1.0–1.07; no edge before costs |
+| Daily TSMOM | CLOSED | Gross PF 1.036 before costs |
+| Carry (Hetzner cTrader) | CLOSED_DISCARD | All resolved pairs returned 0.0 swap |
+| Stat-arb (daily pairs) | DISCARD | Best OOS net PF 1.128 < 1.20 |
+| Event data proof (HF calendar) | DATA_PASS | 83k rows, indicator coverage ≥96% |
+| Event surprise drift | DISCARD | OOS net PF 0.375 < 1.20 |
+| Vol-regime compression breakout | DISCARD | Gross PF 1.114 → pooled net PF 0.802; OOS net PF 0.782 |
+
+Full closure record: `docs/research/CLOSED_RESEARCH_LANES.md`.
+
+**Recommendation:** Microstructure / execution-quality research is **DEFERRED**. It is not a
+standalone alpha lane. Pursue it only when attached to an already-positive gross edge (for example,
+to quantify execution improvement on a strategy that already passed gross-first gates). Do not use
+spread or execution analysis to rescue discarded signals.
 
 ## Ranked New Approaches
 
@@ -166,32 +189,33 @@ or volatility expansion. This uses information timing, not chart patterns.
 - Edge depends on forecast/actual data not available live at decision time.
 - Spread widening consumes expected move.
 
-### 4. Volatility Regime / Range Compression Breakout
+### 4. Volatility Regime / Range Compression Breakout — DISCARD (2026-06-20)
 
-**Premise:** Predict expansion after unusually compressed realized volatility, not directional RSI.
+**Status:** Implemented and falsified. Merged in PR #10 (`545fef0`). Lane closed.
 
-**Universe:** Metals, indices, and selected FX crosses.
+**Fixed prototype run:** H1 Donchian range compression (20-bar, 252-bar 10th percentile, 3-bar
+persistence) → breakout entry 07:00-17:00 UTC → 24-bar time stop. Seven FX majors,
+2016-01-01 → 2026-06-01.
 
-**Prototype:**
+| Metric | Value |
+|---|---:|
+| Pooled trades | 3778 |
+| Gross PF | 1.114 |
+| Pooled costed net PF (6-pip RT) | 0.802 |
+| OOS net PF | 0.782 |
+| Max year concentration | 12.8% (2020) |
 
-- Identify low realized-volatility regimes.
-- Wait for range compression plus liquidity session open.
-- Trade breakout only when expected move exceeds costs by a large margin.
-- Use volatility-scaled exits, not fixed ATR multiples tuned per symbol.
+**Verdict:** Gross stage passed; lane **DISCARD** after costs and OOS net PF gate (0.782 < 1.20).
+Gross edge too small to survive 6-pip round-trip costs.
 
-**Pass gate:**
+**Do not retune:** compression percentile, persistence, entry window, hold, pairs, or timeframe.
 
-- Gross edge clearly above 1.10 before costs.
-- Net OOS survives costs.
-- Works as a portfolio, not one symbol.
+**Artifacts:** `docs/research/vol_regime/VOL_REGIME_RESULTS_2026-06-19.md`,
+`research/new_edge/vol_regime/range_compression_breakout_test.py`.
 
-**Stop gate:**
+### 5. Microstructure / Execution-Quality Research — DEFERRED
 
-- Gross PF near 1.0.
-- Trade count comes mainly from FX majors intraday.
-- Requires tight parameter tuning to pass.
-
-### 5. Microstructure / Execution-Quality Research
+**Status:** Not started as a standalone lane. Deferred unless tied to an already-positive gross edge.
 
 **Premise:** If cTrader bid/ask or tick data is available, study spread behavior and executable levels.
 The goal is not yet a signal; it is to learn where the current cost model is wrong or exploitable.
@@ -209,6 +233,7 @@ The goal is not yet a signal; it is to learn where the current cost model is wro
 **Stop gate:**
 
 - Only improves a no-edge signal family.
+- Used as a rescue attempt for a discarded signal (carry, stat-arb, event drift, vol-regime, TA, TSMOM).
 
 ## Execution Sequence
 
@@ -303,8 +328,12 @@ discussion.
 
 ## Immediate Next Actions
 
-1. Let the current Branch B Hetzner observation window collect data.
-2. In parallel, create the isolated `research-new-edge-program` worktree.
-3. Build the carry/swap data manifest first.
-4. Do not write strategy logic until the data and cost model are documented.
-5. Run one hypothesis at a time and write KEEP/DISCARD results before moving on.
+The ranked new-edge hypotheses in this plan have been executed and closed (see lane scoreboard above).
+No KEEP candidate emerged. Next work must define a **genuinely new premise** per
+`docs/research/CLOSED_RESEARCH_LANES.md` — not retunes of closed lanes.
+
+1. Keep Branch B Hetzner observation running as an alert/observability tool only.
+2. Do not reopen carry, stat-arb, event drift, vol-regime, TA, or TSMOM without a new edge source.
+3. Defer microstructure / execution-quality research unless attached to a future gross-positive strategy.
+4. Any new research lane requires a new contract, data proof, and pre-written gates before code.
+5. Consult [`GROK_RESEARCH_LOOP_ENGINEERING.md`](GROK_RESEARCH_LOOP_ENGINEERING.md) and update the ledger on every run.

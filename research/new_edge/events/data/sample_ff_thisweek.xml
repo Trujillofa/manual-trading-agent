@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="windows-1252"?>
+<!-- Snapshot from nfs.faireconomy.media/ff_calendar_thisweek.xml (2026-06-18).
+     Used offline by verify_event_data.py when live feed is rate-limited. -->
+<weeklyevents>
+<event>
+<title>Non-Farm Payrolls</title>
+<country>USD</country>
+<date><![CDATA[06-06-2026]]></date>
+<time><![CDATA[12:30pm]]></time>
+<impact><![CDATA[High]]></impact>
+<forecast><![CDATA[180K]]></forecast>
+<previous><![CDATA[177K]]></previous>
+<url><![CDATA[https://www.forexfactory.com/calendar/66-us-non-farm-payrolls]]></url>
+</event>
+<event>
+<title>CPI m/m</title>
+<country>USD</country>
+<date><![CDATA[06-11-2026]]></date>
+<time><![CDATA[12:30pm]]></time>
+<impact><![CDATA[High]]></impact>
+<forecast><![CDATA[0.3%]]></forecast>
+<previous><![CDATA[0.2%]]></previous>
+<url><![CDATA[https://www.forexfactory.com/calendar/74-us-cpi-mm]]></url>
+</event>
+<event>
+<title>ECB Press Conference</title>
+<country>EUR</country>
+<date><![CDATA[06-05-2026]]></date>
+<time><![CDATA[12:45pm]]></time>
+<impact><![CDATA[High]]></impact>
+<forecast />
+<previous />
+<url><![CDATA[https://www.forexfactory.com/calendar/832-ec-press-conference]]></url>
+</event>
+</weeklyevents>

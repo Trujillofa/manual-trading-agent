@@ -1,0 +1,11 @@
+{
+  "source_url": "https://huggingface.co/datasets/Ehsanrs2/Forex_Factory_Calendar",
+  "source_format": "csv",
+  "pinned_file": "research/new_edge/events/data/pinned/forex_factory_calendar_hf_2026-06-18.csv",
+  "row_count": 83427,
+  "date_min": "2007-01-01T04:30:00+03:30",
+  "date_max": "2025-04-07T22:30:00+04:30",
+  "sha256": "7e0a247e1a9a23316f775c433a8bb31129a891b6f4813231e485f15d38526a23",
+  "pinned_at_utc": "2026-06-18T19:28:27.321185+00:00",
+  "note": "Community scrape; third-party provenance \u2014 not official Forex Factory feed."
+}

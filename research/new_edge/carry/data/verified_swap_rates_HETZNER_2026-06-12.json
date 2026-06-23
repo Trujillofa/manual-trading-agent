@@ -1,0 +1,15 @@
+{
+  "source_date": "2026-06-12",
+  "broker": "cTrader (live account on Hetzner, ProtoOASymbolByIdReq)",
+  "retrieved": "cTrader Open API symbol detail via research/fetch_broker_swaps.py on running ctrader-agent",
+  "units": "pips per day per standard lot (positive = receive when long the pair) - values as returned by this account's API",
+  "rollover_rule": "3x swap on day 3 (Wednesday) per swapRollover3Days=3 from API; broker specific, holidays may suppress or adjust.",
+  "notes": "Fetched live via cTrader Open API. Only 5 pairs resolved in this account (AUDJPY, NZDJPY, AUDUSD, NZDUSD, USDZAR). USDTRY, EURTRY, GBPTRY not available/resolved. All resolved pairs returned long=0.0, short=0.0. This suggests the account is swap-free, provides no overnight financing differential on these symbols, or the broker routes swaps differently/not exposed in symbol details for this setup. Confirm directly in cTrader platform or broker statement before using for carry. 3 exotic TRY pairs not supported in account universe.",
+  "rates": {
+    "AUD/JPY": {"long": 0.0, "short": 0.0},
+    "NZD/JPY": {"long": 0.0, "short": 0.0},
+    "AUD/USD": {"long": 0.0, "short": 0.0},
+    "NZD/USD": {"long": 0.0, "short": 0.0},
+    "USD/ZAR": {"long": 0.0, "short": 0.0}
+  }
+}

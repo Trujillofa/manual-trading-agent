@@ -13,12 +13,12 @@
 
 **Authorization tiers (binding):**
 
-| Tier                        | Modules                                                                                                                      | Entry gate                                   | Exit status                                                       |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------- |
-| **A — data plumbing**       | `data/loader.py` (interface + `SyntheticLoader`), `data/verify_term_structure_data.py`, `data/metadata.py`, unit tests       | Owner authorizes a data source (manifest §5) | `DATA_PASS`, `BLOCKED`, or `DISCARD` (verifier runs §7 checklist) |
-| **B — strategy simulation** | `signal.py`, `control_tsmom.py`, `backtest.py`, `attribution.py`, `cost_model.py`, `judge.py`, `results_writer.py`, `run.py` | Tier A = `DATA_PASS`                         | `KEEP` or `DISCARD`                                               |
+| Tier                        | Modules                                                                                                                                               | Entry gate                                   | Exit status                                           |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------- |
+| **A — data plumbing**       | `data/loader.py` (interface + `SyntheticLoader`), `data/verify_term_structure_data.py`, `data/metadata.py`, unit tests                                | Owner authorizes a data source (manifest §5) | `DATA_PASS` or `BLOCKED` (verifier runs §7 checklist) |
+| **B — strategy simulation** | `signal.py`, `control_tsmom.py`, `backtest.py`, `attribution.py`, `cost_model.py`, `judge.py`, `results_writer.py`, `run.py` + concrete loader plugin | Tier A = `DATA_PASS`                         | `KEEP` or `DISCARD`                                   |
 
-Tier A builds the verifier that _produces_ the §7 checklist result; it is not blocked by a pre-existing checklist pass. Tier B MUST NOT start until Tier A exits `DATA_PASS`.
+Tier A builds the loader interface, verifier, and synthetic fixtures. It _produces_ the §7 checklist result; it is not blocked by a pre-existing checklist pass. `BLOCKED` means data unavailable or <10 markets pass — not a strategy verdict. Tier B MUST NOT start until Tier A exits `DATA_PASS`.
 
 ---
 
@@ -76,10 +76,32 @@ Where `MarketData` is the three-object set from manifest §2:
 class MarketData:
     symbol: str
     contract_ohlc: dict[str, pd.DataFrame]   # by expiry, e.g. "CLZ2025" → OHLC+OI
-    continuous: pd.DataFrame                  # ratio-adjusted, max-OI roll (for spot P&L + TSMOM control)
+    tsmom_return_index: pd.Series             # chained active-contract returns (§2.1; NOT ratio-adjusted prices)
     roll_calendar: list[date]                 # active-contract switch dates (OI-confirmed)
     metadata: InstrumentMetadata              # tick size, multiplier, venue, sector
 ```
+
+### 2.1 TSMOM return index (binding; supports zero/negative settlements)
+
+The TSMOM control MUST NOT use ratio-adjusted price levels (undefined when settlements cross zero, e.g. WTI April 2020). The loader builds `tsmom_return_index` by **chaining active-contract simple returns** on the max-OI roll calendar:
+
+```text
+ε = max(metadata.tick_size, 1e-8)
+
+Same-contract day t:
+  r_t = (S^held_t - S^held_{t-1}) / max(abs(S^held_{t-1}), ε)
+
+Roll-switch day t (close F1, open F2 at settlements):
+  r_t = (S_F1_t - S^held_{t-1}) / max(abs(S^held_{t-1}), ε)   # finalize F1 only
+  opening_settlement_F2 = S_F2_t                                 # stored as next day's base
+
+First day holding F2 (t+1):
+  r_{t+1} = (S_F2_{t+1} - opening_settlement_F2) / max(abs(opening_settlement_F2), ε)
+```
+
+Cumulative index: `I_0 = 100`, `I_t = I_{t-1} * (1 + r_t)`. Days where `abs(S^held_{t-1}) < ε` are skipped (carry `I` forward); count reported in RESULTS doc.
+
+`control_tsmom.py` uses trailing 252-trading-day return `I_t / I_{t-252} - 1` from this index. Cross-check against a paid-source continuous series is optional diagnostics only.
 
 **Concrete loaders (one implemented per owner-chosen source):**
 
@@ -127,8 +149,8 @@ The prior draft mislabeled **cross-sectional spot momentum** as TSMOM. The bindi
 
 ```python
 def tsmom_signal(market_data: MarketData, as_of: date) -> int:
-    """Per-market signal: sign of trailing 252-trading-day continuous-series return.
-    +1 if return > 0, -1 if return < 0, 0 if insufficient history.
+    """Per-market signal: sign of trailing 252-trading-day return on tsmom_return_index.
+    +1 if I_t / I_{t-252} - 1 > 0, -1 if < 0, 0 if insufficient history.
     Portfolio: long markets with +1, short markets with -1.
     Risk weighting: same trailing 60-day realized-vol method as signal.py.
     Costs and universe: identical to the roll-yield run."""
@@ -172,23 +194,39 @@ The RESULTS doc emits an attribution table (IS / OOS × spot / roll / costs) plu
 
 All **price-path P&L** uses **settlement prices only**. Slippage and commission are **never** embedded in fill prices; they appear only in `explicit_costs` as dollar charges at entry, exit, and roll events (cost model §2).
 
-Let `M` = multiplier, `N` = signed contracts (+ long, − short), `S^held_t` = settlement on the contract held at end of day `t`.
+Let `M` = multiplier, `N` = signed contracts (+ long, − short). The backtester maintains per-position state: `active_contract`, `prior_settlement` (settlement of `active_contract` at end of previous day).
 
-**Daily settlement MTM (all days, including roll-switch days):**
-
-```text
-total_pre_cost[t] = (S^held_t - S^held_{t-1}) * M * N
-```
-
-On a roll-switch day at settlement: close `F1` at `S_F1_t`, open `F2` at `S_F2_t`. The held contract for day `t` is still `F1`, so `S^held_t = S_F1_t`. Position in `F2` begins at `t`; its MTM starts on `t+1`.
-
-**Economic roll-yield accrual (basis convergence while holding the front contract):**
+**Daily settlement MTM (same contract held both days):**
 
 ```text
-roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) / max(days_to_F1_expiry_{t-1}, 1)
+total_pre_cost[t] = (S^active_t - prior_settlement) * M * N
+prior_settlement ← S^active_t
 ```
 
-Where `F1` = active front contract at `t-1`, `F2` = next deferred contract, and `days_to_F1_expiry` = calendar days from `t-1` to `F1` expiry. Sign of `N` applies through the formula (long earns positive accrual when `F1 > F2` in backwardation).
+**Roll-switch day at settlement (close F1, open F2):**
+
+```text
+total_pre_cost[t] = (S_F1_t - prior_settlement) * M * N     # F1 MTM only; prior was S_F1_{t-1}
+active_contract ← F2
+opening_settlement_F2 ← S_F2_t                              # stored; NOT compared to S_F1
+prior_settlement ← S_F2_t                                   # base for next day's F2 MTM
+```
+
+**First and subsequent days holding F2 after roll:**
+
+```text
+total_pre_cost[t] = (S_F2_t - prior_settlement) * M * N     # prior_settlement is always F2's prior close
+```
+
+Never compute `(S_F2_t - S_F1_{t-1})` in the MTM path. Contract switches update state; they do not create cross-contract daily deltas.
+
+**Economic roll-yield accrual (basis convergence; same denominator as signal):**
+
+```text
+roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) / max(calendar_days_between_expiries_{t-1}, 1)
+```
+
+Where `calendar_days_between_expiries` = calendar days from **F1 expiry to F2 expiry** (identical to the signal's `annualized_curve_slope` denominator in §3). Do not use `days_to_F1_expiry` — that explodes near front expiry and is inconsistent with the signal.
 
 ```text
 spot_component[t] = total_pre_cost[t] - roll_component[t]
@@ -209,7 +247,8 @@ At each roll the backtester MUST emit an audit row: old contract, new contract, 
 
 - Do not label contract-switch gap P&L as `roll_component`.
 - Do not embed slippage in settlement or fill prices and also charge slippage in `explicit_costs`.
-- Do not derive `spot_component` from the ratio-adjusted continuous series (TSMOM control / sanity only).
+- Do not derive `spot_component` or `total_pre_cost` from ratio-adjusted price levels or cross-contract daily deltas.
+- Do not use `days_to_F1_expiry` as the roll-accrual denominator (inconsistent with signal; explodes near expiry).
 
 ---
 
@@ -324,14 +363,25 @@ Concentration uses **positive-profit contribution**, not absolute P&L ratios. Th
 
 ---
 
-## 10. Implementation order (when #4 is authorized)
+## 10. Implementation order
 
-Only after (a) owner data-source authorization and (b) Tier A verifier returns `DATA_PASS`:
+### 10.1 Tier A (data plumbing; exits `DATA_PASS` or `BLOCKED`)
 
-1. `data/loader.py` + the chosen concrete loader + `SyntheticLoader` for unit tests.
-2. `signal.py` + `control_tsmom.py` (pure functions, unit-testable on synthetic data).
-3. `cost_model.py` + `attribution.py` (unit-testable).
-4. `backtest.py` (portfolio simulation, uses 1–3).
+After owner data-source authorization:
+
+1. Implement `data/loader.py` (interface + `SyntheticLoader`) and `data/metadata.py`.
+2. Implement `data/verify_term_structure_data.py` (runs manifest §7 checklist).
+3. Add unit tests (`tests/test_term_structure_data.py`) including WTI Apr 2020 negative-settlement fixture.
+4. Run verifier once; record `DATA_PASS` or `BLOCKED` in ledger. If `BLOCKED`, stop — do not proceed to Tier B.
+
+Tier A MAY include a **concrete loader plugin** for the owner-selected source (e.g. `NorgateLoader`). It MUST NOT include strategy simulation modules.
+
+### 10.2 Tier B (strategy simulation; only after Tier A = `DATA_PASS`)
+
+1. Wire the owner-selected concrete loader (if not already done in Tier A) — **do not recreate** `data/loader.py`.
+2. `signal.py` + `control_tsmom.py` (pure functions, unit-testable on `SyntheticLoader` data).
+3. `cost_model.py` + `attribution.py` (unit-testable; §5.1 state machine + accrual denominator).
+4. `backtest.py` (portfolio simulation, uses 2–3).
 5. `judge.py` + `results_writer.py` (verdict ladder + RESULTS doc).
 6. `run.py` (CLI wiring).
 7. **One run**, one RESULTS doc, one ledger row, one KEEP-or-DISCARD. Done.

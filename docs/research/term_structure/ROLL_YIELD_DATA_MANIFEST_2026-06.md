@@ -16,15 +16,15 @@ This phrasing is deliberate: the attribution (roll vs spot) is the whole point, 
 
 ## 2. The core data-engineering requirement (this is the real gate)
 
-**Roll yield cannot be computed from a back-adjusted continuous series.** Back-adjustment (Panama/ratio/calendar) removes exactly the price gaps at roll that _are_ the roll yield. A continuous series alone is sufficient for spot-P&L representation and for the TSMOM control run, but **not** for measuring the signal itself.
+**Roll yield cannot be computed from a back-adjusted continuous price series.** Back-adjustment (Panama/ratio/calendar) removes exactly the price gaps at roll that _are_ the roll yield, and ratio-adjusted levels are undefined across zero/negative settlements (WTI April 2020).
 
 Therefore the data manifest requires, for each market:
 
-| Data object                                                                         | Used for                                                                                                          | Source shape                        |
-| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| **Individual contract OHLC + open interest** by expiry (e.g., `CLZ2025`, `CLF2026`) | Computing front-vs-deferred spread → **roll yield (the signal)** + selecting the active contract by open interest | Per-contract daily bars             |
-| **Continuous series** (ratio/multiplicative back-adjusted, max-OI roll)             | Spot-P&L representation + **TSMOM control run**                                                                   | Single series per market            |
-| **Roll calendar** (active-contract switch dates, with OI/volume confirmation)       | Timing rebalance, roll-cost accounting, attribution                                                               | Derived from individual-contract OI |
+| Data object                                                                         | Used for                                                                                         | Source shape                        |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| **Individual contract OHLC + open interest** by expiry (e.g., `CLZ2025`, `CLF2026`) | Computing front-vs-deferred spread → **roll yield (the signal)** + settlement MTM + roll accrual | Per-contract daily bars             |
+| **TSMOM return index** (chained active-contract simple returns; harness spec §2.1)  | **TSMOM control run only** — not for signal or attribution                                       | Derived from individual contracts   |
+| **Roll calendar** (active-contract switch dates, with OI/volume confirmation)       | Timing rebalance, roll-cost accounting, attribution state machine                                | Derived from individual-contract OI |
 
 This three-object requirement is the **hard gate.** A data source that provides only a continuous series is _insufficient_ for this lane, regardless of how clean or cheap it is.
 
@@ -100,18 +100,20 @@ annualized_curve_slope =
 
 Sign convention: **positive** annualized curve slope when the front trades at a **premium** to the next (backwardation for a long, i.e., you are paid to roll long); **negative** when contangoed. Rank markets cross-sectionally by this value.
 
-**Continuous-series construction (for spot P&L + TSMOM control only):** multiplicative (ratio) back-adjustment, active contract = max open interest, roll on the OI-crossover day. Ratio (not Panama/additive) is chosen because additive adjustment can produce negative prices on long histories, distorting log-returns.
+**TSMOM return index (binding):** built per harness spec §2.1 by chaining active-contract simple returns on the max-OI roll calendar. Do **not** use ratio-adjusted price levels for TSMOM. Near-zero denominators use `ε = max(tick_size, 1e-8)`; skip days with `abs(prior_settlement) < ε` and report skip count.
 
-**Settlement-based mark-to-market accounting (binding):** the backtester MUST calculate daily variation-margin P&L from raw **settlement** prices and contract multipliers. Slippage and commission are dollar charges in `explicit_costs`, not embedded in settlement fills (see harness spec §5.1 and cost model §2).
+**Settlement-based mark-to-market accounting (binding):** per-position state machine (`active_contract`, `prior_settlement`, `opening_settlement` on roll) per harness spec §5.1. Slippage and commission are dollar charges in `explicit_costs`, not embedded in settlement fills.
 
 Economic decomposition:
 
 ```text
-total_pre_cost[t] = (S^held_t - S^held_{t-1}) * M * N
-roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) / max(days_to_F1_expiry_{t-1}, 1)
+total_pre_cost[t] = MTM on active contract only (never cross-contract delta)
+roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) / max(calendar_days_between_expiries_{t-1}, 1)
 spot_component[t] = total_pre_cost[t] - roll_component[t]
 total_net_pnl     = Σ total_pre_cost[t] - explicit_costs
 ```
+
+`calendar_days_between_expiries` = F1 expiry → F2 expiry (same denominator as signal `annualized_curve_slope`).
 
 Reconciliation: `|total_net_pnl - (spot_component + roll_component - explicit_costs)| < $0.01`.
 
@@ -126,7 +128,7 @@ For each market in the universe, all must be true:
 - [ ] Individual contracts reconstruct cleanly for ≥15 complete years (no missing expiries, no gaps >5 sessions).
 - [ ] Active-contract series derivable by OI crossover matches a reference (paid source's continuous, or CME-published roll dates) to within ±1 session.
 - [ ] Front-vs-deferred spread computable on ≥95% of trading days; outliers (>5σ) manually verified as real (not data errors).
-- [ ] Continuous series (ratio-adjusted) has no negative prices and no unexplained >10% overnight gaps.
+- [ ] TSMOM return index builds without ratio-adjusted prices; negative-settlement days handled per §6 (Apr 2020 fixture in unit tests).
 - [ ] Currency/units consistent (USD, contract-multiplier-aware for P&L, not for signal).
 - [ ] Survivorship: futures markets that delisted within the window are handled (include to delist date or exclude consistently).
 

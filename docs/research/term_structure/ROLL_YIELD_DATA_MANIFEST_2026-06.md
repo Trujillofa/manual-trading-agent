@@ -23,7 +23,7 @@ Therefore the data manifest requires, for each market:
 | Data object                                                                         | Used for                                                                                         | Source shape                        |
 | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------- |
 | **Individual contract OHLC + open interest** by expiry (e.g., `CLZ2025`, `CLF2026`) | Computing front-vs-deferred spread → **roll yield (the signal)** + settlement MTM + roll accrual | Per-contract daily bars             |
-| **TSMOM return index** (chained active-contract simple returns; harness spec §2.1)  | **TSMOM control run only** — not for signal or attribution                                       | Derived from individual contracts   |
+| **TSMOM daily excess P&L** (additive per-contract $ MTM; harness spec §2.1)         | **TSMOM control run only** — not for signal or attribution                                       | Derived from individual contracts   |
 | **Roll calendar** (active-contract switch dates, with OI/volume confirmation)       | Timing rebalance, roll-cost accounting, attribution state machine                                | Derived from individual-contract OI |
 
 This three-object requirement is the **hard gate.** A data source that provides only a continuous series is _insufficient_ for this lane, regardless of how clean or cheap it is.
@@ -77,7 +77,7 @@ v1 uses **one economic carry definition** across commodity futures only. Equity-
 | **Quandl / Nasdaq Data Link (Sharadar)** | partial                  | yes                      | varies                                              | paid                | Verify per-market availability                                                                           |
 | **yfinance**                             | **no** (continuous only) | yes                      | gaps, symbol-map fragility                          | free                | **Insufficient for this lane** (fails §2) — usable only as a sanity cross-check on the continuous series |
 
-**Required owner decision before Phase-1 build:** authorize a paid source that provides individual contracts (FirstRate / Norgate / CSI / Pinnacle), **or** accept the free path of stitching CME settlement files (higher build effort, narrower coverage). The manifest does not prescribe the choice; it prescribes the _requirement_ (§2). If no path satisfies §2 within the owner's budget/effort tolerance, the lane is **data-blocked** and is recorded as such (see lane 3's "blocked" precedent) rather than run on insufficient data.
+**Required owner decision before Tier A build:** authorize a paid source that provides individual contracts (FirstRate / Norgate / CSI / Pinnacle), **or** accept the free path of stitching CME settlement files (higher build effort, narrower coverage). Tier A MUST implement the corresponding **concrete loader** and run the verifier through it; `SyntheticLoader` alone cannot produce `DATA_PASS`. If no path satisfies §2 within the owner's budget/effort tolerance, the lane is **data-blocked** and is recorded as such (see lane 3's "blocked" precedent) rather than run on insufficient data.
 
 ---
 
@@ -100,7 +100,7 @@ annualized_curve_slope =
 
 Sign convention: **positive** annualized curve slope when the front trades at a **premium** to the next (backwardation for a long, i.e., you are paid to roll long); **negative** when contangoed. Rank markets cross-sectionally by this value.
 
-**TSMOM return index (binding):** built per harness spec §2.1 by chaining active-contract simple returns on the max-OI roll calendar. Do **not** use ratio-adjusted price levels for TSMOM. Near-zero denominators use `ε = max(tick_size, 1e-8)`; skip days with `abs(prior_settlement) < ε` and report skip count.
+**TSMOM daily excess P&L (binding):** built per harness spec §2.1 as `daily_excess_pnl[t] = (S^held_t - prior_settlement) * M` on the max-OI roll calendar. Do **not** use ratio-adjusted prices or multiplicative compounding (`I_t = I_{t-1}(1+r)` fails when settlements cross zero). TSMOM signal = `sign(Σ last 252 daily_excess_pnl)`.
 
 **Settlement-based mark-to-market accounting (binding):** per-position state machine (`active_contract`, `prior_settlement`, `opening_settlement` on roll) per harness spec §5.1. Slippage and commission are dollar charges in `explicit_costs`, not embedded in settlement fills.
 
@@ -108,12 +108,12 @@ Economic decomposition:
 
 ```text
 total_pre_cost[t] = MTM on active contract only (never cross-contract delta)
-roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) / max(calendar_days_between_expiries_{t-1}, 1)
+roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) * calendar_days_elapsed / max(calendar_days_between_expiries_{t-1}, 1)
 spot_component[t] = total_pre_cost[t] - roll_component[t]
 total_net_pnl     = Σ total_pre_cost[t] - explicit_costs
 ```
 
-`calendar_days_between_expiries` = F1 expiry → F2 expiry (same denominator as signal `annualized_curve_slope`).
+`calendar_days_elapsed` = calendar days from prior trading date `t_prev` to `t` (e.g. Friday→Monday = 3). Not one trading day per row. `calendar_days_between_expiries` = F1 expiry → F2 expiry (same denominator as signal `annualized_curve_slope`).
 
 Reconciliation: `|total_net_pnl - (spot_component + roll_component - explicit_costs)| < $0.01`.
 
@@ -128,7 +128,7 @@ For each market in the universe, all must be true:
 - [ ] Individual contracts reconstruct cleanly for ≥15 complete years (no missing expiries, no gaps >5 sessions).
 - [ ] Active-contract series derivable by OI crossover matches a reference (paid source's continuous, or CME-published roll dates) to within ±1 session.
 - [ ] Front-vs-deferred spread computable on ≥95% of trading days; outliers (>5σ) manually verified as real (not data errors).
-- [ ] TSMOM return index builds without ratio-adjusted prices; negative-settlement days handled per §6 (Apr 2020 fixture in unit tests).
+- [ ] TSMOM daily excess P&L builds without ratio-adjusted or compounded returns; negative-settlement days handled per §6 (Apr 2020 fixture in unit tests).
 - [ ] Currency/units consistent (USD, contract-multiplier-aware for P&L, not for signal).
 - [ ] Survivorship: futures markets that delisted within the window are handled (include to delist date or exclude consistently).
 
@@ -161,7 +161,7 @@ The harness spec (`ROLL_HARNESS_SPEC_2026-06.md`, next Phase-1 deliverable) **mu
 
 ## 10. Optional Phase-0.5 (review suggestion: #6 COT as a de-risking spike)
 
-Before committing to paid futures data (§5 owner decision), run a **1–2 day COT-loader spike inside this worktree** using the free weekly CFTC Commitment-of-Traders data (premise #6). Purpose: de-risk harness-building (term-structure backtester skeleton, IS/OOS judge, ledger plumbing) on free data before spending on the roll-yield dataset. **COT is not the program thesis** — it is a cheap warm-up that either (a) produces an incidental honest DISCARD of premise #6 for free, or (b) merely validates the harness. Either outcome is acceptable. Optional; skip if the owner prefers to go straight to the roll-yield data decision.
+Before committing to paid futures data (§5 owner decision), an optional COT-loader spike may run in a separate worktree using free weekly CFTC data (premise #6). **COT is not the program thesis** — it is a cheap warm-up that either produces an incidental honest DISCARD of premise #6 or validates harness plumbing. Optional; skip if the owner prefers to go straight to the roll-yield data decision.
 
 ---
 

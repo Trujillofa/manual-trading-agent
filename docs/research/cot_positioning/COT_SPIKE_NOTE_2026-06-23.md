@@ -30,7 +30,7 @@ This note records what the spike verified and where it hit an environment bounda
 
 ---
 
-## Resume plan (next session, ~half day)
+## Resume plan (next session)
 
 1. `pip install cot_reports` in the worktree venv — delegates URL/version handling to the maintained package (sidesteps the 404 archaeology).
 2. Create `research/new_edge/cot_positioning/cot_positioning_test.py` mirroring `vol_regime/range_compression_breakout_test.py`:
@@ -48,7 +48,7 @@ This note records what the spike verified and where it hit an environment bounda
 ## What this spike does NOT authorize
 
 - Promoting COT to the program thesis (it remains Phase-0.5 warm-up).
-- Spending more than ~half a day on it — if `cot_reports` also fails to fetch, record COT as environment-blocked and proceed directly to the roll-yield data-source decision (manifest §5).
+- If `cot_reports` also fails to fetch, record COT as environment-blocked and proceed directly to the roll-yield data-source decision (manifest §5).
 - Any rescue overlays on a failing COT result (closed-lane discipline applies even to warm-up spikes).
 
 ---

@@ -84,12 +84,12 @@ Every position's realized dollar P&L decomposes as:
 total_net_pnl = spot_component + roll_component - explicit_costs
 
   total_pre_cost[t] = MTM on active contract via prior_settlement state (§5.1; no F2-vs-F1 cross delta)
-  roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) / max(calendar_days_between_expiries_{t-1}, 1)
+  roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) * calendar_days_elapsed / max(calendar_days_between_expiries_{t-1}, 1)
   spot_component[t] = total_pre_cost[t] - roll_component[t]
   explicit_costs    = commission(§2.1) + slippage dollar charges(§2.2–2.3); NOT in settlement path
 ```
 
-`calendar_days_between_expiries` matches the signal denominator (F1 expiry → F2 expiry). At each roll the backtester MUST: (1) record F1 close MTM against `prior_settlement`, (2) store `opening_settlement_F2 = S_F2_t` and set `prior_settlement ← S_F2_t`, (3) charge slippage/commission in `explicit_costs`, and (4) emit an audit row with contract identifiers, settlements, and accrual decomposition.
+`calendar_days_between_expiries` matches the signal denominator (F1 expiry → F2 expiry). `calendar_days_elapsed` = calendar days from prior trading date to current (e.g. Friday→Monday = 3). At each roll the backtester MUST: (1) record F1 close MTM against `prior_settlement`, (2) store `opening_settlement_F2 = S_F2_t` and set `prior_settlement ← S_F2_t`, (3) charge slippage/commission in `explicit_costs`, and (4) emit an audit row with contract identifiers, settlements, and accrual decomposition.
 
 **Reconciliation requirement (binding):** for every position and the portfolio aggregate,
 

@@ -23,7 +23,7 @@ services:
       - ./config:/app/config:ro
       - ./results:/app/results
     ports:
-      - "9090:9090"  # Prometheus metrics (optional, for future use)
+      - "127.0.0.1:9090:9090"  # Prometheus metrics (optional, for future use)
     # Run scan every 15 minutes + poll Telegram commands continuously.
     # Local dev with prod token: use docker-compose.local.yml (see that file).
     entrypoint:

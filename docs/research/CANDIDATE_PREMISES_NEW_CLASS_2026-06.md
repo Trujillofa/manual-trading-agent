@@ -1,7 +1,8 @@
 # Candidate Premises — New Instrument-Class Research Program (2026-06)
 
-**Status:** DRAFT for owner decision. Gate-definition phase only — no strategy code in this doc.
-**Scope (owner-fixed):** genuinely new instrument class (single-stock equities, equity-index options, listed futures). FX/CFD is NOT the target. Horizon open. All data sources on the table.
+**Status:** Owner-approved program premise (PR #26). Gate-definition phase complete for Lane 7; no strategy code authorized until data proof.
+**Scope (owner-fixed):** genuinely new instrument class (single-stock equities, equity-index options, listed futures). FX/CFD is NOT the research target. Horizon open. All data sources on the table.
+**Governance:** [`PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md`](PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md) reconciles production (forex Branch B) vs isolated new-instrument research.
 **Re-entry authority:** `research/program.md` STOP banner + `docs/research/PROFITABILITY_PLAN_2026-06.md` non-negotiables.
 
 ---
@@ -56,7 +57,7 @@ Each premise uses the fixed rubric: thesis → material-difference check → uni
 
 ### Premise #1 — Futures term-structure / roll yield
 
-**Thesis.** Futures returns decompose into spot change + roll yield + collateral. The roll-yield component (long backwardated markets that pay you to roll, short contangoed markets that charge you to roll) is a documented structural return source, distinct from spot direction. Rank a diversified universe by 12-month roll yield, long the backwardated tail, short the contangoed tail, rebalance monthly.
+**Thesis.** Futures returns decompose into spot change + roll yield + collateral. The roll-yield component (long backwardated markets that pay you to roll, short contangoed markets that charge you to roll) is a documented structural return source, distinct from spot direction. Rank a diversified **commodity** universe by annualized curve slope (front vs deferred, maturity-spacing-adjusted), long the backwardated tail, short the contangoed tail, rebalance monthly.
 
 **Material-difference check.**
 - *Different edge source* — **CLEARS.** The signal is curve shape (front vs deferred), not spot direction. This is orthogonal to every closed FX lane (all spot-directional) and to TSMOM (spot momentum).
@@ -64,12 +65,12 @@ Each premise uses the fixed rubric: thesis → material-difference check → uni
 - *Non-OHLC data* — borderline (uses OHLC + the futures term structure, which is a different data object than a single OHLC series).
 - *Not a restatement of lane 3 (FX carry)?* Yes — lane 3 died on broker-swap data being 0.0; this is a different return source (roll, not financing) on a different instrument (listed futures, not OTC FX). Different edge family.
 
-**Universe.** ~20–30 liquid futures: energy (CL, NG, HO, RB), metals (GC, SI, HG), ags (ZC, ZS, ZW, KC, SB), softs/livestock, financials (US 2/5/10/30y, UB), indices (ES, NQ, RTY) for the financial tail. Start with the most-liquid 10–15 to keep data clean.
+**Universe (v1 commodity-only).** Twelve liquid commodity futures with one economic carry definition: energy (CL, NG, RB, HO), metals (GC, SI, HG), ags (ZC, ZS, ZW), livestock (LE, HE). Equity indices (ES, NQ) and Treasury futures (ZN, ZB) are excluded from v1. ≥10 of 12 must pass the data gate; rejected markets are not replaced after seeing results.
 
 **Horizon.** Daily signals, monthly rebalance. Holding periods weeks to months. Natural fit for the roll-yield half-life.
 
 **Data required + accessibility.**
-- Continuous back-adjusted futures series + individual contract prices (to compute the front-vs-deferred spread). Sources: free-ish via yfinance for major contracts; Pinnacle/CSI/Quandl for clean continuous data (~paid); CME/CFTC for settlement. **Phase-1 gate:** verify ≥10 years of clean term-structure data for ≥10 markets before any backtest. Needs Phase-1 verification on data cost for a retail account.
+- Continuous back-adjusted futures series + individual contract settlement prices (to compute the front-vs-deferred spread with actual expiry spacing). Sources: Pinnacle/FirstRate/CSI/Norgate for individual contracts (~paid); CME settlement for free stitching. **Phase-1 gate:** verify ≥15 complete years of individual-contract data for ≥10 commodity markets before any backtest. Needs Phase-1 verification on data cost for a retail account.
 - Positioning (COT, free weekly) optional as a risk filter.
 
 **Evidence base.** Gorton & Rouwenhorst (2006), "Facts and Fantasies about Commodity Futures" — roll return is a distinct, positive contributor to commodity-futures returns historically. Follow-up literature (Bianchi, Ward) documents roll-yield-momentum cross-sectionally. **Honest caveats:** the edge is well-known, implemented in commodity-index ETFs (e.g., roll-optimized variants), and has likely decayed since 2006 as a result. Net edge after roll costs + execution for a new retail-scale entrant is questionable — *needs Phase-1 verification on recent data (last ~5y).*
@@ -79,11 +80,13 @@ Each premise uses the fixed rubric: thesis → material-difference check → uni
 **Infra feasibility.** **Medium lift.** The existing `research/evaluate.py` is Dukascopy M1 FX-specific and cannot be reused for futures term-structure. Phase 1 requires: (a) a futures term-structure data loader (new), (b) a roll-yield ranker, (c) a portfolio backtester with separate roll/spot P&L attribution, (d) an IS/OOS judge mirroring the discipline (never tune on OOS). No live trading — paper/research only until a KEEP verdict.
 
 **Pre-written gates (commit before code).**
-- *Universe:* ≥10 liquid futures, ≥10y history each.
-- *IS/OOS split:* chronological, 65/35, walk-forward (e.g., 8y IS / 4y OOS rolling).
-- *Metrics:* net PF (after roll + commission + 2-tick slippage), Sharpe, MAR, max DD, turnover, # trades, exposure by sector, **roll P&L vs spot P&L attribution**.
-- *Pass gate:* OOS net PF ≥ 1.20 (12-month rebalance will produce enough OOS rebalances for statistical meaning over 4y); positive roll contribution that survives costs; not concentrated in one sector or one year (≤25% of P&L from any single year).
-- *Stop gate (DISCARD without rescue):* OOS net PF < 1.0; edge dominated by spot drift not roll; concentrated in one commodity/sector; works only pre-2015 (decayed). Any rescue attempt (adding TA filters, RSI, breakout) is a closed-lane violation and is forbidden.
+- *Universe:* ≥10 commodity futures from the fixed 12-market v1 set, ≥15 complete years each.
+- *IS/OOS split:* one chronological 65/35 holdout; no walk-forward optimization; no parameter search. OOS MUST contain ≥5 complete calendar years.
+- *Metrics:* net PF (after roll + commission + 2-tick slippage), Sharpe, MAR, max DD, turnover, # trades, exposure by sector, **settlement-based roll P&L vs spot P&L attribution** with exact reconciliation (`total_net_pnl = spot + roll − costs`).
+- *TSMOM control:* true 252-trading-day time-series momentum on the same universe, monthly rebalance, same vol weighting and costs. Roll-yield OOS net PF must exceed TSMOM by ≥0.10; roll P&L must contribute >50% of gross OOS P&L.
+- *Bootstrap:* deterministic 3-month block bootstrap over OOS monthly returns (2,000 resamples, seed `20260624`); 5th-percentile net PF > 1.0.
+- *Pass gate:* OOS net PF ≥ 1.20 under baseline costs; positive roll contribution that survives costs; not concentrated in one sector (≤50%) or one year (≤25%).
+- *Stop gate (DISCARD without rescue):* OOS net PF < 1.0; edge dominated by spot drift not roll; repackaged TSMOM; concentrated in one commodity/sector; works only pre-2015 (decayed). Any rescue attempt (adding TA filters, RSI, breakout) is a closed-lane violation and is forbidden.
 
 **Material-difference score.** Instrument novelty 4/5 · Edge novelty 4/5 (curve ≠ spot) · Data novelty 3/5 → **CLEARS re-entry.**
 
@@ -308,7 +311,7 @@ Per the profitability plan's rule: **do not write strategy logic until the data 
 
 **Phase 1 deliverables (in this worktree, `research/new-premises-2026-06`):**
 
-1. **Data manifest** — `docs/research/term_structure/ROLL_YIELD_DATA_MANIFEST_2026-06.md`: exact markets, source(s), history length, cost, roll-convention, continuous-contract construction method. Gate: verified ≥10y clean data for ≥10 markets before proceeding.
+1. **Data manifest** — `docs/research/term_structure/ROLL_YIELD_DATA_MANIFEST_2026-06.md`: exact commodity markets, source(s), ≥15y history, settlement-based accounting, maturity-spacing annualization, roll-convention, continuous-contract construction method. Gate: verified ≥15y individual-contract data for ≥10 markets before proceeding.
 2. **Cost model doc** — `docs/research/term_structure/ROLL_COST_MODEL_2026-06.md`: commission per contract, assumed slippage (ticks), roll cost treatment, how roll P&L is separated from spot P&L. Conservative defaults; if the strategy passes only under optimistic costs → DISCARD.
 3. **Harness spec** — a short design for the futures term-structure backtester + IS/OOS judge, mirroring the discipline of `research/evaluate.py` (never tune on OOS; the 65/35 split is sacred).
 4. **One falsifiable test** — only after 1–3: implement the rank-by-roll-yield long-short portfolio, run the pre-written pass/stop gates, write `docs/research/term_structure/ROLL_YIELD_RESULTS_YYYY-MM-DD.md` with KEEP/DISCARD.

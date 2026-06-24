@@ -30,37 +30,38 @@ This three-object requirement is the **hard gate.** A data source that provides 
 
 ---
 
-## 3. Proposed universe (12 markets, confirm before proceed)
+## 3. Proposed universe (v1 commodity-only, 12 markets)
 
-Start narrow, liquid, and cross-sector to support the "not concentrated" pass gate. Each has a deep, clean term structure. Proposed starting set:
+v1 uses **one economic carry definition** across commodity futures only. Equity-index futures (ES, NQ) and Treasury futures (ZN, ZB) are **excluded from v1** — they carry different curve mechanics and would require asset-class-specific definitions. Candidates for v2 expansion only if v1 clears gates.
 
 | Sector | Market | Symbol | Notes |
 |---|---|---|---|
 | Energy | WTI crude | CL | most liquid commodity future |
 | Energy | Natural gas | NG | seasonal, strong curve structure |
+| Energy | RBOB gasoline | RB | energy complex |
+| Energy | Heating oil | HO | energy complex |
 | Metals | Gold | GC | |
 | Metals | Silver | SI | |
 | Metals | Copper | HG | growth/cycle proxy |
 | Agriculture | Corn | ZC | |
 | Agriculture | Soybeans | ZS | |
 | Agriculture | Wheat (CBOT) | ZW | |
-| Financials | US 10-year note | ZN | interest-rate term structure |
-| Financials | US 30-year bond | ZB | |
-| Equity index | S&P 500 | ES | financial tail |
-| Equity index | Nasdaq 100 | NQ | financial tail |
+| Livestock | Live cattle | LE | |
+| Livestock | Lean hogs | HE | |
 
-**Gate:** ≥10 of these 12 must clear the data-quality checklist (§7) for ≥10 years each before any backtest. If fewer than 10 clear, **reduce the universe and widen the history requirement**, or STOP — do not proceed with a thin universe that violates profitability-plan rule 3 ("do not judge from a single symbol or period").
+**Gate:** ≥10 of these 12 must clear the data-quality checklist (§7) for ≥15 complete years each before any backtest. The verifier MAY reject individual markets, but rejected markets **must not** be replaced after seeing strategy results. If fewer than 10 clear, **STOP** — record as data-blocked. Do not proceed with a thin universe that violates profitability-plan rule 3 ("do not judge from a single symbol or period").
 
-**Excluded from v1:** livestock (LE, FE), softs (KC, SB — thinner roll structure), ICE-listed (Brent — dual-venue data friction). Candidates for a v2 expansion only if v1 clears gates.
+**Excluded from v1:** equity indices (ES, NQ, RTY), Treasury/rate futures (ZN, ZB, ZF, ZT), softs (KC, SB — thinner roll structure), ICE-listed Brent (dual-venue data friction).
 
 ---
 
 ## 4. Required history and splits
 
-- **Minimum history:** 10 years per market (preference ≥15y where the source provides it).
+- **Minimum history:** **15 complete years** per accepted market. No market with <15 years of individual-contract data may enter the universe.
 - **Period:** through the most recent complete month.
-- **IS/OOS split:** chronological 65/35 (sacred — never tune on OOS; see harness spec). With 10y: ~6.5y IS / ~3.5y OOS → ~42 OOS rebalance events at monthly cadence.
-- **Trade-count semantics (addresses review Gap A):** For slow strategies the standard "≥30 trades" rule is ill-defined. Pre-registered definition for this lane: **one "trade" = one market's directional position change at a rebalance** (entry, exit, or flip). Statistical bar (in lieu of ≥30): OOS net PF ≥ 1.20 **AND** a bootstrap resample of the OOS rebalance-event returns whose 5th-percentile net PF > 1.0 (i.e., the edge is not an artifact of rebalance ordering). This directly uses the plan's "separate pre-written statistical bar for slower strategies" provision. Finalized in the harness spec.
+- **IS/OOS split:** one chronological **65/35 holdout** (sacred — never tune on OOS; see harness spec). There is **no parameter search** and **no walk-forward optimization** in this test. With 15y: ~9.75y IS / ~5.25y OOS.
+- **OOS calendar-year requirement:** the OOS window MUST contain **at least five complete calendar years**. This makes the pre-written single-year P&L concentration gate (≤25% from any one year) mathematically achievable and auditable.
+- **Trade-count semantics (addresses review Gap A):** For slow strategies the standard "≥30 trades" rule is ill-defined. Pre-registered definition for this lane: **one "trade" = one market's directional position change at a rebalance** (entry, exit, or flip). Statistical bar (in lieu of ≥30): OOS net PF ≥ 1.20 **AND** a deterministic 3-month block bootstrap of OOS monthly portfolio returns (2,000 resamples, seed `20260624`) whose 5th-percentile net PF > 1.0. Finalized in the harness spec.
 
 ---
 
@@ -82,19 +83,39 @@ Start narrow, liquid, and cross-sector to support the "not concentrated" pass ga
 
 ## 6. Roll-yield computation and roll convention (pre-committed)
 
-**Roll-yield signal (computed from raw individual contract prices, not the adjusted series):**
+**Roll-yield signal (computed from raw individual contract settlement prices, not the adjusted series):**
 
 For each market, at each monthly rebalance, with the active contract `F1` and the next `F2` (selected by open interest):
 
-```
-roll_yield_annualized ≈ 12 × (log(F1_close) − log(F2_close))   # for monthly framing
+```text
+annualized_curve_slope =
+    (log(F1_close) - log(F2_close))
+    * 365
+    / calendar_days_between_expiries
 ```
 
-Sign convention: **positive** roll yield when the front trades at a **premium** to the next (backwardation for a long, i.e., you are paid to roll long); **negative** when contangoed. Rank markets cross-sectionally by this value.
+`calendar_days_between_expiries` MUST be positive and derived from contract metadata (expiry dates of F1 and F2). The fixed `12 × log(F1/F2)` monthly approximation is **forbidden** — maturity spacing varies by market and roll cycle.
+
+Sign convention: **positive** annualized curve slope when the front trades at a **premium** to the next (backwardation for a long, i.e., you are paid to roll long); **negative** when contangoed. Rank markets cross-sectionally by this value.
 
 **Continuous-series construction (for spot P&L + TSMOM control only):** multiplicative (ratio) back-adjustment, active contract = max open interest, roll on the OI-crossover day. Ratio (not Panama/additive) is chosen because additive adjustment can produce negative prices on long histories, distorting log-returns.
 
-**Attribution accounting:** every realized position P&L is decomposed into (a) spot component — change in continuous-series price over the hold — and (b) roll component — the roll yield captured over the hold, computed from the front-vs-deferred spread at each roll. The pass gate requires (b) to dominate, not (a). This is the direct, pre-committed response to review Gap B (TSMOM adjacency).
+**Settlement-based mark-to-market accounting (binding):** the backtester MUST calculate daily variation-margin P&L from raw **settlement** prices and contract multipliers. At each roll:
+
+1. Close the old contract at its settlement (or modeled fill).
+2. Open the replacement contract at its settlement (or modeled fill).
+3. Record execution slippage and roll slippage separately.
+4. Preserve an audit row containing both contract identifiers and prices.
+
+For every position and for the portfolio:
+
+```text
+total_net_pnl = spot_component + roll_component - explicit_costs
+```
+
+The reconciliation difference MUST be less than `1e-8` in normalized-return tests and less than `$0.01` in dollar-P&L tests. Attribution is derived from this accounting identity, not from a parallel continuous-series shortcut.
+
+**Attribution accounting:** every realized position P&L decomposes into (a) spot component — price change on the held contract excluding roll gaps — and (b) roll component — P&L from contract switches at roll dates. The pass gate requires (b) to dominate (>50% of gross OOS P&L). This is the direct, pre-committed response to review Gap B (TSMOM adjacency).
 
 ---
 
@@ -102,7 +123,7 @@ Sign convention: **positive** roll yield when the front trades at a **premium** 
 
 For each market in the universe, all must be true:
 
-- [ ] Individual contracts reconstruct cleanly for ≥10 years (no missing expiries, no gaps >5 sessions).
+- [ ] Individual contracts reconstruct cleanly for ≥15 complete years (no missing expiries, no gaps >5 sessions).
 - [ ] Active-contract series derivable by OI crossover matches a reference (paid source's continuous, or CME-published roll dates) to within ±1 session.
 - [ ] Front-vs-deferred spread computable on ≥95% of trading days; outliers (>5σ) manually verified as real (not data errors).
 - [ ] Continuous series (ratio-adjusted) has no negative prices and no unexplained >10% overnight gaps.
@@ -129,10 +150,10 @@ Captured here as placeholders the data layer must enable; quantified in the next
 The harness spec (`ROLL_HARNESS_SPEC_2026-06.md`, next Phase-1 deliverable) **must** encode:
 
 - **Gap D — Isolation from FX STOP guard.** New entrypoint path `research/new_edge/term_structure/run.py` (sibling to the FX-specific `research/run_experiment.py`). The FX negative-result STOP guard in `research/autosearch.py` / `research/run_experiment.py` is scoped to the FX engine and must not gate futures entrypoints. Document the scoping explicitly.
-- **Gap B — TSMOM control run.** The harness runs, in addition to the roll-yield portfolio, a **12-month spot-momentum long-short portfolio on the identical universe** using the continuous series. **Pass-gate condition:** roll-yield OOS net PF must exceed spot-momentum OOS net PF, and roll-P&L must exceed spot-P&L in attribution. If spot momentum matches/beats, the verdict is **"repackaged TSMOM → DISCARD,"** not KEEP. This is pre-committed here so it cannot be rationalized away after seeing results.
-- **Gap A — Trade-count + statistical bar.** Finalize the bootstrap-resample net-PF confidence procedure (§4) with the chosen confidence level and resample count.
+- **Gap B — TSMOM control run.** The harness runs, in addition to the roll-yield portfolio, a **true time-series momentum (TSMOM) control** on the identical universe: signal per market = sign of trailing **252-trading-day** continuous-series return; monthly rebalance on the same dates; same trailing-volatility risk weighting; identical costs. Cross-sectional spot momentum MAY be reported as a secondary diagnostic but MUST NOT replace the TSMOM control. **Pass-gate condition:** roll-yield OOS net PF must exceed TSMOM OOS net PF by ≥0.10, and roll P&L must contribute >50% of gross OOS P&L. If TSMOM matches/beats, the verdict is **"repackaged TSMOM → DISCARD,"** not KEEP.
+- **Gap A — Trade-count + statistical bar.** Deterministic 3-month block bootstrap over OOS monthly portfolio returns: 2,000 resamples, seed `20260624`, pass when 5th-percentile bootstrapped net PF > 1.0.
 - **Gap E — Ledger + closure hygiene.** Seed a `research/new_edge/research_ledger.jsonl` row at Phase-1 start (lane 7, status=in_progress). On DISCARD, append lane 7 to `docs/research/CLOSED_RESEARCH_LANES.md` and one line to `docs/PROJECT_STATUS_2026-06.md`. Pre-commit the closure entry now.
-- **IS/OOS discipline:** 65/35 chronological, walk-forward; OOS is sacred and never tuned against (mirrors `research/evaluate.py`'s role for FX).
+- **IS/OOS discipline:** one chronological 65/35 holdout; OOS contains ≥5 complete calendar years; OOS is sacred and never tuned against.
 
 ---
 
@@ -154,8 +175,10 @@ Before committing to paid futures data (§5 owner decision), run a **1–2 day C
 ## Phase-1 deliverable sequence (this is #1 of 4)
 
 1. ✅ **This doc** — Data manifest (gate-definition).
-2. ⬜ `ROLL_COST_MODEL_2026-06.md` — quantify §8 placeholders; conservative defaults; pass-under-optimistic-costs → DISCARD.
-3. ⬜ `ROLL_HARNESS_SPEC_2026-06.md` — entrypoint, FX-guard scoping (Gap D), TSMOM control (Gap B), trade-count + bootstrap bar (Gap A), IS/OOS judge, ledger integration (Gap E).
+2. ✅ `ROLL_COST_MODEL_2026-06.md` — quantify §8 placeholders; conservative defaults; pass-under-optimistic-costs → DISCARD.
+3. ✅ `ROLL_HARNESS_SPEC_2026-06.md` — entrypoint, FX-guard scoping (Gap D), TSMOM control (Gap B), settlement accounting (§5.1), bootstrap + PF definitions (§7), ledger integration (Gap E).
 4. ⬜ One falsifiable test → `ROLL_YIELD_RESULTS_YYYY-MM-DD.md` with pre-committed KEEP/DISCARD.
 
-**Immediate owner decision to unblock #2–4:** the §5 data-source choice (paid individual-contract feed vs CME-stitch free path vs data-blocked).
+**Governance:** [`PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md`](../PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md) authorizes isolated listed-futures research; production Branch B remains forex-only.
+
+**Immediate owner decision to unblock #4:** the §5 data-source choice (paid individual-contract feed vs CME-stitch free path vs data-blocked). Tier-A loader/verifier code is authorized before #4; see harness spec authorization tiers.

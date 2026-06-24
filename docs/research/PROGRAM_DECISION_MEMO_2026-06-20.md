@@ -1,9 +1,11 @@
 # Forex Program Decision Memo — 2026-06-20
 
-**Repository:** `manual-trading-agent` (forex-exclusive)  
+**Repository:** `manual-trading-agent` (production forex; see addendum for research scope)  
 **Decision date:** 2026-06-20  
 **Base context:** [`PROFITABILITY_PLAN_2026-06.md`](PROFITABILITY_PLAN_2026-06.md), [`CLOSED_RESEARCH_LANES.md`](CLOSED_RESEARCH_LANES.md)  
 **Audience:** Humans and agents deciding what to build, run, or fund next in this repo.
+
+> **Scope update (2026-06-24):** [`PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md`](PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md) supersedes the forex-exclusive **research** restriction below. Production/Branch B remains forex-only. Isolated listed-futures research under `research/new_edge/` is authorized. All forex lane stop rules in this memo remain binding.
 
 ---
 

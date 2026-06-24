@@ -1,6 +1,6 @@
 # COT Positioning — Phase-0.5 Spike Note (2026-06-23)
 
-**Status:** Spike note, not a lane. COT is explicitly **not the program thesis** — it is a free-data warm-up to validate the futures harness plumbing (Gap D) and lane hygiene (Gap E) before committing to paid roll-yield data. See `docs/research/CANDIDATE_PREMISES_NEW_CLASS_2026-06.md` §"Optional Phase-0.5."
+**Status:** Spike note, not the program thesis. COT is a **separate pre-registered lane** (Premise #6) authorized after PR #26 merges per [`PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md`](../PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md). It is **not** a seven-pair FX directional system — the universe is **≥15 COT-reported listed-futures markets** (energy, metals, ags, livestock, financials as coverage allows).
 
 This note records what the spike verified and where it hit an environment boundary, so the next session can resume without rediscovering it.
 
@@ -35,7 +35,7 @@ This note records what the spike verified and where it hit an environment bounda
 1. `pip install cot_reports` in the worktree venv — delegates URL/version handling to the maintained package (sidesteps the 404 archaeology).
 2. Create `research/new_edge/cot_positioning/cot_positioning_test.py` mirroring `vol_regime/range_compression_breakout_test.py`:
    - Signal: fade extreme non-commercial positioning z-score (record-long → short, record-short → long), weekly rebalance.
-   - Universe: COT-reported futures (start with the 12-market roll-yield universe where coverage overlaps; COT covers CL/NG/GC/SI/HG/ZC/ZS/ZW/ZN/ZB/ES/NQ).
+   - Universe: ≥15 COT-reported futures markets across sectors (not FX spot pairs). Start from the Lane 7 commodity set where coverage overlaps, then add financial/index futures (ZN, ZB, ES, NQ, etc.) to reach breadth.
    - Reuse: `determine_verdict` / `determine_net_verdict` shape, RESULTS doc writer, ledger append.
 3. Pre-written gates (from `CANDIDATE_PREMISES_NEW_CLASS_2026-06.md` premise #6):
    - **Pass:** OOS net PF ≥ 1.20; positive across ≥60% of markets; monotonic in positioning-extremity quintile.

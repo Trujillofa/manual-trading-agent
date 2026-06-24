@@ -69,44 +69,58 @@ Synthesized from §2 for the harness. Commission in $; slippage in market-specif
 
 ---
 
-## 4. Roll vs spot P&L attribution (lane-3 lesson, pre-committed)
+## 4. Settlement-based attribution and reconciliation (lane-3 lesson, pre-committed)
 
-This is the second binding gate (alongside the TSMOM control in the harness spec). Every position's realized return decomposes as:
+This is the second binding gate (alongside the TSMOM control in the harness spec). P&L is computed from **settlement-based mark-to-market** on individual contracts (data manifest §6), not from a parallel continuous-series shortcut.
 
+Every position's realized dollar P&L decomposes as:
+
+```text
+total_net_pnl = spot_component + roll_component - explicit_costs
+
+  spot_component  = Σ daily settlement-to-settlement P&L on the held contract
+                    (excluding roll-switch days)
+  roll_component  = Σ P&L from closing old contract and opening new at each roll
+  explicit_costs  = commission(§2.1) + execution_slippage(§2.2) + roll_slippage(§2.3)
 ```
-realized_return = spot_component + roll_component − friction(2.1+2.2+2.3)
-  spot_component = change in continuous (ratio-adjusted) series over the hold
-  roll_component = sum of front-vs-deferred spread captured at each roll during the hold
+
+At each roll the backtester MUST: (1) close the old contract at settlement or modeled fill, (2) open the replacement at settlement or modeled fill, (3) charge execution and roll slippage separately, and (4) emit an audit row with both contract identifiers and prices.
+
+**Reconciliation requirement (binding):** for every position and the portfolio aggregate,
+
+```text
+|total_net_pnl - (spot_component + roll_component - explicit_costs)| < 1e-8   # normalized
+|total_net_pnl - (spot_component + roll_component - explicit_costs)| < $0.01  # dollar P&L
 ```
 
 **Pass-gate attribution condition (pre-committed, cannot be relaxed):**
-- `roll_component` must contribute **> 50%** of pre-friction gross P&L, AND
-- `roll_component` net of friction must be **positive** in OOS.
+- `roll_component` must contribute **> 50%** of pre-friction gross OOS P&L (`roll_oos / (spot_oos + roll_oos) > 0.50`), AND
+- `roll_component` must be **positive** in OOS (pre-friction; friction is in `explicit_costs`).
 
 If `spot_component` dominates → the strategy is spot-directional in disguise → **DISCARD** with reason "edge dominated by spot drift, not roll yield" (this is the lane-3 failure mode, pre-empted).
 
-The TSMOM control run (harness spec, Gap B) provides the orthogonal check: if 12-month spot momentum on the same universe matches or beats roll-yield OOS net PF, the verdict is **"repackaged TSMOM → DISCARD."**
+The TSMOM control run (harness spec, Gap B) provides the orthogonal check: if true 252-day time-series momentum on the same universe matches or beats roll-yield OOS net PF by less than 0.10, the verdict is **"repackaged TSMOM → DISCARD."** Cross-sectional spot momentum is a secondary diagnostic only and MUST NOT substitute for this control.
 
 ---
 
-## 5. Universe-specific cost notes (12-market proposed set)
+## 5. Universe-specific cost notes (v1 commodity 12-market set)
 
-Per-market tick size and multiplier must be loaded from instrument metadata (part of the data manifest §2 object set). Indicative values for the proposed universe (verify against source data, do not hardcode):
+Per-market tick size and multiplier must be loaded from instrument metadata (part of the data manifest §2 object set). Indicative values for the v1 commodity universe (verify against source data, do not hardcode):
 
 | Market | Tick size | Tick value | Notes |
 |---|---|---|---|
 | CL (WTI) | $0.01 | $12.50 | very liquid, slippage assumption sound |
 | NG (natgas) | $0.001 | $10.00 | more volatile, 2-tick assumption may be optimistic |
+| RB (RBOB) | $0.0001 | $4.20 | energy complex |
+| HO (heating oil) | $0.0001 | $4.20 | energy complex |
 | GC (gold) | $0.10 | $10.00 | liquid |
 | SI (silver) | $0.005 | $25.00 | tick value larger — slippage $ impact higher |
 | HG (copper) | $0.0005 | $12.50 | |
 | ZC/ZS/ZW (ags) | 0.25¢ | $12.50 | seasonal roll liquidity varies |
-| ZN (10y) | 1/64% | $15.625 | |
-| ZB (30y) | 1/32% | $31.25 | tick value larger |
-| ES (S&P) | $0.25 | $12.50 | extremely liquid |
-| NQ (NDX) | $0.25 | $5.00 | extremely liquid |
+| LE (live cattle) | $0.025 | $10.00 | livestock |
+| HE (lean hogs) | $0.025 | $10.00 | livestock |
 
-**Implication for the ladder:** the 2-tick/side baseline is reasonable for the index/energy/metals liquid core; it may flatter the ags and NG. The harness must apply per-market tick values (not a flat pip assumption), and the pessimistic tier (3 ticks) is the honest stress for thinner markets.
+**Implication for the ladder:** the 2-tick/side baseline is reasonable for the energy/metals liquid core; it may flatter the ags, livestock, and NG. The harness must apply per-market tick values (not a flat pip assumption), and the pessimistic tier (3 ticks) is the honest stress for thinner markets.
 
 ---
 

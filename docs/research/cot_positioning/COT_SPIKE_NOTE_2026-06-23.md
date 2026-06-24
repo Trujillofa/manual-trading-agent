@@ -18,7 +18,7 @@ This note records what the spike verified and where it hit an environment bounda
    - Verdict ladder: `GROSS_PASS → DISCARD/KEEP` via `determine_verdict` + `determine_net_verdict` (gross gate → OOS net gate)
    - RESULTS doc writer: `build_results_doc(...)` emits the canonical lane-verdict markdown
    - Lane constants: `MIN_TRADES`, `GROSS_PF_DISCARD = 1.05`, `NET_OOS_PF_PASS = 1.20`
-   The COT spike should reproduce this shape exactly (different signal, same plumbing) — that is the point of the warm-up.
+     The COT spike should reproduce this shape exactly (different signal, same plumbing) — that is the point of the warm-up.
 
 ---
 

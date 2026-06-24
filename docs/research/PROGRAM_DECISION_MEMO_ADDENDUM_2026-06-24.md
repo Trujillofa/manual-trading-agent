@@ -1,7 +1,7 @@
 # Program Decision Memo — Addendum (2026-06-24)
 
-**Supersedes (partially):** [`PROGRAM_DECISION_MEMO_2026-06-20.md`](PROGRAM_DECISION_MEMO_2026-06-20.md) §Scope Boundaries and §Decision  
-**Authority:** Owner-approved reconciliation of governance conflict between the 2026-06-20 forex stop and draft PR #26 (new instrument-class research)  
+**Supersedes (partially):** [`PROGRAM_DECISION_MEMO_2026-06-20.md`](PROGRAM_DECISION_MEMO_2026-06-20.md) §Scope Boundaries and §Decision
+**Authority:** Owner-approved reconciliation of governance conflict between the 2026-06-20 forex stop and draft PR #26 (new instrument-class research)
 **Audience:** Humans and agents deciding what to build, run, or fund next in this repository
 
 ---
@@ -16,12 +16,12 @@ This addendum **supersedes only the forex-exclusive research restriction**. All 
 
 ## Decision (reconciled scope)
 
-| Layer | Scope | Status |
-|---|---|---|
-| **Production / Branch B** | Forex scanner + Telegram alerts on Hetzner | Continue unchanged; forex-only |
-| **`src/` live code** | No equities, futures, or options execution | Unchanged |
-| **Closed forex lanes** | FX directional TA, TSMOM, carry (Hetzner), stat-arb, event drift, vol-regime | Permanently closed; no retuning |
-| **New research (isolated)** | Listed-futures research under `research/new_edge/` in dedicated worktrees/branches | **Authorized, research-only** |
+| Layer                       | Scope                                                                              | Status                          |
+| --------------------------- | ---------------------------------------------------------------------------------- | ------------------------------- |
+| **Production / Branch B**   | Forex scanner + Telegram alerts on Hetzner                                         | Continue unchanged; forex-only  |
+| **`src/` live code**        | No equities, futures, or options execution                                         | Unchanged                       |
+| **Closed forex lanes**      | FX directional TA, TSMOM, carry (Hetzner), stat-arb, event drift, vol-regime       | Permanently closed; no retuning |
+| **New research (isolated)** | Listed-futures research under `research/new_edge/` in dedicated worktrees/branches | **Authorized, research-only**   |
 
 **Stop rule preserved:** Do not reopen or retune any closed forex lane. Negative forex results remain authoritative.
 
@@ -57,14 +57,14 @@ Equities and equity-index options remain **candidate premises** in the ranking d
 
 ## Execution order (dependency waves, not calendar estimates)
 
-| Wave | Dependency | Deliverable |
-|---|---|---|
-| **0** | This addendum + repaired PR #26 | Governance reconciled; Lane 7 gates unambiguous |
-| **1** | Wave 0 merged | COT data proof + relationship tests (≥15 futures markets; not FX directional) |
-| **2** | COT terminal verdict recorded | Owner decision on individual-contract commodity data source |
-| **3** | Wave 2 `DATA_PASS` (≥10 of 12 markets, ≥15y each) | Roll-yield loader + verifier only |
-| **4** | Wave 3 `DATA_PASS` | Frozen roll-yield harness + one falsifying run |
-| **5** | Wave 4 terminal verdict | `KEEP`, `DISCARD`, or `BLOCKED` recorded; lane closed if DISCARD |
+| Wave  | Dependency                                        | Deliverable                                                                   |
+| ----- | ------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **0** | This addendum + repaired PR #26                   | Governance reconciled; Lane 7 gates unambiguous                               |
+| **1** | Wave 0 merged                                     | COT data proof + relationship tests (≥15 futures markets; not FX directional) |
+| **2** | COT terminal verdict recorded                     | Owner decision on individual-contract commodity data source                   |
+| **3** | Wave 2 `DATA_PASS` (≥10 of 12 markets, ≥15y each) | Roll-yield loader + verifier only                                             |
+| **4** | Wave 3 `DATA_PASS`                                | Frozen roll-yield harness + one falsifying run                                |
+| **5** | Wave 4 terminal verdict                           | `KEEP`, `DISCARD`, or `BLOCKED` recorded; lane closed if DISCARD              |
 
 **ML rule (binding):** No classification model until a simple fixed-rule strategy clears **gross PF > 1.10** on the pre-registered test. Relationship proof (frequency tables, OLS) precedes any classifier.
 
@@ -95,4 +95,4 @@ If a proposal conflicts with this addendum, **the addendum wins** for new-instru
 
 Forex profitability search on closed lanes remains **stopped**. Branch B remains **forex-only in production**. Isolated, research-only listed-futures work under pre-written gates is **authorized** as the next program wave.
 
-*Related:* PR #26 · [`CANDIDATE_PREMISES_NEW_CLASS_2026-06.md`](CANDIDATE_PREMISES_NEW_CLASS_2026-06.md) · [`GROK_RESEARCH_LOOP_ENGINEERING.md`](GROK_RESEARCH_LOOP_ENGINEERING.md)
+_Related:_ PR #26 · [`CANDIDATE_PREMISES_NEW_CLASS_2026-06.md`](CANDIDATE_PREMISES_NEW_CLASS_2026-06.md) · [`GROK_RESEARCH_LOOP_ENGINEERING.md`](GROK_RESEARCH_LOOP_ENGINEERING.md)

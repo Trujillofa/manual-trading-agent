@@ -12,10 +12,10 @@
 
 Operationalized as a **three-tier ladder.** The harness must report verdicts under all three. The **baseline** tier is the canonical KEEP/DISCARD decision; optimistic and pessimistic bracket sensitivity.
 
-| Tier | Meaning | Verdict implication |
-|---|---|---|
-| **Optimistic** | Best plausible execution (low commission, 1 tick slippage, no roll slippage) | Pass here alone is *not* sufficient to KEEP |
-| **Baseline** | Conservative expected execution (default commission, 2 ticks/side, 1 tick/roll) | **Canonical decision tier** |
+| Tier            | Meaning                                                                                      | Verdict implication                                         |
+| --------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **Optimistic**  | Best plausible execution (low commission, 1 tick slippage, no roll slippage)                 | Pass here alone is _not_ sufficient to KEEP                 |
+| **Baseline**    | Conservative expected execution (default commission, 2 ticks/side, 1 tick/roll)              | **Canonical decision tier**                                 |
 | **Pessimistic** | Adverse execution (high commission, 3 ticks/side, 2 ticks/roll, conservative roll liquidity) | Pass here is strong evidence; fail here is not auto-DISCARD |
 
 **Hard rule (pre-committed):** KEEP requires baseline-tier pass. Optimistic-only pass → **DISCARD** with reason "passes only under optimistic costs." This cannot be relaxed after seeing results.
@@ -27,26 +27,31 @@ Operationalized as a **three-tier ladder.** The harness must report verdicts und
 Every realized position P&L in the backtester is decomposed and charged as:
 
 ### 2.1 Commission
+
 - **Per contract per side**, round-turn quoted as `(commission_per_side × 2)`.
 - Futures commission is per-contract, not per-share; position sizing is contract-count × multiplier.
 - **Baseline default:** $2.50 per side ($5.00 round-turn) — conservative for retail discount futures brokers (IBKR overnight futures ~$0.85–$2.25/side; this leaves headroom).
 - **Owner-configurable** per market if broker terms differ; defaults are conservative.
 
 ### 2.2 Slippage (execution friction)
+
 - **Baseline:** 2 ticks per side (entry + exit). Tick values are contract-specific (CL = $12.50/tick; ZN = $15.625/tick; ES = $12.50/tick; etc. — derive from multiplier and tick size).
 - **Pessimistic:** 3 ticks/side. **Optimistic:** 1 tick/side.
-- Applied symmetrically to entries and exits. No assumption of favorable fills (no limit-fill benefit) — conservative for a passive signal that may cross the spread.
+- Applied as **dollar charges in `explicit_costs`** at entry, exit, and roll events. Slippage is **not** embedded in settlement prices or fill prices used for the P&L path (harness spec §5.1). No assumption of favorable fills.
 
 ### 2.3 Roll slippage (the term-structure-specific cost)
-- This is the cost the *lane itself* imposes and most retail backtests miss. Exiting the front month into the next at roll incurs the same slippage profile as a turn, plus thinner deferred-month liquidity.
+
+- This is the cost the _lane itself_ imposes and most retail backtests miss. Exiting the front month into the next at roll incurs the same slippage profile as a turn, plus thinner deferred-month liquidity.
 - **Baseline:** 1 tick per roll (the long/short position rolls from F1 to F2 at each rebalance or OI crossover, whichever the harness uses).
 - **Pessimistic:** 2 ticks/roll. **Optimistic:** 0 ticks/roll (unrealistic — included only to show sensitivity).
 
-### 2.4 Roll-yield capture (the signal — not a cost, but accounted symmetrically)
-- The roll-yield component is **credited** to P&L at each roll based on the front-vs-deferred spread realized over the hold (computed from raw individual-contract prices per the data manifest §6, not the adjusted series).
-- This is the *edge*. Costs 2.1–2.3 are the friction. The pass gate requires roll-yield credit (net of 2.1–2.3) to exceed the spot P&L component — see attribution §4.
+### 2.4 Roll-yield capture (economic accrual — not a cost)
+
+- Economic roll yield is **accrued daily** from F1–F2 basis convergence while holding the front contract (harness spec §5.1). It is not the mechanical P&L of switching contracts.
+- Costs 2.1–2.3 are friction charged separately. The pass gate requires economic roll accrual to dominate spot drift in OOS — see attribution §4.
 
 ### 2.5 Margin opportunity cost — documented, NOT netted
+
 - Per the plan's conservative-baseline rule: margin/collateral opportunity cost is **documented separately, not subtracted from research P&L.**
 - Reason: it is a capital-allocation question, not an execution cost; netting it would conflate strategy quality with account-leverage choice.
 - Reported as an exposure × collateral-rate × risk-free-rate figure in the RESULTS doc, alongside (not inside) net PF.
@@ -57,11 +62,11 @@ Every realized position P&L in the backtester is decomposed and charged as:
 
 Synthesized from §2 for the harness. Commission in $; slippage in market-specific ticks converted to $ via multiplier/tick-size.
 
-| Component | Optimistic | Baseline | Pessimistic |
-|---|---|---|---|
-| Commission (per side) | $1.00 | $2.50 | $4.00 |
-| Execution slippage (per side) | 1 tick | 2 ticks | 3 ticks |
-| Roll slippage (per roll) | 0 ticks | 1 tick | 2 ticks |
+| Component                     | Optimistic | Baseline | Pessimistic |
+| ----------------------------- | ---------- | -------- | ----------- |
+| Commission (per side)         | $1.00      | $2.50    | $4.00       |
+| Execution slippage (per side) | 1 tick     | 2 ticks  | 3 ticks     |
+| Roll slippage (per roll)      | 0 ticks    | 1 tick   | 2 ticks     |
 
 **Round-trip baseline example (CL, tick = $12.50):** $5.00 commission + 2 × (2 × $12.50) slippage + 1 × $12.50 roll = **$67.50/contract** before any P&L. The strategy's roll-yield credit must clear this per-contract hurdle.
 
@@ -78,13 +83,13 @@ Every position's realized dollar P&L decomposes as:
 ```text
 total_net_pnl = spot_component + roll_component - explicit_costs
 
-  spot_component  = Σ daily settlement-to-settlement P&L on the held contract
-                    (excluding roll-switch days)
-  roll_component  = Σ P&L from closing old contract and opening new at each roll
-  explicit_costs  = commission(§2.1) + execution_slippage(§2.2) + roll_slippage(§2.3)
+  total_pre_cost[t] = settlement MTM on held contract (settlement prices only)
+  roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) / max(days_to_F1_expiry_{t-1}, 1)
+  spot_component[t] = total_pre_cost[t] - roll_component[t]
+  explicit_costs    = commission(§2.1) + slippage dollar charges(§2.2–2.3); NOT in settlement path
 ```
 
-At each roll the backtester MUST: (1) close the old contract at settlement or modeled fill, (2) open the replacement at settlement or modeled fill, (3) charge execution and roll slippage separately, and (4) emit an audit row with both contract identifiers and prices.
+At each roll the backtester MUST: (1) record settlement MTM on the closing front contract, (2) open the replacement at settlement (MTM begins next day), (3) charge slippage/commission as dollar costs in `explicit_costs`, and (4) emit an audit row with contract identifiers, settlements, and accrual decomposition.
 
 **Reconciliation requirement (binding):** for every position and the portfolio aggregate,
 
@@ -94,6 +99,7 @@ At each roll the backtester MUST: (1) close the old contract at settlement or mo
 ```
 
 **Pass-gate attribution condition (pre-committed, cannot be relaxed):**
+
 - `roll_component` must contribute **> 50%** of pre-friction gross OOS P&L (`roll_oos / (spot_oos + roll_oos) > 0.50`), AND
 - `roll_component` must be **positive** in OOS (pre-friction; friction is in `explicit_costs`).
 
@@ -107,18 +113,18 @@ The TSMOM control run (harness spec, Gap B) provides the orthogonal check: if tr
 
 Per-market tick size and multiplier must be loaded from instrument metadata (part of the data manifest §2 object set). Indicative values for the v1 commodity universe (verify against source data, do not hardcode):
 
-| Market | Tick size | Tick value | Notes |
-|---|---|---|---|
-| CL (WTI) | $0.01 | $12.50 | very liquid, slippage assumption sound |
-| NG (natgas) | $0.001 | $10.00 | more volatile, 2-tick assumption may be optimistic |
-| RB (RBOB) | $0.0001 | $4.20 | energy complex |
-| HO (heating oil) | $0.0001 | $4.20 | energy complex |
-| GC (gold) | $0.10 | $10.00 | liquid |
-| SI (silver) | $0.005 | $25.00 | tick value larger — slippage $ impact higher |
-| HG (copper) | $0.0005 | $12.50 | |
-| ZC/ZS/ZW (ags) | 0.25¢ | $12.50 | seasonal roll liquidity varies |
-| LE (live cattle) | $0.025 | $10.00 | livestock |
-| HE (lean hogs) | $0.025 | $10.00 | livestock |
+| Market           | Tick size | Tick value | Notes                                              |
+| ---------------- | --------- | ---------- | -------------------------------------------------- |
+| CL (WTI)         | $0.01     | $12.50     | very liquid, slippage assumption sound             |
+| NG (natgas)      | $0.001    | $10.00     | more volatile, 2-tick assumption may be optimistic |
+| RB (RBOB)        | $0.0001   | $4.20      | energy complex                                     |
+| HO (heating oil) | $0.0001   | $4.20      | energy complex                                     |
+| GC (gold)        | $0.10     | $10.00     | liquid                                             |
+| SI (silver)      | $0.005    | $25.00     | tick value larger — slippage $ impact higher       |
+| HG (copper)      | $0.0005   | $12.50     |                                                    |
+| ZC/ZS/ZW (ags)   | 0.25¢     | $12.50     | seasonal roll liquidity varies                     |
+| LE (live cattle) | $0.025    | $10.00     | livestock                                          |
+| HE (lean hogs)   | $0.025    | $10.00     | livestock                                          |
 
 **Implication for the ladder:** the 2-tick/side baseline is reasonable for the energy/metals liquid core; it may flatter the ags, livestock, and NG. The harness must apply per-market tick values (not a flat pip assumption), and the pessimistic tier (3 ticks) is the honest stress for thinner markets.
 

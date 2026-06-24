@@ -9,16 +9,16 @@
 ## 0. What this spec is, and is not
 
 **Is:** a design contract. Any implementation that deviates from §1–§7 without an explicit, recorded amendment is invalid by construction.
-**Is not:** authorization to write the full strategy backtest. Deliverable #4 (the falsifying run) is gated on (a) owner data-source decision, (b) §7 data-quality checklist passing for ≥10 markets, (c) this spec. All three must hold.
+**Is not:** authorization to write the full strategy backtest. Deliverable #4 (the falsifying run) is gated on (a) owner data-source authorization, (b) Tier A verifier returning `DATA_PASS` (≥10 markets pass manifest §7), (c) this spec.
 
 **Authorization tiers (binding):**
 
-| Tier | Modules | Gate |
-|---|---|---|
-| **A — data plumbing** | `data/loader.py` (interface + `SyntheticLoader`), `data/verify_term_structure_data.py`, `data/metadata.py`, unit tests | Owner data-source decision + manifest §7 checklist |
-| **B — strategy simulation** | `signal.py`, `control_tsmom.py`, `backtest.py`, `attribution.py`, `cost_model.py`, `judge.py`, `results_writer.py`, `run.py` | Tier A returns `DATA_PASS` for ≥10 markets |
+| Tier                        | Modules                                                                                                                      | Entry gate                                   | Exit status                                                       |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------- |
+| **A — data plumbing**       | `data/loader.py` (interface + `SyntheticLoader`), `data/verify_term_structure_data.py`, `data/metadata.py`, unit tests       | Owner authorizes a data source (manifest §5) | `DATA_PASS`, `BLOCKED`, or `DISCARD` (verifier runs §7 checklist) |
+| **B — strategy simulation** | `signal.py`, `control_tsmom.py`, `backtest.py`, `attribution.py`, `cost_model.py`, `judge.py`, `results_writer.py`, `run.py` | Tier A = `DATA_PASS`                         | `KEEP` or `DISCARD`                                               |
 
-Tier A MUST NOT be blocked by Tier B. Tier B MUST NOT start until Tier A passes.
+Tier A builds the verifier that _produces_ the §7 checklist result; it is not blocked by a pre-existing checklist pass. Tier B MUST NOT start until Tier A exits `DATA_PASS`.
 
 ---
 
@@ -45,14 +45,17 @@ research/new_edge/term_structure/
 ```
 
 **Entrypoint contract** (mirrors `research/new_edge/vol_regime/range_compression_breakout_test.py`):
+
 ```bash
 python -m research.new_edge.term_structure.run \
-    --start 2016-01-01 --end 2026-06-01 \
+    --start 2005-01-01 --end 2026-06-01 \
     --cost-tier baseline \
     --output docs/research/term_structure/ROLL_YIELD_RESULTS_YYYY-MM-DD.md
 ```
 
-**FX-guard scoping (Gap D, binding):** `research/autosearch.py` and `research/run_experiment.py` must remain FX-scoped. The new `run.py` does **not** import them, does **not** route through them, and carries its **own** verdict logic in `judge.py`. A pre-commit guard comment in `run.py` records: *"This entrypoint is term-structure/futures only. Do not add FX majors OHLC directional TA here — that lane is closed (see research/program.md STOP banner) and gated by --override-negative-result in the FX entrypoints."*
+`--start` MUST be early enough that every accepted market has ≥15 complete years before `--end`. The verifier enforces this per market; if any accepted market fails the history gate, the run MUST abort before strategy simulation.
+
+**FX-guard scoping (Gap D, binding):** `research/autosearch.py` and `research/run_experiment.py` must remain FX-scoped. The new `run.py` does **not** import them, does **not** route through them, and carries its **own** verdict logic in `judge.py`. A pre-commit guard comment in `run.py` records: _"This entrypoint is term-structure/futures only. Do not add FX majors OHLC directional TA here — that lane is closed (see research/program.md STOP banner) and gated by --override-negative-result in the FX entrypoints."_
 
 ---
 
@@ -79,6 +82,7 @@ class MarketData:
 ```
 
 **Concrete loaders (one implemented per owner-chosen source):**
+
 - `NorgateLoader`, `FirstRateLoader`, `CSILoader`, `PinnacleLoader` (paid) — all conform to the interface; the choice is the owner's (manifest §5).
 - `CMEStitchLoader` (free, high-effort) — CME settlement + expiry calendar + OI stitching; only if budget is zero and universe is narrowed to CME-native markets.
 - `SyntheticLoader` (test only) — deterministic synthetic curves for unit-testing the harness before any real data exists.
@@ -98,10 +102,12 @@ def rank_by_roll_yield(market_data: dict[str, MarketData], as_of: date) -> pd.Se
         (log(F1_close) - log(F2_close)) * 365 / calendar_days_between_expiries
     where F1 = active contract (max OI), F2 = next expiry.
     calendar_days_between_expiries is positive, from contract metadata.
+    Skip market if F1_close <= 0 or F2_close <= 0 (manifest §6 non-positive rule).
     Positive = backwardation (paid to roll long); negative = contango."""
 ```
 
 **Fixed parameters (no sweep, no optimization):**
+
 - Rebalance: **monthly** (last trading day of month).
 - Universe each rebalance: all markets passing the §7 data-quality gate.
 - Portfolio construction: long the top backwardated quintile, short the bottom contangoed quintile, equal-risk-weighted by trailing 60-day realized vol (vol-target, not equal-notional — standard for cross-sectional futures).
@@ -132,10 +138,10 @@ Cross-sectional spot momentum (rank by trailing return, long top quintile / shor
 
 **Binding KEEP-condition (pre-committed, non-relaxable):**
 
-| Condition | If met | If not met |
-|---|---|---|
-| Roll-yield OOS net PF > TSMOM OOS net PF **by ≥0.10** | Eligible for KEEP (subject to all other gates) | → **DISCARD**, reason `"repackaged TSMOM — roll yield does not outperform time-series momentum on the same universe"` |
-| Roll-component > 50% of pre-friction gross OOS P&L (attribution §5) | Reinforces KEEP | → DISCARD, reason `"edge dominated by spot drift, not roll yield"` |
+| Condition                                                           | If met                                         | If not met                                                                                                            |
+| ------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Roll-yield OOS net PF > TSMOM OOS net PF **by ≥0.10**               | Eligible for KEEP (subject to all other gates) | → **DISCARD**, reason `"repackaged TSMOM — roll yield does not outperform time-series momentum on the same universe"` |
+| Roll-component > 50% of pre-friction gross OOS P&L (attribution §5) | Reinforces KEEP                                | → DISCARD, reason `"edge dominated by spot drift, not roll yield"`                                                    |
 
 Both must hold. The TSMOM control run appears in the RESULTS doc as its own row, side-by-side with the roll-yield result, so the comparison is auditable and cannot be quietly omitted.
 
@@ -143,54 +149,15 @@ Both must hold. The TSMOM control run appears in the RESULTS doc as its own row,
 
 ## 5. Attribution (binding gate — lane-3 lesson)
 
-`attribution.py` decomposes every realized position from **settlement-based mark-to-market** (data manifest §6, cost model §4):
+`attribution.py` decomposes pre-friction P&L into **economic spot drift** vs **economic roll yield (basis convergence)**. Contract-switch mechanics are bookkeeping, not roll yield.
 
 ```text
 total_net_pnl = spot_component + roll_component - explicit_costs
 
-  spot_component  = Σ daily settlement-to-settlement P&L on the held contract
-                    (excluding roll-switch days)
-  roll_component  = Σ P&L from closing old contract and opening new at each roll
-  explicit_costs  = commission + execution_slippage + roll_slippage (per cost tier)
-```
-
-At each roll the backtester MUST emit an audit row with both contract identifiers and prices. Reconciliation MUST satisfy:
-
-```text
-|total_net_pnl - (spot_component + roll_component - explicit_costs)| < 1e-8   # normalized
-|total_net_pnl - (spot_component + roll_component - explicit_costs)| < $0.01  # dollar P&L
-```
-
-The RESULTS doc emits an attribution table (IS / OOS × spot / roll / costs) plus a reconciliation check row. The pass gate requires `roll_component` to contribute >50% of gross OOS P&L and to be net-positive in OOS. This is the second anti-self-deception gate (orthogonal to the TSMOM control): even if roll beats TSMOM, if the roll *strategy's* P&L comes from spot drift rather than roll switches, it's DISCARD.
-
-### 5.1 Contract-level accounting algorithm (binding)
-
-All P&L is computed in **dollars** from settlement prices, contract multipliers, and signed contract counts. Let `M` = multiplier, `N` = signed contracts (+ long, − short), `S_t` = settlement on day `t`.
-
-**Non-roll days** (same contract identity held from `t-1` to `t`):
-
-```text
-spot_component[t] = (S_t - S_{t-1}) * M * N
-roll_component[t] = 0
-```
-
-**Roll-switch days** (close contract `A`, open contract `B`):
-
-```text
-close_fill_A = S_A_t - slippage_A_exit      # modeled fill, baseline tier
-open_fill_B  = S_B_t + slippage_B_entry
-
-roll_component[t] = (close_fill_A - S_A_{t-1}) * M * N     # finalize A
-                  + (S_B_t - open_fill_B) * M * N          # open B (same N)
-spot_component[t] = 0
-```
-
-Slippage signs follow position direction: long exits are worse at lower prices; short exits are worse at higher prices. Roll slippage (cost model §2.3) is charged separately in `explicit_costs`, not embedded in fills unless the cost model doc explicitly maps ticks into fill prices (it does — slippage is applied to fills; roll slippage is an additional tick charge at roll).
-
-**Portfolio aggregation:**
-
-```text
-total_net_pnl = Σ_t (spot_component[t] + roll_component[t]) - explicit_costs
+  total_pre_cost[t]  = settlement MTM on the held contract (§5.1)
+  roll_component[t]  = economic roll-yield accrual from F1–F2 basis convergence (§5.1)
+  spot_component[t]  = total_pre_cost[t] - roll_component[t]
+  explicit_costs     = commission + slippage dollar charges (cost model §2; NOT in settlement path)
 ```
 
 **Reconciliation (per position, per market, portfolio):**
@@ -199,9 +166,50 @@ total_net_pnl = Σ_t (spot_component[t] + roll_component[t]) - explicit_costs
 |total_net_pnl - (spot_component + roll_component - explicit_costs)| < $0.01
 ```
 
-Normalized-return unit tests MAY additionally require `< 1e-8` on per-market return series scaled by initial margin or notional.
+The RESULTS doc emits an attribution table (IS / OOS × spot / roll / costs) plus a reconciliation check row. The pass gate requires `roll_component` to contribute >50% of gross OOS pre-friction P&L and to be positive in OOS.
 
-**Forbidden shortcuts:** Do not derive `spot_component` from the ratio-adjusted continuous series. The continuous series is for the TSMOM control and sanity checks only.
+### 5.1 Contract-level accounting algorithm (binding)
+
+All **price-path P&L** uses **settlement prices only**. Slippage and commission are **never** embedded in fill prices; they appear only in `explicit_costs` as dollar charges at entry, exit, and roll events (cost model §2).
+
+Let `M` = multiplier, `N` = signed contracts (+ long, − short), `S^held_t` = settlement on the contract held at end of day `t`.
+
+**Daily settlement MTM (all days, including roll-switch days):**
+
+```text
+total_pre_cost[t] = (S^held_t - S^held_{t-1}) * M * N
+```
+
+On a roll-switch day at settlement: close `F1` at `S_F1_t`, open `F2` at `S_F2_t`. The held contract for day `t` is still `F1`, so `S^held_t = S_F1_t`. Position in `F2` begins at `t`; its MTM starts on `t+1`.
+
+**Economic roll-yield accrual (basis convergence while holding the front contract):**
+
+```text
+roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) / max(days_to_F1_expiry_{t-1}, 1)
+```
+
+Where `F1` = active front contract at `t-1`, `F2` = next deferred contract, and `days_to_F1_expiry` = calendar days from `t-1` to `F1` expiry. Sign of `N` applies through the formula (long earns positive accrual when `F1 > F2` in backwardation).
+
+```text
+spot_component[t] = total_pre_cost[t] - roll_component[t]
+```
+
+This is the Gorton-style decomposition: roll yield is **basis convergence during the hold**, not the mechanical P&L of switching between differently priced contracts.
+
+**Portfolio aggregation:**
+
+```text
+total_net_pnl = Σ_t total_pre_cost[t] - explicit_costs
+              = Σ_t (spot_component[t] + roll_component[t]) - explicit_costs
+```
+
+At each roll the backtester MUST emit an audit row: old contract, new contract, settlements, `total_pre_cost[t]`, `roll_component[t]`, `spot_component[t]`, and slippage/commission charged in `explicit_costs`.
+
+**Forbidden shortcuts:**
+
+- Do not label contract-switch gap P&L as `roll_component`.
+- Do not embed slippage in settlement or fill prices and also charge slippage in `explicit_costs`.
+- Do not derive `spot_component` from the ratio-adjusted continuous series (TSMOM control / sanity only).
 
 ---
 
@@ -240,20 +248,20 @@ PF(window) = sum(r_m where r_m > 0) / abs(sum(r_m where r_m < 0))
 
 If the denominator is 0 (no losing months), PF is undefined → DISCARD with reason `"no losing months — insufficient loss sample for PF"`.
 
-**Gross PF:** same formula with `explicit_costs = 0` and slippage fills at settlement (no tick slippage).
+**Gross PF:** same formula on `total_pre_cost` monthly returns (`explicit_costs = 0`; settlement path only).
 
-**Net PF:** same formula with baseline-tier `explicit_costs` and slippage fills per cost model.
+**Net PF:** same formula on `total_net_pnl` monthly returns (baseline-tier `explicit_costs`).
 
-All promotion gates use **OOS net PF** unless explicitly labeled otherwise.
+**OOS sanctity:** OOS months are not consulted until Stage 2. Stage 1 uses **IS gross PF only** to qualify for net/OOS evaluation.
 
 ### 7.2 Verdict ladder
 
 ```
-STAGE 1 — GROSS (full sample, costs = 0):
-  if gross_pf_full <= 1.10:  → DISCARD "gross PF near 1.0, no edge before costs"
+STAGE 1 — GROSS (IS only, costs = 0):
+  if gross_pf_is <= 1.10:  → DISCARD "gross PF near 1.0, no edge before costs"
   else: GROSS_PASS
 
-STAGE 2 — NET (OOS only, baseline tier):
+STAGE 2 — NET (OOS only, baseline tier; first OOS gate):
   if oos_net_pf < 1.20:  → DISCARD "baseline OOS net PF < 1.20"
   else: NET_PASS
 
@@ -277,12 +285,17 @@ STAGE 4 — ATTRIBUTION + CONTROL (OOS only):
   if roll_oos <= 0:  → DISCARD "roll component not positive in OOS"
   if roll_oos / gross_oos_pnl <= 0.50:  → DISCARD "edge dominated by spot drift"
   if roll_yield_oos_net_pf <= tsmom_oos_net_pf + 0.10:  → DISCARD "repackaged TSMOM"
-  if max_y |net_pnl_y| / |net_pnl_oos_total| > 0.25:  → DISCARD "concentrated in one year"
-  if max_s |net_pnl_s| / |net_pnl_oos_total| > 0.50:  → DISCARD "concentrated in one sector"
+  positive_profit_y = max(net_pnl_y, 0)   # net_pnl_y = OOS daily total_net_pnl by calendar year
+  total_positive_profit = sum_y positive_profit_y
+  if total_positive_profit <= 0:  → DISCARD "no positive OOS profit to concentrate"
+  if max_y (positive_profit_y / total_positive_profit) > 0.25:  → DISCARD "concentrated in one year"
+  positive_profit_s = max(net_pnl_s, 0)   # by sector metadata
+  total_positive_profit_sector = sum_s positive_profit_s
+  if max_s (positive_profit_s / total_positive_profit_sector) > 0.50:  → DISCARD "concentrated in one sector"
   else: KEEP
 ```
 
-Where `net_pnl_y` = sum of OOS daily `total_net_pnl` in calendar year `y`; `net_pnl_s` = same by sector metadata; `net_pnl_oos_total` = sum over all OOS days.
+Concentration uses **positive-profit contribution**, not absolute P&L ratios. This avoids false triggers when years or sectors net negative.
 
 **Trade-count definition (Gap A, pre-committed):** "one trade" = one market's directional position change at a rebalance (entry, exit, or flip). With ≥5 complete OOS calendar years (~60 monthly rebalance events) and a 12-market commodity universe, the expected event count is well above any reasonable threshold; the 3-month block bootstrap (Stage 3) replaces the fixed ≥30 rule with a robustness check appropriate to slow strategies. This satisfies profitability-plan rule 4's "separate pre-written statistical bar for slower-term strategies."
 
@@ -296,14 +309,14 @@ Where `net_pnl_y` = sum of OOS daily `total_net_pnl` in calendar year `y`; `net_
 
 - **On Phase-1 start (already done, commit `cc9d32b`):** seed `research/new_edge/research_ledger.jsonl` with `{lane: "term_structure_roll_yield", status: "phase1_manifest"}`.
 - **On test run:** append a row with `{status: "tested", gross_pf, net_pf, oos_pf, verdict}` matching the existing `vol_regime` row schema.
-- **On DISCARD:** append lane 7 to `docs/research/CLOSED_RESEARCH_LANES.md` (status, one-paragraph finding, numbers, pointer to RESULTS doc) and one line to `docs/PROJECT_STATUS_2026-06.md`. Pre-commit the closure entry shape now so it can't be skipped: *"Lane 7 (term-structure roll yield): DISCARD — [reason]. See ROLL_YIELD_RESULTS_YYYY-MM-DD.md. Do not retune quintile, rebalance, vol-target, universe, or horizon."*
+- **On DISCARD:** append lane 7 to `docs/research/CLOSED_RESEARCH_LANES.md` (status, one-paragraph finding, numbers, pointer to RESULTS doc) and one line to `docs/PROJECT_STATUS_2026-06.md`. Pre-commit the closure entry shape now so it can't be skipped: _"Lane 7 (term-structure roll yield): DISCARD — [reason]. See ROLL_YIELD_RESULTS_YYYY-MM-DD.md. Do not retune quintile, rebalance, vol-target, universe, or horizon."_
 - **On KEEP:** do **not** promote to paper-shadow automatically. Promotion requires the profitability plan's separate paper-shadow gate (≥30d run, kill switch, risk limits) and explicit owner authorization.
 
 ---
 
 ## 9. Non-goals (pre-committed constraints)
 
-- **No live trading integration.** No broker, no `src/cli.py`, no Telegram, no Branch B. Research-only until a KEEP verdict *and* a separate promotion decision.
+- **No live trading integration.** No broker, no `src/cli.py`, no Telegram, no Branch B. Research-only until a KEEP verdict _and_ a separate promotion decision.
 - **No parameter optimization.** Quintile, rebalance, vol-target window, and universe are fixed in §3. Sweep/autosearch is explicitly out of scope for this lane (the FX autosearch pattern is not imported here — Gap D).
 - **No rescue overlays.** A DISCARD is terminal.
 - **No optimistic-only verdicts.** Enforced in `judge.py`.
@@ -313,7 +326,7 @@ Where `net_pnl_y` = sum of OOS daily `total_net_pnl` in calendar year `y`; `net_
 
 ## 10. Implementation order (when #4 is authorized)
 
-Only after (a) owner data-source decision and (b) §7 data-quality gate passes for ≥10 markets:
+Only after (a) owner data-source authorization and (b) Tier A verifier returns `DATA_PASS`:
 
 1. `data/loader.py` + the chosen concrete loader + `SyntheticLoader` for unit tests.
 2. `signal.py` + `control_tsmom.py` (pure functions, unit-testable on synthetic data).

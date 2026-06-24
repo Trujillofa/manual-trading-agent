@@ -2,7 +2,7 @@
 
 **Status:** Phase-1 deliverable for Premise #1 (futures term-structure / roll yield). Gate-definition only.
 **Authority:** `docs/research/CANDIDATE_PREMISES_NEW_CLASS_2026-06.md` (accepted premise #1) + `research/program.md` re-entry protocol + `docs/research/PROFITABILITY_PLAN_2026-06.md` rule "no strategy logic until data and cost model are documented."
-**Scope of this doc:** define exactly what data must exist, where it comes from, and the hard stop — *before* any strategy code.
+**Scope of this doc:** define exactly what data must exist, where it comes from, and the hard stop — _before_ any strategy code.
 
 ---
 
@@ -16,17 +16,17 @@ This phrasing is deliberate: the attribution (roll vs spot) is the whole point, 
 
 ## 2. The core data-engineering requirement (this is the real gate)
 
-**Roll yield cannot be computed from a back-adjusted continuous series.** Back-adjustment (Panama/ratio/calendar) removes exactly the price gaps at roll that *are* the roll yield. A continuous series alone is sufficient for spot-P&L representation and for the TSMOM control run, but **not** for measuring the signal itself.
+**Roll yield cannot be computed from a back-adjusted continuous series.** Back-adjustment (Panama/ratio/calendar) removes exactly the price gaps at roll that _are_ the roll yield. A continuous series alone is sufficient for spot-P&L representation and for the TSMOM control run, but **not** for measuring the signal itself.
 
 Therefore the data manifest requires, for each market:
 
-| Data object | Used for | Source shape |
-|---|---|---|
-| **Individual contract OHLC + open interest** by expiry (e.g., `CLZ2025`, `CLF2026`) | Computing front-vs-deferred spread → **roll yield (the signal)** + selecting the active contract by open interest | Per-contract daily bars |
-| **Continuous series** (ratio/multiplicative back-adjusted, max-OI roll) | Spot-P&L representation + **TSMOM control run** | Single series per market |
-| **Roll calendar** (active-contract switch dates, with OI/volume confirmation) | Timing rebalance, roll-cost accounting, attribution | Derived from individual-contract OI |
+| Data object                                                                         | Used for                                                                                                          | Source shape                        |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| **Individual contract OHLC + open interest** by expiry (e.g., `CLZ2025`, `CLF2026`) | Computing front-vs-deferred spread → **roll yield (the signal)** + selecting the active contract by open interest | Per-contract daily bars             |
+| **Continuous series** (ratio/multiplicative back-adjusted, max-OI roll)             | Spot-P&L representation + **TSMOM control run**                                                                   | Single series per market            |
+| **Roll calendar** (active-contract switch dates, with OI/volume confirmation)       | Timing rebalance, roll-cost accounting, attribution                                                               | Derived from individual-contract OI |
 
-This three-object requirement is the **hard gate.** A data source that provides only a continuous series is *insufficient* for this lane, regardless of how clean or cheap it is.
+This three-object requirement is the **hard gate.** A data source that provides only a continuous series is _insufficient_ for this lane, regardless of how clean or cheap it is.
 
 ---
 
@@ -34,20 +34,20 @@ This three-object requirement is the **hard gate.** A data source that provides 
 
 v1 uses **one economic carry definition** across commodity futures only. Equity-index futures (ES, NQ) and Treasury futures (ZN, ZB) are **excluded from v1** — they carry different curve mechanics and would require asset-class-specific definitions. Candidates for v2 expansion only if v1 clears gates.
 
-| Sector | Market | Symbol | Notes |
-|---|---|---|---|
-| Energy | WTI crude | CL | most liquid commodity future |
-| Energy | Natural gas | NG | seasonal, strong curve structure |
-| Energy | RBOB gasoline | RB | energy complex |
-| Energy | Heating oil | HO | energy complex |
-| Metals | Gold | GC | |
-| Metals | Silver | SI | |
-| Metals | Copper | HG | growth/cycle proxy |
-| Agriculture | Corn | ZC | |
-| Agriculture | Soybeans | ZS | |
-| Agriculture | Wheat (CBOT) | ZW | |
-| Livestock | Live cattle | LE | |
-| Livestock | Lean hogs | HE | |
+| Sector      | Market        | Symbol | Notes                            |
+| ----------- | ------------- | ------ | -------------------------------- |
+| Energy      | WTI crude     | CL     | most liquid commodity future     |
+| Energy      | Natural gas   | NG     | seasonal, strong curve structure |
+| Energy      | RBOB gasoline | RB     | energy complex                   |
+| Energy      | Heating oil   | HO     | energy complex                   |
+| Metals      | Gold          | GC     |                                  |
+| Metals      | Silver        | SI     |                                  |
+| Metals      | Copper        | HG     | growth/cycle proxy               |
+| Agriculture | Corn          | ZC     |                                  |
+| Agriculture | Soybeans      | ZS     |                                  |
+| Agriculture | Wheat (CBOT)  | ZW     |                                  |
+| Livestock   | Live cattle   | LE     |                                  |
+| Livestock   | Lean hogs     | HE     |                                  |
 
 **Gate:** ≥10 of these 12 must clear the data-quality checklist (§7) for ≥15 complete years each before any backtest. The verifier MAY reject individual markets, but rejected markets **must not** be replaced after seeing strategy results. If fewer than 10 clear, **STOP** — record as data-blocked. Do not proceed with a thin universe that violates profitability-plan rule 3 ("do not judge from a single symbol or period").
 
@@ -67,17 +67,17 @@ v1 uses **one economic carry definition** across commodity futures only. Equity-
 
 ## 5. Candidate data sources (owner decision: free-tier vs paid)
 
-| Source | Individual contracts? | Continuous? | Coverage / history | Cost | Suitability |
-|---|---|---|---|---|---|
-| **FirstRate Data** | yes | yes (gap-adjusted) | ~130 active futures, daily + intraday, back to 2007 | paid (verify tier) | **Strong candidate** — meets §2 three-object requirement |
-| **Norgate Data** (futures package) | yes | yes (Norgate-continuous) | broad futures, decades | paid subscription | **Strong candidate** — popular for futures research; pricing + coverage **needs verification** |
-| **CSI Data** (Unfair Advantage) | yes | yes | deep history, many markets | paid | Strong; institutional-leaning cost |
-| **Pinnacle Data Corp** | yes | yes | commodity-futures focus, deep | paid | Strong for commodities |
-| **CME settlement files** | yes | no (build your own) | authoritative, free | free + build effort | Authoritative primary; requires stitching |
-| **Quandl / Nasdaq Data Link (Sharadar)** | partial | yes | varies | paid | Verify per-market availability |
-| **yfinance** | **no** (continuous only) | yes | gaps, symbol-map fragility | free | **Insufficient for this lane** (fails §2) — usable only as a sanity cross-check on the continuous series |
+| Source                                   | Individual contracts?    | Continuous?              | Coverage / history                                  | Cost                | Suitability                                                                                              |
+| ---------------------------------------- | ------------------------ | ------------------------ | --------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------- |
+| **FirstRate Data**                       | yes                      | yes (gap-adjusted)       | ~130 active futures, daily + intraday, back to 2007 | paid (verify tier)  | **Strong candidate** — meets §2 three-object requirement                                                 |
+| **Norgate Data** (futures package)       | yes                      | yes (Norgate-continuous) | broad futures, decades                              | paid subscription   | **Strong candidate** — popular for futures research; pricing + coverage **needs verification**           |
+| **CSI Data** (Unfair Advantage)          | yes                      | yes                      | deep history, many markets                          | paid                | Strong; institutional-leaning cost                                                                       |
+| **Pinnacle Data Corp**                   | yes                      | yes                      | commodity-futures focus, deep                       | paid                | Strong for commodities                                                                                   |
+| **CME settlement files**                 | yes                      | no (build your own)      | authoritative, free                                 | free + build effort | Authoritative primary; requires stitching                                                                |
+| **Quandl / Nasdaq Data Link (Sharadar)** | partial                  | yes                      | varies                                              | paid                | Verify per-market availability                                                                           |
+| **yfinance**                             | **no** (continuous only) | yes                      | gaps, symbol-map fragility                          | free                | **Insufficient for this lane** (fails §2) — usable only as a sanity cross-check on the continuous series |
 
-**Required owner decision before Phase-1 build:** authorize a paid source that provides individual contracts (FirstRate / Norgate / CSI / Pinnacle), **or** accept the free path of stitching CME settlement files (higher build effort, narrower coverage). The manifest does not prescribe the choice; it prescribes the *requirement* (§2). If no path satisfies §2 within the owner's budget/effort tolerance, the lane is **data-blocked** and is recorded as such (see lane 3's "blocked" precedent) rather than run on insufficient data.
+**Required owner decision before Phase-1 build:** authorize a paid source that provides individual contracts (FirstRate / Norgate / CSI / Pinnacle), **or** accept the free path of stitching CME settlement files (higher build effort, narrower coverage). The manifest does not prescribe the choice; it prescribes the _requirement_ (§2). If no path satisfies §2 within the owner's budget/effort tolerance, the lane is **data-blocked** and is recorded as such (see lane 3's "blocked" precedent) rather than run on insufficient data.
 
 ---
 
@@ -96,26 +96,26 @@ annualized_curve_slope =
 
 `calendar_days_between_expiries` MUST be positive and derived from contract metadata (expiry dates of F1 and F2). The fixed `12 × log(F1/F2)` monthly approximation is **forbidden** — maturity spacing varies by market and roll cycle.
 
+**Non-positive settlement rule (binding):** `log()` is undefined for `≤ 0`. If either `F1_close ≤ 0` or `F2_close ≤ 0` on a signal date (e.g., WTI April 2020), that market-day is **excluded from ranking** for that rebalance. The RESULTS doc MUST report the count of excluded market-days. If exclusions exceed 1% of market-days in OOS for any accepted market, flag as a data-quality warning (not auto-DISCARD, but auditable). Alternative slope for diagnostics only (not for signal): `(F1 - F2) / max(F2, ε)` when both are positive; never use log on non-positive prices.
+
 Sign convention: **positive** annualized curve slope when the front trades at a **premium** to the next (backwardation for a long, i.e., you are paid to roll long); **negative** when contangoed. Rank markets cross-sectionally by this value.
 
 **Continuous-series construction (for spot P&L + TSMOM control only):** multiplicative (ratio) back-adjustment, active contract = max open interest, roll on the OI-crossover day. Ratio (not Panama/additive) is chosen because additive adjustment can produce negative prices on long histories, distorting log-returns.
 
-**Settlement-based mark-to-market accounting (binding):** the backtester MUST calculate daily variation-margin P&L from raw **settlement** prices and contract multipliers. At each roll:
+**Settlement-based mark-to-market accounting (binding):** the backtester MUST calculate daily variation-margin P&L from raw **settlement** prices and contract multipliers. Slippage and commission are dollar charges in `explicit_costs`, not embedded in settlement fills (see harness spec §5.1 and cost model §2).
 
-1. Close the old contract at its settlement (or modeled fill).
-2. Open the replacement contract at its settlement (or modeled fill).
-3. Record execution slippage and roll slippage separately.
-4. Preserve an audit row containing both contract identifiers and prices.
-
-For every position and for the portfolio:
+Economic decomposition:
 
 ```text
-total_net_pnl = spot_component + roll_component - explicit_costs
+total_pre_cost[t] = (S^held_t - S^held_{t-1}) * M * N
+roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) / max(days_to_F1_expiry_{t-1}, 1)
+spot_component[t] = total_pre_cost[t] - roll_component[t]
+total_net_pnl     = Σ total_pre_cost[t] - explicit_costs
 ```
 
-The reconciliation difference MUST be less than `1e-8` in normalized-return tests and less than `$0.01` in dollar-P&L tests. Attribution is derived from this accounting identity, not from a parallel continuous-series shortcut.
+Reconciliation: `|total_net_pnl - (spot_component + roll_component - explicit_costs)| < $0.01`.
 
-**Attribution accounting:** every realized position P&L decomposes into (a) spot component — price change on the held contract excluding roll gaps — and (b) roll component — P&L from contract switches at roll dates. The pass gate requires (b) to dominate (>50% of gross OOS P&L). This is the direct, pre-committed response to review Gap B (TSMOM adjacency).
+**Attribution accounting:** roll yield is **basis convergence during the hold**, not contract-switch gap P&L. The pass gate requires economic `roll_component` to dominate (>50% of gross OOS pre-friction P&L). This is the direct response to review Gap B (TSMOM adjacency).
 
 ---
 

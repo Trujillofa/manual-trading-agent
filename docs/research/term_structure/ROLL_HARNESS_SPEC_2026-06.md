@@ -121,7 +121,9 @@ def rank_by_roll_yield(market_data: dict[str, MarketData], as_of: date) -> pd.Se
     annualized_curve_slope =
         (log(F1_close) - log(F2_close)) * 365 / calendar_days_between_expiries
     where F1 = active contract (max OI), F2 = next expiry.
-    calendar_days_between_expiries is positive, from contract metadata.
+    calendar_days_between_expiries =
+        (date(F2_expiry) - date(F1_expiry)).days   # F2 expires later; must be > 0
+    assert calendar_days_between_expiries > 0
     Skip market if F1_close <= 0 or F2_close <= 0 (manifest §6 non-positive rule).
     Positive = backwardation (paid to roll long); negative = contango."""
 ```
@@ -130,7 +132,7 @@ def rank_by_roll_yield(market_data: dict[str, MarketData], as_of: date) -> pd.Se
 
 - Rebalance: **monthly** (last trading day of month).
 - Universe each rebalance: all markets passing the §7 data-quality gate.
-- Portfolio construction: long the top backwardated quintile, short the bottom contangoed quintile, equal-risk-weighted by trailing 60-day realized vol (vol-target, not equal-notional — standard for cross-sectional futures).
+- Portfolio construction: long the top backwardated quintile, short the bottom contangoed quintile, equal-risk-weighted by trailing 60-day realized vol of `daily_excess_pnl` (dollar P&L on the max-OI roll calendar; vol-target, not equal-notional — standard for cross-sectional futures).
 - Hold: positions held until next monthly rebalance; rolls executed at the OI-crossover in the roll calendar.
 
 **No overlays.** No RSI, no breakout, no ADX, no session filter. Any post-hoc "let me add a filter to rescue this" is a closed-lane violation and is rejected at code review.
@@ -150,7 +152,7 @@ def tsmom_signal(market_data: MarketData, as_of: date) -> int:
     """Per-market signal: sign of trailing 252-trading-day sum of daily_excess_pnl.
     +1 if sum > 0, -1 if sum < 0, 0 if insufficient history.
     Portfolio: long markets with +1, short markets with -1.
-    Risk weighting: same trailing 60-day realized-vol method as signal.py.
+    Risk weighting: trailing 60-day realized vol of market_data.tsmom_daily_excess_pnl (same dollar-P&L series as the signal).
     Costs and universe: identical to the roll-yield run."""
 ```
 
@@ -186,7 +188,7 @@ total_net_pnl = spot_component + roll_component - explicit_costs
 |total_net_pnl - (spot_component + roll_component - explicit_costs)| < $0.01
 ```
 
-The RESULTS doc emits an attribution table (IS / OOS × spot / roll / costs) plus a reconciliation check row. The pass gate requires `roll_component` to contribute >50% of gross OOS pre-friction P&L and to be positive in OOS.
+The RESULTS doc emits an attribution table (IS / OOS × spot / roll / costs) plus a reconciliation check row. The pass gate requires `roll_component` to be positive in OOS and to contribute >50% of gross OOS pre-friction P&L. `judge.py` MUST discard when `gross_oos_pnl <= 0` before evaluating `roll_oos / gross_oos_pnl` (avoids divide-by-zero and misleading passes on negative gross P&L).
 
 ### 5.1 Contract-level accounting algorithm (binding)
 
@@ -225,11 +227,13 @@ Trading observations are sparse (no weekend rows). Accrual MUST scale by **calen
 ```text
 basis_{t-1} = S_F1_{t-1} - S_F2_{t-1}
 calendar_days_elapsed = (date(t) - date(t_prev)).days    # e.g. Fri→Mon = 3
-calendar_days_between_expiries = F1_expiry - F2_expiry   # same denominator as signal §3
+calendar_days_between_expiries =
+    (date(F2_expiry) - date(F1_expiry)).days   # same denominator as signal §3
+assert calendar_days_between_expiries > 0
 
 roll_component[t] =
     N * M * basis_{t-1} * calendar_days_elapsed
-    / max(calendar_days_between_expiries, 1)
+    / calendar_days_between_expiries
 ```
 
 Where `t_prev` is the prior trading date with a position open. Do not use `days_to_F1_expiry` — inconsistent with signal and explodes near front expiry.
@@ -328,6 +332,7 @@ STAGE 3 — STATISTICAL BAR (OOS only, baseline tier):
 STAGE 4 — ATTRIBUTION + CONTROL (OOS only):
   gross_oos_pnl = spot_oos + roll_oos   # pre-friction
   if roll_oos <= 0:  → DISCARD "roll component not positive in OOS"
+  if gross_oos_pnl <= 0:  → DISCARD "gross OOS P&L not positive"
   if roll_oos / gross_oos_pnl <= 0.50:  → DISCARD "edge dominated by spot drift"
   if roll_yield_oos_net_pf <= tsmom_oos_net_pf + 0.10:  → DISCARD "repackaged TSMOM"
   positive_profit_y = max(net_pnl_y, 0)   # net_pnl_y = OOS daily total_net_pnl by calendar year

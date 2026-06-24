@@ -94,7 +94,12 @@ annualized_curve_slope =
     / calendar_days_between_expiries
 ```
 
-`calendar_days_between_expiries` MUST be positive and derived from contract metadata (expiry dates of F1 and F2). The fixed `12 × log(F1/F2)` monthly approximation is **forbidden** — maturity spacing varies by market and roll cycle.
+```text
+calendar_days_between_expiries = (date(F2_expiry) - date(F1_expiry)).days
+assert calendar_days_between_expiries > 0
+```
+
+F2 expires later than F1; do not subtract in reverse. The fixed `12 × log(F1/F2)` monthly approximation is **forbidden** — maturity spacing varies by market and roll cycle.
 
 **Non-positive settlement rule (binding):** `log()` is undefined for `≤ 0`. If either `F1_close ≤ 0` or `F2_close ≤ 0` on a signal date (e.g., WTI April 2020), that market-day is **excluded from ranking** for that rebalance. The RESULTS doc MUST report the count of excluded market-days. If exclusions exceed 1% of market-days in OOS for any accepted market, flag as a data-quality warning (not auto-DISCARD, but auditable). Alternative slope for diagnostics only (not for signal): `(F1 - F2) / max(F2, ε)` when both are positive; never use log on non-positive prices.
 
@@ -108,12 +113,12 @@ Economic decomposition:
 
 ```text
 total_pre_cost[t] = MTM on active contract only (never cross-contract delta)
-roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) * calendar_days_elapsed / max(calendar_days_between_expiries_{t-1}, 1)
+roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) * calendar_days_elapsed / calendar_days_between_expiries_{t-1}
 spot_component[t] = total_pre_cost[t] - roll_component[t]
 total_net_pnl     = Σ total_pre_cost[t] - explicit_costs
 ```
 
-`calendar_days_elapsed` = calendar days from prior trading date `t_prev` to `t` (e.g. Friday→Monday = 3). Not one trading day per row. `calendar_days_between_expiries` = F1 expiry → F2 expiry (same denominator as signal `annualized_curve_slope`).
+`calendar_days_elapsed` = calendar days from prior trading date `t_prev` to `t` (e.g. Friday→Monday = 3). Not one trading day per row. `calendar_days_between_expiries` = `(date(F2_expiry) - date(F1_expiry)).days` (same denominator as signal `annualized_curve_slope`; assert > 0).
 
 Reconciliation: `|total_net_pnl - (spot_component + roll_component - explicit_costs)| < $0.01`.
 
@@ -152,7 +157,7 @@ Captured here as placeholders the data layer must enable; quantified in the next
 The harness spec (`ROLL_HARNESS_SPEC_2026-06.md`, next Phase-1 deliverable) **must** encode:
 
 - **Gap D — Isolation from FX STOP guard.** New entrypoint path `research/new_edge/term_structure/run.py` (sibling to the FX-specific `research/run_experiment.py`). The FX negative-result STOP guard in `research/autosearch.py` / `research/run_experiment.py` is scoped to the FX engine and must not gate futures entrypoints. Document the scoping explicitly.
-- **Gap B — TSMOM control run.** The harness runs, in addition to the roll-yield portfolio, a **true time-series momentum (TSMOM) control** on the identical universe: signal per market = sign of trailing **252-trading-day** continuous-series return; monthly rebalance on the same dates; same trailing-volatility risk weighting; identical costs. Cross-sectional spot momentum MAY be reported as a secondary diagnostic but MUST NOT replace the TSMOM control. **Pass-gate condition:** roll-yield OOS net PF must exceed TSMOM OOS net PF by ≥0.10, and roll P&L must contribute >50% of gross OOS P&L. If TSMOM matches/beats, the verdict is **"repackaged TSMOM → DISCARD,"** not KEEP.
+- **Gap B — TSMOM control run.** The harness runs, in addition to the roll-yield portfolio, a **true time-series momentum (TSMOM) control** on the identical universe: signal per market = `sign(Σ last 252 trading days of daily_excess_pnl)` where `daily_excess_pnl[t] = (S^held_t - prior_settlement) * M` (harness spec §2.1; additive dollar P&L, not continuous-series returns or compounded indices); monthly rebalance on the same dates; trailing **60-day realized volatility** for risk weighting computed from that same `daily_excess_pnl` dollar series (not ratio returns); identical costs. Cross-sectional spot momentum MAY be reported as a secondary diagnostic but MUST NOT replace the TSMOM control. **Pass-gate condition:** roll-yield OOS net PF must exceed TSMOM OOS net PF by ≥0.10, and roll P&L must contribute >50% of gross OOS P&L (judge discards when `gross_oos_pnl <= 0` before the ratio). If TSMOM matches/beats, the verdict is **"repackaged TSMOM → DISCARD,"** not KEEP.
 - **Gap A — Trade-count + statistical bar.** Deterministic 3-month block bootstrap over OOS monthly portfolio returns: 2,000 resamples, seed `20260624`, pass when 5th-percentile bootstrapped net PF > 1.0.
 - **Gap E — Ledger + closure hygiene.** Seed a `research/new_edge/research_ledger.jsonl` row at Phase-1 start (lane 7, status=in_progress). On DISCARD, append lane 7 to `docs/research/CLOSED_RESEARCH_LANES.md` and one line to `docs/PROJECT_STATUS_2026-06.md`. Pre-commit the closure entry now.
 - **IS/OOS discipline:** one chronological 65/35 holdout; OOS contains ≥5 complete calendar years; OOS is sacred and never tuned against.

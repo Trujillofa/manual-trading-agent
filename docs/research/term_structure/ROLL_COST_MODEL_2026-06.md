@@ -84,12 +84,12 @@ Every position's realized dollar P&L decomposes as:
 total_net_pnl = spot_component + roll_component - explicit_costs
 
   total_pre_cost[t] = MTM on active contract via prior_settlement state (§5.1; no F2-vs-F1 cross delta)
-  roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) * calendar_days_elapsed / max(calendar_days_between_expiries_{t-1}, 1)
+  roll_component[t] = N * M * (S_F1_{t-1} - S_F2_{t-1}) * calendar_days_elapsed / calendar_days_between_expiries_{t-1}
   spot_component[t] = total_pre_cost[t] - roll_component[t]
   explicit_costs    = commission(§2.1) + slippage dollar charges(§2.2–2.3); NOT in settlement path
 ```
 
-`calendar_days_between_expiries` matches the signal denominator (F1 expiry → F2 expiry). `calendar_days_elapsed` = calendar days from prior trading date to current (e.g. Friday→Monday = 3). At each roll the backtester MUST: (1) record F1 close MTM against `prior_settlement`, (2) store `opening_settlement_F2 = S_F2_t` and set `prior_settlement ← S_F2_t`, (3) charge slippage/commission in `explicit_costs`, and (4) emit an audit row with contract identifiers, settlements, and accrual decomposition.
+`calendar_days_between_expiries = (date(F2_expiry) - date(F1_expiry)).days` (assert > 0; same denominator as signal). `calendar_days_elapsed` = calendar days from prior trading date to current (e.g. Friday→Monday = 3). At each roll the backtester MUST: (1) record F1 close MTM against `prior_settlement`, (2) store `opening_settlement_F2 = S_F2_t` and set `prior_settlement ← S_F2_t`, (3) charge slippage/commission in `explicit_costs`, and (4) emit an audit row with contract identifiers, settlements, and accrual decomposition.
 
 **Reconciliation requirement (binding):** for every position and the portfolio aggregate,
 
@@ -100,8 +100,9 @@ total_net_pnl = spot_component + roll_component - explicit_costs
 
 **Pass-gate attribution condition (pre-committed, cannot be relaxed):**
 
-- `roll_component` must contribute **> 50%** of pre-friction gross OOS P&L (`roll_oos / (spot_oos + roll_oos) > 0.50`), AND
-- `roll_component` must be **positive** in OOS (pre-friction; friction is in `explicit_costs`).
+- `roll_component` must be **positive** in OOS (pre-friction; friction is in `explicit_costs`), AND
+- `gross_oos_pnl = spot_oos + roll_oos` must be **> 0** (judge discards before the ratio if not), AND
+- `roll_component` must contribute **> 50%** of pre-friction gross OOS P&L (`roll_oos / gross_oos_pnl > 0.50`).
 
 If `spot_component` dominates → the strategy is spot-directional in disguise → **DISCARD** with reason "edge dominated by spot drift, not roll yield" (this is the lane-3 failure mode, pre-empted).
 

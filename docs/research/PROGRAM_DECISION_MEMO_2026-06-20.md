@@ -1,9 +1,11 @@
 # Forex Program Decision Memo — 2026-06-20
 
-**Repository:** `manual-trading-agent` (forex-exclusive)  
-**Decision date:** 2026-06-20  
-**Base context:** [`PROFITABILITY_PLAN_2026-06.md`](PROFITABILITY_PLAN_2026-06.md), [`CLOSED_RESEARCH_LANES.md`](CLOSED_RESEARCH_LANES.md)  
+**Repository:** `manual-trading-agent` (production forex; see addendum for research scope)
+**Decision date:** 2026-06-20
+**Base context:** [`PROFITABILITY_PLAN_2026-06.md`](PROFITABILITY_PLAN_2026-06.md), [`CLOSED_RESEARCH_LANES.md`](CLOSED_RESEARCH_LANES.md)
 **Audience:** Humans and agents deciding what to build, run, or fund next in this repo.
+
+> **Scope update (2026-06-24):** [`PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md`](PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md) supersedes the forex-exclusive **research** restriction below. Production/Branch B remains forex-only. Isolated listed-futures research under `research/new_edge/` is authorized. All forex lane stop rules in this memo remain binding.
 
 ---
 
@@ -33,11 +35,11 @@ Continuing to tune parameters, widen universes, or add filters on discarded lane
 
 The external `vibe-investing` repository was reviewed for transferable ideas. Its strongest crypto hypothesis — **token unlock 72-hour shock** — was independently falsified by `crypto-agent` on fresh Binance data:
 
-| Metric | Result |
-|---|---|
-| Negative at 72h | 49.0% |
-| Mean return at 72h | +0.98% |
-| Paper claim | Did not survive independent prices |
+| Metric             | Result                             |
+| ------------------ | ---------------------------------- |
+| Negative at 72h    | 49.0%                              |
+| Mean return at 72h | +0.98%                             |
+| Paper claim        | Did not survive independent prices |
 
 **Conclusion:** No crypto follow-up is needed in this repo. Event-token / unlock-shock research belongs elsewhere, if anywhere.
 
@@ -47,15 +49,15 @@ The external `vibe-investing` repository was reviewed for transferable ideas. It
 
 All lanes from the 2026-06 New Edge Program have written verdicts. **None are KEEP.**
 
-| Lane | Status | One-line finding |
-|---|---|---|
-| FX directional TA (M15/H1 OHLC) | **CLOSED** | Gross PF ~1.0–1.07 across ORB and trend-pullback; live MTF variant extremely sparse |
-| Daily multi-asset TSMOM | **CLOSED** | Gross PF 1.036, weak Sharpe; no edge before costs |
-| Carry / swap (Hetzner cTrader) | **CLOSED_DISCARD** | All resolved pairs returned 0.0 swap; financing premise absent on account |
-| Stat-arb (daily pairs z-score) | **DISCARD** | Gross pass on two spreads; OOS net PF failed gates |
-| Event calendar data proof | **DATA_PASS** | Pinned HF snapshot validated (83k rows, 2007–2025); infrastructure only |
-| Event surprise drift | **DISCARD** | Gross PF 1.200; OOS net PF 0.375 after widened spreads |
-| Vol-regime compression breakout | **DISCARD** | Gross PF 1.114; OOS net PF 0.782 after 6-pip round-trip |
+| Lane                            | Status             | One-line finding                                                                    |
+| ------------------------------- | ------------------ | ----------------------------------------------------------------------------------- |
+| FX directional TA (M15/H1 OHLC) | **CLOSED**         | Gross PF ~1.0–1.07 across ORB and trend-pullback; live MTF variant extremely sparse |
+| Daily multi-asset TSMOM         | **CLOSED**         | Gross PF 1.036, weak Sharpe; no edge before costs                                   |
+| Carry / swap (Hetzner cTrader)  | **CLOSED_DISCARD** | All resolved pairs returned 0.0 swap; financing premise absent on account           |
+| Stat-arb (daily pairs z-score)  | **DISCARD**        | Gross pass on two spreads; OOS net PF failed gates                                  |
+| Event calendar data proof       | **DATA_PASS**      | Pinned HF snapshot validated (83k rows, 2007–2025); infrastructure only             |
+| Event surprise drift            | **DISCARD**        | Gross PF 1.200; OOS net PF 0.375 after widened spreads                              |
+| Vol-regime compression breakout | **DISCARD**        | Gross PF 1.114; OOS net PF 0.782 after 6-pip round-trip                             |
 
 Authoritative detail: [`CLOSED_RESEARCH_LANES.md`](CLOSED_RESEARCH_LANES.md) and per-lane result documents under `docs/research/<lane>/`.
 
@@ -125,13 +127,13 @@ Maintain for operability and future **qualifying** research only.
 
 ## Immediate Actions
 
-| Action | Owner | Status |
-|---|---|---|
-| Halt new-edge falsifier development on discarded lanes | Agents / humans | **Now** |
-| Keep Branch B scanner running for observability | Ops (Hetzner) | Continue |
-| Do not promote, retune, or paper-shadow any discarded family | All | **Now** |
-| Consult this memo + `CLOSED_RESEARCH_LANES.md` before proposing work | All agents | **Required** |
-| Future forex research: new premise → contract → data proof → gates → code | Future program | Only path in |
+| Action                                                                    | Owner           | Status       |
+| ------------------------------------------------------------------------- | --------------- | ------------ |
+| Halt new-edge falsifier development on discarded lanes                    | Agents / humans | **Now**      |
+| Keep Branch B scanner running for observability                           | Ops (Hetzner)   | Continue     |
+| Do not promote, retune, or paper-shadow any discarded family              | All             | **Now**      |
+| Consult this memo + `CLOSED_RESEARCH_LANES.md` before proposing work      | All agents      | **Required** |
+| Future forex research: new premise → contract → data proof → gates → code | Future program  | Only path in |
 
 ---
 
@@ -143,4 +145,4 @@ The 2026-06 forex profitability program is **complete with a negative result**. 
 
 ---
 
-*Related documents:* [`CLOSED_RESEARCH_LANES.md`](CLOSED_RESEARCH_LANES.md) · [`PROFITABILITY_PLAN_2026-06.md`](PROFITABILITY_PLAN_2026-06.md) · [`PROJECT_STATUS_2026-06.md`](../PROJECT_STATUS_2026-06.md) · [`GROK_RESEARCH_LOOP_ENGINEERING.md`](GROK_RESEARCH_LOOP_ENGINEERING.md)
+_Related documents:_ [`CLOSED_RESEARCH_LANES.md`](CLOSED_RESEARCH_LANES.md) · [`PROFITABILITY_PLAN_2026-06.md`](PROFITABILITY_PLAN_2026-06.md) · [`PROJECT_STATUS_2026-06.md`](../PROJECT_STATUS_2026-06.md) · [`GROK_RESEARCH_LOOP_ENGINEERING.md`](GROK_RESEARCH_LOOP_ENGINEERING.md)

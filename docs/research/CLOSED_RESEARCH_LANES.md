@@ -68,7 +68,26 @@ Re-opening without a new premise violates the fail-fast discipline.
   - Ledger row: `research/new_edge/research_ledger.jsonl` (lane `vol_regime`, status `DISCARD`)
 - **Rule**: Do not retune compression percentile, persistence, entry window (07:00-17:00 UTC), 24-bar hold, pairs, or H1 timeframe. This is not permission to reopen unconditional Donchian/ORB directional TA.
 
-## New Edge Program Lane Scoreboard (2026-06-20)
+## 7. CFTC COT Non-Commercial Positioning Reversal
+
+- **Status**: RELATIONSHIP_FAIL / CLOSED (2026-06-30)
+- **Core Finding**: Official CFTC data proof passed for all 23 fixed markets, but the
+  preregistered 4-week reversal relationship failed on 22 markets with price coverage.
+  IS slope was weakly negative (-0.00315, one-sided p=0.0506); OOS slope reversed
+  positive (+0.00938, p=0.9991). The highest-positioning OOS quintile outperformed
+  the lowest by 0.965%, only 50% of market slopes were negative, and the reversal
+  ranked at the 1.6th percentile of within-market shuffled signals.
+- **References**:
+  - `docs/research/cot_positioning/COT_RELATIONSHIP_CONTRACT_2026-06.md`
+  - `docs/research/cot_positioning/COT_RELATIONSHIP_RESULTS_2026-06.md`
+  - `research/new_edge/cot_positioning/relationship.py`
+  - Ledger row: `research/new_edge/research_ledger.jsonl` (lane `cot_positioning`,
+    status `RELATIONSHIP_FAIL`)
+- **Rule**: Do not tune positioning lookback, percentile thresholds, forward horizon,
+  market subset, or add price filters to rescue the reversal premise. A materially
+  different positioning thesis requires a new prewritten contract.
+
+## New Edge Program Lane Scoreboard (2026-06-30)
 
 | Lane | Status |
 |---|---|
@@ -79,6 +98,7 @@ Re-opening without a new premise violates the fail-fast discipline.
 | Event data proof (HF calendar) | DATA_PASS |
 | Event surprise drift | DISCARD |
 | Vol-regime compression breakout | DISCARD |
+| COT positioning reversal | RELATIONSHIP_FAIL / CLOSED |
 
 **Deferred (not a standalone alpha lane):** Microstructure / execution-quality research should not proceed unless tied to an already-positive gross edge. It must not be used to rescue discarded signals.
 

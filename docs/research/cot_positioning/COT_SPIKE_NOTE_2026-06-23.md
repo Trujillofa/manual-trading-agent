@@ -2,6 +2,12 @@
 
 **Status:** Spike note, not the program thesis. COT is a **separate pre-registered lane** (Premise #6) authorized after PR #26 merges per [`PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md`](../PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md). It is **not** a seven-pair FX directional system — the universe is **≥15 COT-reported listed-futures markets** (energy, metals, ags, livestock, financials as coverage allows).
 
+> **2026-06-25 update:** The environment boundary and resume plan below are
+> superseded by [`COT_CONTRACT_2026-06.md`](COT_CONTRACT_2026-06.md). The current
+> implementation uses the official CFTC Public Reporting Environment Legacy
+> Futures Only API (dataset `6dca-aqww`) directly; it does not depend on
+> `cot_reports` or historical bulk-file URL discovery.
+
 This note records what the spike verified and where it hit an environment boundary, so the next session can resume without rediscovering it.
 
 ---

@@ -79,6 +79,15 @@ v1 uses **one economic carry definition** across commodity futures only. Equity-
 
 **Required owner decision before Tier A build:** authorize a paid source that provides individual contracts (FirstRate / Norgate / CSI / Pinnacle), **or** accept the free path of stitching CME settlement files (higher build effort, narrower coverage). Tier A MUST implement the corresponding **concrete loader** and run the verifier through it; `SyntheticLoader` alone cannot produce `DATA_PASS`. If no path satisfies §2 within the owner's budget/effort tolerance, the lane is **data-blocked** and is recorded as such (see lane 3's "blocked" precedent) rather than run on insufficient data.
 
+**Owner decision and live result (2026-06-30):** the free CME path was selected and
+implemented as `CMEStitchLoader` plus an expanded-PA2 downloader/parser and source
+verifier. The parser smoke normalized 533 settlements across all 12 fixed markets.
+The live public-FTP inventory contains 3,043 final files from 2014-01-02 through
+2025-09-12 (11.69 years), below the 15-complete-year gate. Expanded PA2 provides
+contract settlements but not daily OHLC or contract-month open interest, so it
+cannot derive the required OI-confirmed roll calendar. Tier A therefore exits
+`BLOCKED`; see `CME_FREE_DATA_AUDIT_2026-06-30.md`. Tier B remains unauthorized.
+
 ---
 
 ## 6. Roll-yield computation and roll convention (pre-committed)
@@ -188,4 +197,7 @@ Before committing to paid futures data (§5 owner decision), an optional COT-loa
 
 **Governance:** [`PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md`](../PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md) authorizes isolated listed-futures research; production Branch B remains forex-only.
 
-**Immediate owner decision to unblock #4:** the §5 data-source choice (paid individual-contract feed vs CME-stitch free path vs data-blocked). Tier-A loader/verifier code is authorized before #4; see harness spec authorization tiers.
+**Current blocker for #4:** the selected free CME path is implemented but failed the
+pre-written data gate. A source with individual-contract daily OHLC, contract-month
+open interest, and at least 15 complete years is required. Do not relax those gates
+or begin Tier B.

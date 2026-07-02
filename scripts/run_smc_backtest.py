@@ -55,6 +55,8 @@ TagFilter = Literal["all", "bos", "choch"]
 StructureTimeframe = Literal["15m", "1h", "4h"]
 
 _TIMEFRAME_FREQ = {"15m": "15min", "1h": "1h", "4h": "4h"}
+PREREGISTERED_COMPARISON_NAME = "smc_preregistered_comparison.md"
+OPTIMAL_COMPARISON_NAME = "smc_optimal_comparison.md"
 
 
 @dataclass(frozen=True)
@@ -913,13 +915,20 @@ def main() -> int:
     report_path, trades_path = _write_report(args.output_dir, report_rows, all_trades)
     compare_path = write_comparison_report(
         eval_rows,
-        args.output_dir / "smc_optimal_comparison.md",
+        args.output_dir / PREREGISTERED_COMPARISON_NAME,
+        title="SMC Preregistered Variant Comparison",
     )
     best = best_eval_row(eval_rows)
-    print(f"Most optimal: {best.name} (score={best.score:.4f}, verdict={best.verdict})")
+    print(
+        f"Best preregistered: {best.name} (score={best.score:.4f}, verdict={best.verdict})"
+    )
     print(f"Report: {report_path}")
     print(f"Trades: {trades_path}")
-    print(f"Comparison: {compare_path}")
+    print(f"Preregistered comparison: {compare_path}")
+    print(
+        f"For overall optimal (incl. autosearch winner) run: "
+        f"python -m research.smc_autosearch → results/{OPTIMAL_COMPARISON_NAME}"
+    )
     return 0
 
 

@@ -181,7 +181,7 @@ def test_same_bar_exit_does_not_arm_new_structure_signal() -> None:
 
     from scripts.run_smc_backtest import PreparedSmcData, run_prepared_backtest
 
-    break_at = 5
+    prior_break = 5
     entry_at = 6
     index = pd.date_range("2026-01-01", periods=12, freq="15min", tz="UTC")
     opens = [1.1000] * len(index)
@@ -190,13 +190,22 @@ def test_same_bar_exit_does_not_arm_new_structure_signal() -> None:
     closes = [1.1000] * len(index)
     highs[entry_at] = 1.1020
     lows[entry_at] = 1.0980
-    event = StructureBreak(
-        bar_index=break_at,
+    prior_event = StructureBreak(
+        bar_index=prior_break,
         direction="long",
         tag="BOS",
         pivot_level=1.0990,
         pivot_bar_index=2,
         swing_top=1.1010,
+        swing_bottom=1.0980,
+    )
+    same_bar_event = StructureBreak(
+        bar_index=entry_at,
+        direction="short",
+        tag="CHoCH",
+        pivot_level=1.1015,
+        pivot_bar_index=4,
+        swing_top=1.1020,
         swing_bottom=1.0980,
     )
     prepared = PreparedSmcData(
@@ -209,7 +218,9 @@ def test_same_bar_exit_does_not_arm_new_structure_signal() -> None:
         parsed_lows=lows,
         usd_per_quote=[1.0] * len(index),
         atr_by_period={14: [0.001] * len(index)},
-        breaks_by_spec={("15m", 50): {break_at: event}},
+        breaks_by_spec={
+            ("15m", 50): {prior_break: prior_event, entry_at: same_bar_event},
+        },
     )
     config = StrategyConfig(
         name="immediate_guard",
@@ -220,6 +231,7 @@ def test_same_bar_exit_does_not_arm_new_structure_signal() -> None:
     )
     result = run_prepared_backtest("EUR/USD", prepared, config)
     assert len(result.trades) == 1
+    assert result.trades[0].direction == "long"
     assert result.trades[0].entry_time == index[entry_at]
     assert result.trades[0].exit_time == index[entry_at]
 

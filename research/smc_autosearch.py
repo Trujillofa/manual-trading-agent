@@ -36,6 +36,7 @@ from scripts.run_htf_fib_backtest import (
 )
 from scripts.run_smc_backtest import (
     CONFIGS,
+    OPTIMAL_COMPARISON_NAME,
     EvalRow,
     PreparedSmcData,
     StrategyConfig,
@@ -54,7 +55,7 @@ from research.smc_config import CONFIG, PARAM_SPACE
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = Path(__file__).resolve().parent / "smc_results.tsv"
 BEST_JSON = Path(__file__).resolve().parent / "smc_best_config.json"
-COMPARE_REPORT = ROOT / "results" / "smc_optimal_comparison.md"
+COMPARE_REPORT = ROOT / "results" / OPTIMAL_COMPARISON_NAME
 HEADER = (
     "ts\tscore\tis_pf\tis_pnl_pct\tis_trades\toos_pf\toos_pnl_pct\toos_trades\t"
     "status\tentry_mode\ttag_filter\tdescription\n"

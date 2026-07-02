@@ -35,6 +35,7 @@ from scripts.run_donchian_backtest import fetch_pair
 from scripts.run_htf_fib_backtest import (
     DEFAULT_PAIRS,
     IS_FRACTION,
+    MIN_WINDOW_TRADES,
     BacktestResult,
     Trade,
     WindowStats,
@@ -476,6 +477,7 @@ def run_prepared_backtest(
         high = prepared.highs[i]
         low = prepared.lows[i]
         close = prepared.closes[i]
+        exited_this_bar = False
 
         if pending_direction is not None and position is None:
             position = pending_direction
@@ -558,8 +560,9 @@ def run_prepared_backtest(
                 )
                 result.ending_balance_usd = balance
                 position = None
+                exited_this_bar = True
 
-        if position is not None or pending_direction is not None:
+        if position is not None or pending_direction is not None or exited_this_bar:
             continue
 
         if pending_ob is not None:
@@ -675,7 +678,7 @@ def score_window_stats(is_stats: WindowStats, oos_stats: WindowStats) -> float:
     if oos_stats.trades < 1:
         return float("-inf")
     overfit_gap = max(0.0, is_stats.total_net_pnl_pct - oos_stats.total_net_pnl_pct)
-    lown = max(0, 30 - oos_stats.trades)
+    lown = max(0, MIN_WINDOW_TRADES - oos_stats.trades)
     return float(oos_stats.total_net_pnl_pct - 0.5 * overfit_gap - 0.25 * lown)
 
 
@@ -697,6 +700,15 @@ def evaluate_config_on_pairs(
     return EvalRow(config.name, score, decision, ins, oos, rationale)
 
 
+def best_eval_row(rows: list[EvalRow]) -> EvalRow:
+    """Return the highest-scoring row, ignoring zero-trade (-inf) configs."""
+
+    finite = [row for row in rows if math.isfinite(row.score)]
+    if not finite:
+        return max(rows, key=lambda row: row.score)
+    return max(finite, key=lambda row: row.score)
+
+
 def write_comparison_report(
     rows: list[EvalRow],
     output_path: Path,
@@ -704,7 +716,7 @@ def write_comparison_report(
     title: str = "SMC Optimal Configuration Comparison",
 ) -> Path:
     ranked = sorted(rows, key=lambda row: row.score, reverse=True)
-    best = ranked[0]
+    best = best_eval_row(rows)
     lines = [
         f"# {title}",
         "",
@@ -850,8 +862,12 @@ def main() -> int:
         return 1
     conversion_closes = load_usd_conversion_closes(pair_data, args.days)
 
+    from research.smc_config import CONFIG as AUTOSEARCH_CONFIG
+
+    autosearch_seed_cfg = config_from_dict({**AUTOSEARCH_CONFIG, "name": "autosearch_baseline"})
     break_specs = {config.structure_spec for config in CONFIGS}
-    atr_periods = {config.atr_period for config in CONFIGS} | {200}
+    break_specs.add(autosearch_seed_cfg.structure_spec)
+    atr_periods = {config.atr_period for config in CONFIGS} | {autosearch_seed_cfg.atr_period, 200}
     prepared = {
         pair: prepare_smc_data(
             pair,
@@ -885,12 +901,21 @@ def main() -> int:
         if reasons and reasons != ["All minimum gates passed."]:
             print("  " + "; ".join(reasons))
 
+    eval_rows.append(
+        evaluate_config_on_pairs(
+            autosearch_seed_cfg,
+            pair_data,
+            prepared,
+            cutoff_by_pair,
+        )
+    )
+
     report_path, trades_path = _write_report(args.output_dir, report_rows, all_trades)
     compare_path = write_comparison_report(
         eval_rows,
         args.output_dir / "smc_optimal_comparison.md",
     )
-    best = max(eval_rows, key=lambda row: row.score)
+    best = best_eval_row(eval_rows)
     print(f"Most optimal: {best.name} (score={best.score:.4f}, verdict={best.verdict})")
     print(f"Report: {report_path}")
     print(f"Trades: {trades_path}")

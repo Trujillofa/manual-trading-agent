@@ -40,6 +40,7 @@ from scripts.run_smc_backtest import (
     PreparedSmcData,
     StrategyConfig,
     _ensure_break_schedule,
+    best_eval_row,
     config_from_dict,
     evaluate_config_on_pairs,
     prepare_smc_data,
@@ -299,7 +300,7 @@ def main() -> int:
     )
     all_rows = preregistered + [search_row]
     compare_path = write_comparison_report(all_rows, COMPARE_REPORT)
-    best_overall = max(all_rows, key=lambda row: row.score)
+    best_overall = best_eval_row(all_rows)
 
     print("\n=== SMC search done ===")
     print(

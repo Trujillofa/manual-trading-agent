@@ -176,6 +176,54 @@ def test_build_break_schedule_on_resampled_htf_has_no_lookahead() -> None:
     assert all(idx >= 2 for idx in schedule)
 
 
+def test_same_bar_exit_does_not_arm_new_structure_signal() -> None:
+    """Exiting on the entry bar must not also arm a break scheduled that bar."""
+
+    from scripts.run_smc_backtest import PreparedSmcData, run_prepared_backtest
+
+    break_at = 5
+    entry_at = 6
+    index = pd.date_range("2026-01-01", periods=12, freq="15min", tz="UTC")
+    opens = [1.1000] * len(index)
+    highs = [1.1005] * len(index)
+    lows = [1.0995] * len(index)
+    closes = [1.1000] * len(index)
+    highs[entry_at] = 1.1020
+    lows[entry_at] = 1.0980
+    event = StructureBreak(
+        bar_index=break_at,
+        direction="long",
+        tag="BOS",
+        pivot_level=1.0990,
+        pivot_bar_index=2,
+        swing_top=1.1010,
+        swing_bottom=1.0980,
+    )
+    prepared = PreparedSmcData(
+        timestamps=[pd.Timestamp(ts) for ts in index],
+        opens=opens,
+        highs=highs,
+        lows=lows,
+        closes=closes,
+        parsed_highs=highs,
+        parsed_lows=lows,
+        usd_per_quote=[1.0] * len(index),
+        atr_by_period={14: [0.001] * len(index)},
+        breaks_by_spec={("15m", 50): {break_at: event}},
+    )
+    config = StrategyConfig(
+        name="immediate_guard",
+        entry_mode="immediate",
+        max_hold_bars=0,
+        tp_atr=10.0,
+        sl_atr=0.5,
+    )
+    result = run_prepared_backtest("EUR/USD", prepared, config)
+    assert len(result.trades) == 1
+    assert result.trades[0].entry_time == index[entry_at]
+    assert result.trades[0].exit_time == index[entry_at]
+
+
 def test_synthetic_backtest_produces_trades() -> None:
     from scripts.run_smc_backtest import PreparedSmcData, build_break_schedule, run_prepared_backtest
 

@@ -2,7 +2,7 @@
 // Strategy Tester version of the confirmed-HTF-pivot Fib indicator.
 //
 // Backtest assumptions:
-// - Run on a standard 15-minute candle chart.
+// - Run on a time-based chart below 4H (15-minute recommended for backtest parity).
 // - HTF pivots use a one-bar historical offset with lookahead_on. This avoids
 //   repainting but intentionally delays each event by one additional HTF bar.
 // - Market entries fill on the next bar open under TradingView's default model.
@@ -13,7 +13,7 @@
 //   not available in this script.
 strategy(
     "Confirmed HTF Pivots + Fib + EMA Strategy",
-    shorttitle="HTF Fib Strategy",
+    shorttitle="HTF Fib",
     overlay=true,
     pyramiding=1,
     initial_capital=100000,
@@ -123,11 +123,11 @@ int baselineShortRsi = input.int(
 bool showTable = input.bool(false, "Show Values Table", group="Table")
 
 float chartTimeframeSeconds = timeframe.in_seconds()
-float fifteenMinuteSeconds = timeframe.in_seconds("15")
+float fourHourSeconds = timeframe.in_seconds("240")
 if barstate.isfirst and (
-    na(chartTimeframeSeconds) or chartTimeframeSeconds != fifteenMinuteSeconds
+    na(chartTimeframeSeconds) or chartTimeframeSeconds >= fourHourSeconds
 )
-    runtime.error("Run this strategy on a standard 15-minute time-based chart.")
+    runtime.error("Use on a time-based chart below 4H (15m recommended).")
 
 bool hardened = logicMode == "Hardened MTF"
 float ema50 = ta.ema(close, ema50Length)

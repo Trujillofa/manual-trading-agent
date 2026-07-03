@@ -271,16 +271,18 @@ def map_htf_schedule_to_ltf(
     htf_timestamps: list[pd.Timestamp],
     htf_schedule: dict[int, StructureBreak],
     ltf_timestamps: list[pd.Timestamp],
+    timeframe: StructureTimeframe,
 ) -> dict[int, StructureBreak]:
-    """Map HTF close-time breaks onto the first 15m bar at/after HTF bar open."""
+    """Map HTF breaks onto the first LTF bar at or after the source bar closes."""
 
     if not ltf_timestamps:
         return {}
+    close_offset = pd.Timedelta(_TIMEFRAME_FREQ[timeframe])
     ltf_epoch = [int(timestamp.value) for timestamp in ltf_timestamps]
     mapped: dict[int, StructureBreak] = {}
     for htf_index, event in htf_schedule.items():
-        htf_time = htf_timestamps[htf_index]
-        ltf_index = bisect.bisect_left(ltf_epoch, int(htf_time.value))
+        available_at = htf_timestamps[htf_index] + close_offset
+        ltf_index = bisect.bisect_left(ltf_epoch, int(available_at.value))
         if ltf_index >= len(ltf_timestamps):
             continue
         mapped[ltf_index] = StructureBreak(
@@ -396,7 +398,12 @@ def _ensure_break_schedule(
             swing_length,
         )
         htf_timestamps = [pd.Timestamp(timestamp) for timestamp in htf.index]
-        schedule = map_htf_schedule_to_ltf(htf_timestamps, htf_schedule, prepared.timestamps)
+        schedule = map_htf_schedule_to_ltf(
+            htf_timestamps,
+            htf_schedule,
+            prepared.timestamps,
+            timeframe,
+        )
     prepared.breaks_by_spec[spec] = schedule
 
 
@@ -690,10 +697,7 @@ def evaluate_config_on_pairs(
     prepared: dict[str, PreparedSmcData],
     cutoff_by_pair: dict[str, pd.Timestamp],
 ) -> EvalRow:
-    results = [
-        run_prepared_backtest(pair, prepared[pair], config)
-        for pair in pair_data
-    ]
+    results = [run_prepared_backtest(pair, prepared[pair], config) for pair in pair_data]
     ins = aggregate_window(results, cutoff_by_pair, oos=False)
     oos = aggregate_window(results, cutoff_by_pair, oos=True)
     decision, reasons = verdict(ins, oos)
@@ -724,9 +728,9 @@ def write_comparison_report(
         "",
         f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}",
         "",
-        "## Most optimal configuration",
+        "## Least-negative searched candidate",
         "",
-        f"**{best.name}** ranks first by OOS-penalized score ({best.score:.4f}).",
+        f"**{best.name}** ranks first by the declared search score ({best.score:.4f}).",
         f"Rationale: {best.rationale}",
         "",
         "| Config | Score | Verdict | IS Trades | IS Net PF | IS Net PnL | "
@@ -745,9 +749,9 @@ def write_comparison_report(
             "",
             "## Notes",
             "",
-            "- Ranking uses OOS net PnL minus overfit and low-N penalties (same family as HTF Fib autosearch).",
+            "- Autosearch ranking uses validation net PnL minus overfit and low-N penalties.",
             "- A top score does not imply KEEP gates passed; check Verdict column.",
-            "- Order blocks, internal structure, and FVG were not traded in this harness.",
+            "- Tested entries include structure markers, CHoCH, order-block retests, and HTF swing maps.",
             "",
         )
     )
@@ -919,9 +923,7 @@ def main() -> int:
         title="SMC Preregistered Variant Comparison",
     )
     best = best_eval_row(eval_rows)
-    print(
-        f"Best preregistered: {best.name} (score={best.score:.4f}, verdict={best.verdict})"
-    )
+    print(f"Best preregistered: {best.name} (score={best.score:.4f}, verdict={best.verdict})")
     print(f"Report: {report_path}")
     print(f"Trades: {trades_path}")
     print(f"Preregistered comparison: {compare_path}")

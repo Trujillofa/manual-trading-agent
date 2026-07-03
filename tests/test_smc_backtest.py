@@ -5,19 +5,25 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from research.smc_autosearch import _config_name, _filter_results
+from scripts.run_htf_fib_backtest import BacktestResult, Trade
 from scripts.run_smc_backtest import (
+    EvalRow,
     PendingObRetest,
+    PreparedSmcData,
+    StrategyConfig,
     StructureBreak,
     StructureTracker,
-    StrategyConfig,
+    WindowStats,
     _accept_break,
     _in_discount_half,
-    _in_premium_half,
     build_break_schedule,
     compute_order_block,
     map_htf_schedule_to_ltf,
     ob_mitigated,
     ob_retest_triggered,
+    run_prepared_backtest,
+    write_comparison_report,
 )
 
 
@@ -131,7 +137,7 @@ def test_ob_mitigated_when_close_breaks_zone() -> None:
     assert ob_mitigated(pending, 1.10, 1.096, 1.098) is False
 
 
-def test_htf_schedule_maps_to_first_ltf_bar_at_or_after_htf_open() -> None:
+def test_htf_schedule_maps_to_first_ltf_bar_at_or_after_htf_close() -> None:
     htf_times = [
         pd.Timestamp("2026-01-01 10:00", tz="UTC"),
         pd.Timestamp("2026-01-01 11:00", tz="UTC"),
@@ -140,6 +146,7 @@ def test_htf_schedule_maps_to_first_ltf_bar_at_or_after_htf_open() -> None:
         pd.Timestamp("2026-01-01 10:45", tz="UTC"),
         pd.Timestamp("2026-01-01 11:00", tz="UTC"),
         pd.Timestamp("2026-01-01 11:15", tz="UTC"),
+        pd.Timestamp("2026-01-01 12:00", tz="UTC"),
     ]
     htf_event = StructureBreak(
         bar_index=1,
@@ -150,10 +157,11 @@ def test_htf_schedule_maps_to_first_ltf_bar_at_or_after_htf_open() -> None:
         swing_top=1.12,
         swing_bottom=1.08,
     )
-    mapped = map_htf_schedule_to_ltf(htf_times, {1: htf_event}, ltf_times)
-    assert 1 in mapped
-    assert mapped[1].direction == "long"
-    assert mapped[1].bar_index == 1
+    mapped = map_htf_schedule_to_ltf(htf_times, {1: htf_event}, ltf_times, "1h")
+    assert 3 in mapped
+    assert mapped[3].direction == "long"
+    assert mapped[3].bar_index == 3
+    assert all(index >= 3 for index in mapped)
 
 
 def test_build_break_schedule_on_resampled_htf_has_no_lookahead() -> None:
@@ -176,10 +184,65 @@ def test_build_break_schedule_on_resampled_htf_has_no_lookahead() -> None:
     assert all(idx >= 2 for idx in schedule)
 
 
+def test_comparison_report_uses_archival_language(tmp_path) -> None:
+    stats = WindowStats(1, 0.0, 0.0, 0.5, -1.0, 1.0, 0, 1)
+    path = write_comparison_report(
+        [EvalRow("candidate", -1.0, "DISCARD", stats, stats, "failed")],
+        tmp_path / "comparison.md",
+    )
+    report = path.read_text(encoding="utf-8")
+    assert "Least-negative searched candidate" in report
+    assert "Most optimal" not in report
+    assert "order-block retests" in report
+
+
+def test_filter_results_keeps_holdout_out_of_search_windows() -> None:
+    times = pd.date_range("2026-01-01", periods=4, freq="1h", tz="UTC")
+    trades = [
+        Trade(
+            pair="EUR/USD",
+            config="candidate",
+            account_name="risk_fraction",
+            entry_time=timestamp,
+            exit_time=timestamp,
+            direction="long",
+            entry_price=1.0,
+            exit_price=1.0,
+            exit_reason="time",
+            gross_r=0.0,
+            net_r=0.0,
+            net_pnl_usd=0.0,
+            net_pnl_pct=0.0,
+            lots=1.0,
+        )
+        for timestamp in times
+    ]
+    result = BacktestResult(pair="EUR/USD", config="candidate", trades=trades)
+    selected = _filter_results(
+        [result],
+        start_by_pair={"EUR/USD": times[0]},
+        end_by_pair={"EUR/USD": times[2]},
+    )
+    assert [trade.entry_time for trade in selected[0].trades] == [times[1], times[2]]
+
+
+def test_config_name_includes_atr_period() -> None:
+    config = {
+        "entry_mode": "immediate",
+        "tag_filter": "all",
+        "swing_length": 50,
+        "structure_timeframe": "15m",
+        "ob_retest_bars": 16,
+        "atr_period": 10,
+        "tp_atr": 3.0,
+        "sl_atr": 2.5,
+        "max_hold_bars": 16,
+    }
+    assert "_atr10_" in _config_name(config)
+
+
 def test_same_bar_exit_does_not_arm_new_structure_signal() -> None:
     """Exiting on the entry bar must not also arm a break scheduled that bar."""
-
-    from scripts.run_smc_backtest import PreparedSmcData, run_prepared_backtest
 
     prior_break = 5
     entry_at = 6
@@ -237,8 +300,6 @@ def test_same_bar_exit_does_not_arm_new_structure_signal() -> None:
 
 
 def test_synthetic_backtest_produces_trades() -> None:
-    from scripts.run_smc_backtest import PreparedSmcData, build_break_schedule, run_prepared_backtest
-
     index = pd.date_range("2026-01-01", periods=400, freq="15min", tz="UTC")
     base = 1.1000
     highs = []

@@ -38,7 +38,6 @@ from scripts.run_htf_fib_backtest import (
     verdict,
 )
 from scripts.run_smc_backtest import (
-    CONFIGS,
     OPTIMAL_COMPARISON_NAME,
     EvalRow,
     PreparedSmcData,
@@ -46,7 +45,6 @@ from scripts.run_smc_backtest import (
     _ensure_break_schedule,
     best_eval_row,
     config_from_dict,
-    evaluate_config_on_pairs,
     prepare_smc_data,
     run_prepared_backtest,
     score_window_stats,
@@ -296,22 +294,6 @@ def _load_context(pairs: list[str], days: int) -> SearchContext:
     )
 
 
-def _preregistered_rows(ctx: SearchContext) -> list[EvalRow]:
-    rows: list[EvalRow] = []
-    for config in CONFIGS:
-        for pair, frame in ctx.frames.items():
-            _ensure_break_spec(ctx.prepared[pair], frame, config)
-        rows.append(
-            evaluate_config_on_pairs(
-                config,
-                ctx.frames,
-                ctx.prepared,
-                ctx.validation_starts,
-            )
-        )
-    return rows
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--iters", type=int, default=100)
@@ -384,18 +366,9 @@ def main() -> int:
                 search_best_cfg, search_best_score, search_best_result = cand, res.score, res
             if res.verdict == "KEEP" and res.score > best_keep_score:
                 best_keep_score = res.score
-                payload = {
-                    "config": best_cfg,
-                    "strategy": asdict(res.config),
-                    "verdict": res.verdict,
-                    "reasons": res.reasons,
-                    "is": asdict(res.is_stats),
-                    "oos": asdict(res.oos_stats),
-                }
-                BEST_JSON.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-                print(f"        ^ new KEEP-verdict best written to {BEST_JSON.name}")
+                print("        ^ candidate passed IS/validation gates; holdout remains untouched")
                 if args.stop_on_keep:
-                    print("STOP: KEEP-verdict config found.")
+                    print("STOP: IS/validation candidate found; evaluating final holdout.")
                     break
 
     pre_holdout, holdout, final_verdict, final_reasons = evaluate_holdout(
@@ -454,6 +427,19 @@ def main() -> int:
     }
     MANIFEST.parent.mkdir(parents=True, exist_ok=True)
     MANIFEST.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    if final_verdict == "KEEP":
+        payload = {
+            "config": search_best_cfg,
+            "strategy": asdict(search_best_result.config),
+            "verdict": final_verdict,
+            "reasons": final_reasons,
+            "selection_is": asdict(search_best_result.is_stats),
+            "selection_validation": asdict(search_best_result.oos_stats),
+            "final_holdout": asdict(holdout),
+            "run_id": run_id,
+            "manifest": str(MANIFEST.relative_to(ROOT)),
+        }
+        BEST_JSON.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
     print("\n=== SMC search done ===")
     print(
@@ -469,13 +455,14 @@ def main() -> int:
     )
     print(f"Comparison report: {compare_path}")
     print(f"Run manifest: {MANIFEST}")
-    if best_keep_score > float("-inf"):
-        print(f"Best KEEP-verdict config saved to {BEST_JSON}")
+    if final_verdict == "KEEP":
+        print(f"Final holdout KEEP config saved to {BEST_JSON}")
     else:
         print(
-            "No config passed KEEP gates. Locked gates: "
-            f"IS/OOS trades >= {MIN_WINDOW_TRADES}, "
-            f"OOS net PF >= {MIN_OOS_PROFIT_FACTOR:.2f}, positive IS/OOS net PnL."
+            "Selected candidate failed final holdout gates. Locked gates: "
+            f"pre-holdout/holdout trades >= {MIN_WINDOW_TRADES}, "
+            f"holdout net PF >= {MIN_OOS_PROFIT_FACTOR:.2f}, "
+            "positive pre-holdout/holdout net PnL."
         )
     return 0
 

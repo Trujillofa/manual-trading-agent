@@ -45,6 +45,9 @@ research is **terminated** (locked + agent-guarded). The system's honest posture
   and parses all 12 fixed markets, but Tier A is data-blocked. The live public archive
   has 11.69 years (15 required) and lacks contract-month OHLC/open interest, so no
   OI-confirmed roll calendar or Tier-B strategy test is authorized.
+- PEAD: a docs-only contract defines the next data-proof lane for point-in-time
+  US equity earnings surprises. No source has passed, no purchase is authorized,
+  and no relationship or strategy code may begin before `DATA_PASS`.
 
 ## Key evidence (the diagnostic table)
 
@@ -66,3 +69,5 @@ Restart FX-majors OHLC directional TA (guarded). Cite retired promotion numbers.
 Tune costs or parameters of a ~1.0 gross base. Run correlated 4th TA variants.
 Extend or retune a daily TSMOM result that failed the gross gate at PF ≈ 1.03–1.04 / weak Sharpe (this lane is archived).
 Build or tune a COT reversal strategy after its fixed relationship test failed OOS.
+Write PEAD relationship or strategy code before point-in-time earnings,
+survivorship, timestamp, and delisting data pass the written gate.

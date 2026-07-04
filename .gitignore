@@ -57,6 +57,10 @@ research/run.log
 
 # Local agent state and experiment artifacts
 .commandcode/
+.cleo/
+.serena/
+claudedocs/
+.research-archive/
 
 # Claude local overrides
 .claude/settings.local.json
@@ -66,4 +70,5 @@ pi-session-*.html
 
 # TradingView scripts (local experiments, not part of repo)
 *.pine
+!pine_scripts/htf_pivots_fib_ema_strategy.pine
 scripts/run_tradingview_strategy_backtest.py

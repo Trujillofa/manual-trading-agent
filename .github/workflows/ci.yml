@@ -31,9 +31,6 @@ jobs:
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
-    # Advisory until fix/mypy-errors lands (24 known errors on main as of 2026-07-06).
-    # Remove continue-on-error once `mypy src/` is clean.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

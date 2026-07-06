@@ -25,7 +25,10 @@ from src.indicators.candlestick import (
     detect_patterns,
 )
 from src.indicators.ema import (
+    EMACrossover,
     EMACrossoverType,
+    EMAPriceTouch,
+    EMASlope,
     EMASlopeDirection,
     calculate_ema,
     detect_crossover,
@@ -47,6 +50,8 @@ from src.indicators.rsi import (
 from src.indicators.sma import calculate_sma
 from src.news.news_checker import NewsChecker
 from src.notifications.digest import (
+    EmaCandidate,
+    EmaSignalEntry,
     SetupCandidate,
     build_setup_digest_message,
     digest_fingerprint,
@@ -242,7 +247,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     scan_run_id = now_utc.isoformat()
     confirmed_pairs: set[str] = set()
     ema_near_state = _load_ema_near_state() if notifier else {}
-    ema_candidates: list[dict[str, object]] = []
+    ema_candidates: list[EmaCandidate] = []
     # Expire trades older than 48 hours
     pending_trades = [t for t in pending_trades if now_ts - int(t.get("fired_at", 0)) < 48 * 3600]
 
@@ -551,7 +556,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 print(f"  📉 Bearish Div: {bearish_div.strength:.2f}")
 
             # ── EMA Computation (only when enabled in config) ──
-            ema_signals_this_pair: list[dict[str, object]] = []
+            ema_signals_this_pair: list[EmaSignalEntry] = []
             ema_ctx_parts: list[str] = []
             if settings.strategy.ema.enabled:
                 ema_cfg = settings.strategy.ema
@@ -1306,7 +1311,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     changed = True
                 else:
                     # Pair still in tracked state this scan: reset any miss streak.
-                    if int(prev.get("miss_count", 0)) > 0:
+                    if prev is not None and int(prev.get("miss_count", 0)) > 0:
                         near_state[pair] = {
                             **prev,
                             "miss_count": 0,
@@ -1364,13 +1369,13 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
         and notifier
         and ema_candidates
     ):
-        for candidate in ema_candidates:
-            pair = candidate["pair"]
-            symbol = candidate["symbol"]
+        for ema_candidate in ema_candidates:
+            pair = ema_candidate["pair"]
+            symbol = ema_candidate["symbol"]
             if pair in shadow_set:
                 continue
 
-            signals = candidate["signals"]
+            signals = ema_candidate["signals"]
             # Rate-limit: prioritize crossover > price_touch > slope
             priority_map = {"crossover": 0, "price_touch": 1, "slope": 2}
             signals.sort(key=lambda s: priority_map.get(str(s.get("type", "")), 99))
@@ -1403,8 +1408,12 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 should_send = prev is None
 
                 if should_send:
-                    if sig_type == "crossover":
-                        direction = "bullish" if data.crossover_type == EMACrossoverType.GOLDEN_CROSS else "bearish"
+                    if sig_type == "crossover" and isinstance(data, EMACrossover):
+                        direction = (
+                            "bullish"
+                            if data.crossover_type == EMACrossoverType.GOLDEN_CROSS
+                            else "bearish"
+                        )
                         await notifier.send_ema_crossover(
                             pair=symbol,
                             direction=direction,
@@ -1414,7 +1423,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             slow_period=data.slow_period,
                             timeframe=data.timeframe,
                         )
-                    elif sig_type == "price_touch":
+                    elif sig_type == "price_touch" and isinstance(data, EMAPriceTouch):
                         await notifier.send_ema_price_touch(
                             pair=symbol,
                             price=data.price,
@@ -1424,7 +1433,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             touch_type=data.direction,
                             distance_pips=data.distance_pips,
                         )
-                    elif sig_type == "slope":
+                    elif sig_type == "slope" and isinstance(data, EMASlope):
                         await notifier.send_ema_slope(
                             pair=symbol,
                             ema_period=data.period,

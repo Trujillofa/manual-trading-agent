@@ -4,7 +4,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Literal, cast
+from typing import Literal, TypedDict, cast
+
+from src.indicators.ema import EMACrossover, EMAPriceTouch, EMASlope
+
+EmaSignalData = EMACrossover | EMAPriceTouch | EMASlope
+
+
+class EmaSignalEntry(TypedDict):
+    type: str
+    data: EmaSignalData
+    pair: str
+
+
+class EmaCandidate(TypedDict):
+    pair: str
+    symbol: str
+    signals: list[EmaSignalEntry]
 
 SetupState = Literal["breakout_pending", "aligned", "near"]
 Direction = Literal["BUY", "SELL"]
@@ -130,7 +146,7 @@ def _pluralize(count: int, singular: str, plural: str | None = None) -> str:
 
 
 def _ema_summary_for_pairs(
-    ema_candidates: list[dict[str, object]],
+    ema_candidates: list[EmaCandidate],
     pairs: set[str],
     *,
     max_ema_pairs: int,
@@ -140,18 +156,15 @@ def _ema_summary_for_pairs(
     compact_pairs = {pair.replace("/", "") for pair in pairs}
 
     for candidate in ema_candidates:
-        pair = str(candidate.get("pair", ""))
+        pair = candidate["pair"]
         compact_pair = pair.replace("/", "")
         if pair not in pairs and compact_pair not in compact_pairs:
             continue
-        signals = candidate.get("signals", [])
-        if not isinstance(signals, list):
-            continue
+        signals = candidate["signals"]
         pair_counts[compact_pair] = pair_counts.get(compact_pair, 0) + len(signals)
         for signal in signals:
-            if isinstance(signal, dict):
-                sig_type = str(signal.get("type", "unknown"))
-                type_counts[sig_type] = type_counts.get(sig_type, 0) + 1
+            sig_type = signal["type"]
+            type_counts[sig_type] = type_counts.get(sig_type, 0) + 1
 
     total = sum(type_counts.values())
     if total == 0:
@@ -181,7 +194,7 @@ def _ema_summary_for_pairs(
 
 def build_setup_digest_message(
     candidates: list[SetupCandidate],
-    ema_candidates: list[dict[str, object]] | None = None,
+    ema_candidates: list[EmaCandidate] | None = None,
     *,
     scanned_at: datetime | None = None,
     max_setups: int = 3,

@@ -8,7 +8,7 @@ import os
 import urllib.error
 import urllib.request
 from datetime import UTC, datetime
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 from src.config import get_settings
 from src.data.fetcher import DataFetcher
@@ -78,7 +78,7 @@ def _get_pair_param(pair: str, param: str, default: float | int) -> float | int:
     if override is not None:
         value = getattr(override, param, None)
         if value is not None:
-            return value
+            return cast(float | int, value)
     return default
 
 
@@ -186,7 +186,7 @@ def _check_breakout_with_profile(
 def _is_signal_invalidated(
     record: ActiveSignalRecord,
     data_15m: Any,
-    rsi_15m_series: list[float],
+    rsi_15m_series: list[float | None],
     current_close: float,
     current_sma_15m: float | None,
 ) -> tuple[bool, str | None]:

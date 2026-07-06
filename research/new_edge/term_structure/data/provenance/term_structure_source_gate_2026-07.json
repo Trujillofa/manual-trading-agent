@@ -1,0 +1,147 @@
+{
+  "audit": {
+    "archive_files": 3043,
+    "available_fields": [
+      "settle"
+    ],
+    "available_years": 11.693600826847916,
+    "first_available_date": "2014-01-02",
+    "issues": [
+      "public SPAN archive coverage is 11.69y; 15 complete years required",
+      "expanded PA2 settlement files do not contain required fields: high, low, open, open_interest",
+      "contract-month open interest is unavailable, so the OI-confirmed roll calendar cannot be derived"
+    ],
+    "last_available_date": "2025-09-12",
+    "passing_markets": 0,
+    "required_fields": [
+      "open",
+      "high",
+      "low",
+      "settle",
+      "open_interest"
+    ],
+    "required_passing_markets": 10,
+    "sample_rows": 0,
+    "sample_symbols": [],
+    "verdict": "BLOCKED"
+  },
+  "gate": {
+    "fixed_universe": [
+      "CL",
+      "NG",
+      "RB",
+      "HO",
+      "GC",
+      "SI",
+      "HG",
+      "ZC",
+      "ZS",
+      "ZW",
+      "LE",
+      "HE"
+    ],
+    "minimum_coverage_years": 15.0,
+    "minimum_passing_markets": 10,
+    "required_fields": [
+      "open",
+      "high",
+      "low",
+      "settle",
+      "open_interest"
+    ]
+  },
+  "lane": "term_structure_roll_yield",
+  "retrieved_at_utc": "2026-07-02T14:52:18.200928+00:00",
+  "schema_version": 1,
+  "source": {
+    "files_by_year": {
+      "2013": {
+        "count": 0,
+        "first": null,
+        "last": null
+      },
+      "2014": {
+        "count": 259,
+        "first": "cme.20140102.s.pa2.zip",
+        "last": "cme.20141230.s.pa2.zip"
+      },
+      "2015": {
+        "count": 259,
+        "first": "cme.20150102.s.pa2.zip",
+        "last": "cme.20151230.s.pa2.zip"
+      },
+      "2016": {
+        "count": 261,
+        "first": "cme.20160104.s.pa2.zip",
+        "last": "cme.20161230.s.pa2.zip"
+      },
+      "2017": {
+        "count": 260,
+        "first": "cme.20170102.s.pa2.zip",
+        "last": "cme.20171229.s.pa2.zip"
+      },
+      "2018": {
+        "count": 260,
+        "first": "cme.20180102.s.pa2.zip",
+        "last": "cme.20181231.s.pa2.zip"
+      },
+      "2019": {
+        "count": 260,
+        "first": "cme.20190102.s.pa2.zip",
+        "last": "cme.20191231.s.pa2.zip"
+      },
+      "2020": {
+        "count": 261,
+        "first": "cme.20200102.s.pa2.zip",
+        "last": "cme.20201231.s.pa2.zip"
+      },
+      "2021": {
+        "count": 260,
+        "first": "cme.20210104.s.pa2.zip",
+        "last": "cme.20211231.s.pa2.zip"
+      },
+      "2022": {
+        "count": 260,
+        "first": "cme.20220103.s.pa2.zip",
+        "last": "cme.20221230.s.pa2.zip"
+      },
+      "2023": {
+        "count": 260,
+        "first": "cme.20230102.s.pa2.zip",
+        "last": "cme.20231229.s.pa2.zip"
+      },
+      "2024": {
+        "count": 261,
+        "first": "cme.20240102.s.pa2.zip",
+        "last": "cme.20241231.s.pa2.zip"
+      },
+      "2025": {
+        "count": 182,
+        "first": "cme.20250102.s.pa2.zip",
+        "last": "cme.20250912.s.pa2.zip"
+      }
+    },
+    "ftp_host": "ftp.cmegroup.com",
+    "ftp_root": "/span/archive/cme",
+    "publisher": "CME Group",
+    "span_layout": "https://cmegroupclientsite.atlassian.net/wiki/spaces/pubsub/pages/457083445/Risk+Parameter+File+Layouts+for+the+Positional+Formats",
+    "span_source_page": "https://www.cmegroup.com/clearing/risk-management/span-overview.html",
+    "years": [
+      2013,
+      2014,
+      2015,
+      2016,
+      2017,
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ]
+  },
+  "stage": "tier_a_data_proof",
+  "verdict": "BLOCKED"
+}

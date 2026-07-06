@@ -11,7 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml ./
 COPY src/ ./src/
 COPY config/ ./config/
+COPY scripts/run_scanner_loop.sh ./scripts/run_scanner_loop.sh
 COPY .env.example ./
+
+RUN chmod +x /app/scripts/run_scanner_loop.sh
 
 # Install Python dependencies
 RUN pip install --no-cache-dir .

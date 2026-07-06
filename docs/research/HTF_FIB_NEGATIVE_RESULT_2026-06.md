@@ -87,8 +87,5 @@ python scripts/evaluate_htf_fib_accounts.py \
 
 Do not tune pivots, Fibonacci levels, RSI thresholds, EMA filters, or exits
 again on this data family. Continue only with a materially different premise
-and data source. The next authorized research action is the **term-structure
-roll-yield source gate** (individual contract-month data for the fixed
-12-market commodity universe; see
-`docs/research/term_structure/ROLL_YIELD_DATA_MANIFEST_2026-06.md`). No
-strategy logic until that gate records `DATA_PASS` or `BLOCKED`.
+and data source. The next authorized experiment is the CFTC COT-positioning
+relationship test, after delayed-release weeks are controlled.

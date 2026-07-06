@@ -57,6 +57,10 @@ research/run.log
 
 # Local agent state and experiment artifacts
 .commandcode/
+.cleo/
+.serena/
+claudedocs/
+.research-archive/
 
 # Claude local overrides
 .claude/settings.local.json

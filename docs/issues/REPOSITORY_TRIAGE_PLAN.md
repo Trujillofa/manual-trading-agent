@@ -1,23 +1,26 @@
 # Repository Triage & Remediation Plan
 
-**Date:** 2026-07-05
-**Status:** Proposed — awaiting approval
-**Scope:** Open PRs (#30, #31, #32, #34), missing CI, type-check failures, prod log growth
+**Date:** 2026-07-05 (updated 2026-07-06)
+**Status:** Partially complete — PR triage resolved; CI and mypy remain open
+**Scope:** Merged PRs (#30, #31, #32, #34), missing CI, type-check failures, prod redeploy
 
 ---
 
 ## Executive Summary
 
-The repo is in solid shape — **379 tests pass**, ruff is clean. However there are
-4 open PRs pending review, **no CI workflow**, **24 mypy errors** in the codebase,
-and a **production log growth issue** (scan.log + signal_audit.jsonl growing
-unbounded at 8.4 MB in 3 days). This plan proposes actions for each.
+The repo is in solid shape — **379 tests pass**, ruff is clean. At triage time (2026-07-05)
+four PRs were pending review; **all four are now merged** (2026-07-06). Remaining gaps:
+**no CI workflow**, **24 mypy errors**, and **prod redeploy** to pick up log rotation
+(PR #31). This plan records the original triage and updated follow-up actions.
 
 ---
 
-## 1. Open PR Triage
+## 1. PR Triage
 
-### PR #31 — `fix(runtime): version scanner log rotation` → ✅ MERGE
+All four PRs from the original triage are **merged** as of 2026-07-06. No open PRs
+remain from this batch.
+
+### PR #31 — `fix(runtime): version scanner log rotation` → ✅ MERGED (2026-07-06)
 
 | Field | Value |
 |-------|-------|
@@ -25,16 +28,17 @@ unbounded at 8.4 MB in 3 days). This plan proposes actions for each.
 | **Changes** | 1 commit — replaces inline entrypoint with `scripts/run_scanner_loop.sh`, adds bounded log rotation |
 | **Impact** | **Fixes the unbounded log growth issue** (Issue 4 below) |
 
-**Assessment:** This is the highest-value PR. It introduces a proper shell entrypoint
-(`run_scanner_loop.sh`) that rotates `scan.log` and `signal_audit.jsonl` at 50 MiB,
-retaining 25 MiB. The current prod container has no rotation at all — scan.log is 2.7 MB
-and signal_audit.jsonl is 5.7 MB after just 3 days.
+**Assessment:** Highest-value item from the original triage. Introduces a proper shell
+entrypoint (`run_scanner_loop.sh`) that rotates `scan.log` and `signal_audit.jsonl` at
+50 MiB, retaining 25 MiB. At triage time the prod container had no rotation — scan.log
+was 2.7 MB and signal_audit.jsonl was 5.7 MB after just 3 days.
 
-**Action:** Review and merge. Then redeploy the container.
+**Action:** ~~Review and merge.~~ **Done.** Redeploy the prod container and verify
+rotation after one week (see Verification Checklist).
 
 ---
 
-### PR #30 — `feat(research): archive HTF Fibonacci negative result` → ✅ MERGE
+### PR #30 — `feat(research): archive HTF Fibonacci negative result` → ✅ MERGED (2026-07-06)
 
 | Field | Value |
 |-------|-------|
@@ -45,11 +49,11 @@ and signal_audit.jsonl is 5.7 MB after just 3 days.
 **Assessment:** Clean research-lane closure. The HTF Fib strategy was backtested and
 discarded. This PR records the decision and preserves the tooling. Low risk.
 
-**Action:** Merge after CI is set up (or merge directly if research PRs are exempt).
+**Action:** ~~Merge after CI is set up.~~ **Done.**
 
 ---
 
-### PR #32 — `research(term-structure): source gate BLOCKED decision` → ✅ MERGE
+### PR #32 — `research(term-structure): source gate BLOCKED decision` → ✅ MERGED (2026-07-06)
 
 | Field | Value |
 |-------|-------|
@@ -60,21 +64,22 @@ discarded. This PR records the decision and preserves the tooling. Low risk.
 **Assessment:** Pure docs. Records a data-source gate decision with provenance JSON.
 No code changes.
 
-**Action:** Merge (docs-only, no risk).
+**Action:** ~~Merge (docs-only, no risk).~~ **Done.**
 
 ---
 
-### PR #34 — `research: define PEAD data-proof lane` → 🔲 DRAFT
+### PR #34 — `research: define PEAD data-proof lane` → ✅ MERGED (2026-07-06)
 
 | Field | Value |
 |-------|-------|
 | **Branch** | `docs/pead-lane-contract-2026-07` |
-| **Changes** | 1 commit — defines a new research lane for Post-Earnings-Announcement Drift in US equities |
-| **Impact** | Documentation only (draft) |
-| **Status** | **Draft PR** |
+| **Changes** | Defines a new research lane for Post-Earnings-Announcement Drift in US equities |
+| **Impact** | Documentation only — `CONTRACT_DEFINED` in research ledger |
+| **Status** | Merged (was draft at triage time) |
 
-**Action:** Review the research contract. Mark ready for review or keep as draft until
-the PEAD data audit is complete.
+**Action:** ~~Review the research contract.~~ **Done.** Next permitted step per contract:
+read-only `verify_pead_data` source audit — no relationship or strategy code until
+`DATA_PASS`.
 
 ---
 
@@ -130,40 +135,45 @@ after the CI workflow (so CI catches regressions).
 
 ---
 
-## 4. Production Log Growth → ✅ FIXED BY PR #31
+## 4. Production Log Growth → ✅ MERGED — redeploy pending
 
 | Field | Value |
 |-------|-------|
 | **Symptom** | scan.log (2.7 MB) + signal_audit.jsonl (5.7 MB) growing unbounded |
-| **Container uptime** | 3 days (since 2026-07-02) |
+| **Container uptime** | 3 days (since 2026-07-02, at triage time) |
 | **Rate** | ~2.8 MB/day combined |
-| **Fix** | PR #31 adds bounded rotation (50 MiB threshold, 25 MiB retain) |
+| **Fix** | PR #31 merged — `run_scanner_loop.sh` rotates at 50 MiB, retains 25 MiB |
 
-**Assessment:** Not critical yet (8.4 MB total), but will grow indefinitely without
-PR #31. Over months this would fill the disk.
+**Assessment:** Not critical at triage time (8.4 MB total), but would grow indefinitely
+without rotation. Code fix is on `main`; prod must redeploy to pick it up.
 
-**Action:** Merge PR #31 and redeploy.
+**Action:** Redeploy prod container and confirm `scan.log` / `signal_audit.jsonl` stay
+bounded after one week.
 
 ---
 
 ## Summary Action Matrix
 
-| Priority | Item | Type | Effort |
+| Priority | Item | Type | Status |
 |----------|------|------|--------|
-| **P0** | Add CI workflow (`.github/workflows/ci.yml`) | New PR | 1 session |
-| **P1** | Merge PR #31 (log rotation) | Review + merge | 10 min |
-| **P1** | Fix 24 mypy errors | New PR (`fix/mypy-errors`) | 1 session |
-| **P2** | Merge PR #30 (HTF Fib archive) | Review + merge | 10 min |
-| **P2** | Merge PR #32 (term structure docs) | Review + merge | 5 min |
-| **P3** | Review PR #34 (PEAD draft) | Decision | 10 min |
+| **P0** | Add CI workflow (`.github/workflows/ci.yml`) | New PR | Open |
+| **P1** | Fix 24 mypy errors | New PR (`fix/mypy-errors`) | Open |
+| **P1** | Redeploy prod for log rotation (PR #31) | Ops | Open |
+| ~~P1~~ | ~~Merge PR #31 (log rotation)~~ | ~~Review + merge~~ | **Done** (2026-07-06) |
+| ~~P2~~ | ~~Merge PR #30 (HTF Fib archive)~~ | ~~Review + merge~~ | **Done** (2026-07-06) |
+| ~~P2~~ | ~~Merge PR #32 (term structure docs)~~ | ~~Review + merge~~ | **Done** (2026-07-06) |
+| ~~P3~~ | ~~Review PR #34 (PEAD draft)~~ | ~~Decision~~ | **Done** (2026-07-06) |
 
 ---
 
 ## Verification Checklist
 
 - [ ] CI workflow created and passing
-- [ ] PR #31 merged and container redeployed
+- [x] PR #31 merged (2026-07-06)
+- [ ] PR #31 redeployed to prod
 - [ ] mypy errors resolved (0 errors on `mypy src/`)
-- [ ] PRs #30, #32 merged
-- [ ] PR #34 reviewed (ready or stay draft)
+- [x] PR #30 merged (2026-07-06)
+- [x] PR #32 merged (2026-07-06)
+- [x] PR #34 merged (2026-07-06)
 - [ ] Log rotation verified in prod (scan.log < 50 MiB after 1 week)
+- [ ] PEAD `verify_pead_data` source audit started (post-#34 contract)

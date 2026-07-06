@@ -16,6 +16,8 @@ This is a **valid, valuable negative result**. It terminates further investment 
 
 **Live strict MTF RSI (the production scanner at acca11b):** Extremely sparse (~36 fires ever in prod audit over months; 0 trades in recent 30d+ harness samples on 8 pairs). Too few to validate statistically. From the same family.
 
+**HTF pivot/Fibonacci directional TA (2026-06-30 archive):** A separate 4H-pivot / Fibonacci / EMA200 / RSI confirmation family on the same eight FX pairs (365d Dukascopy 15m, costed IS/OOS harness). IS-selected grid winner: OOS net PF 0.07, -11.53% OOS P&L, 12 OOS trades. Marker baseline and hardened MTF variants also failed. This does **not** reopen the lane — it is corroborating evidence that OHLC directional TA on FX majors lacks accessible edge even with a different timeframe structure (4H pivots, 15m execution). See `docs/research/HTF_FIB_NEGATIVE_RESULT_2026-06.md`.
+
 ## Gross-vs-Net Friction Analysis
 
 - M15 ATR(14) for EUR/USD ~11 pips. Round-trip costs in the driver (~1.5 spread + 2 slip + commission) ≈3.5 pips adverse + fixed. This is ~30% tax on the stop distance.

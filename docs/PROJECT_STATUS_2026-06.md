@@ -37,6 +37,10 @@ research is **terminated** (locked + agent-guarded). The system's honest posture
 - Prod (Hetzner, `acca11b`): deployed, healthy, running as the Branch B scanner/alerter.
 - Promotion-table P&L numbers in older docs: **retired** (came from divergent engines).
 - 2026-06 research (isolated worktree `research-multiasset-momentum`): daily TSMOM on metals (2016+ Dukascopy), 5 indices (2018+ via yfinance fallback), core FX majors. Gross-first gate on long data (~10y effective, 10 instruments, 252-bar lookback, inv-vol sizing): gross PF 1.036, Sharpe 0.15. No accessible edge before costs/friction. Lane closed; negative result archived on the research branch (detailed report + harness). No production promotion or further TSMOM tuning.
+- HTF pivot/Fibonacci directional TA (4H pivots, 15m execution, eight FX pairs, 365d):
+  **DISCARD** — IS-selected grid winner OOS net PF 0.07, -11.53% OOS P&L. Additional
+  evidence for the locked FX directional-TA closure, not a new edge family. See
+  `docs/research/HTF_FIB_NEGATIVE_RESULT_2026-06.md`.
 - COT positioning reversal (fixed 23-market CFTC universe): data proof passed, but the
   preregistered relationship test failed. The 4-week pooled slope changed from
   -0.00315 IS to +0.00938 OOS; seven OOS stability gates failed. The reversal lane
@@ -66,3 +70,4 @@ Restart FX-majors OHLC directional TA (guarded). Cite retired promotion numbers.
 Tune costs or parameters of a ~1.0 gross base. Run correlated 4th TA variants.
 Extend or retune a daily TSMOM result that failed the gross gate at PF ≈ 1.03–1.04 / weak Sharpe (this lane is archived).
 Build or tune a COT reversal strategy after its fixed relationship test failed OOS.
+Retune HTF pivot/Fibonacci directional TA or run further autosearch on that family.

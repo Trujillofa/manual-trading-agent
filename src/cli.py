@@ -14,6 +14,7 @@ from typing import Literal, TypedDict, cast
 
 from src.config import get_settings
 from src.dashboard.report import run_dashboard as _dashboard_run
+from src.dashboard.log_status import run_logs_status as _logs_status_run
 from src.dashboard.report import run_healthcheck as _healthcheck_run
 from src.data.fetcher import DataFetcher
 from src.evaluation.branch_b_audit import record_branch_b_scan_decision_signal
@@ -198,6 +199,16 @@ def create_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("telegram-poll", help="Poll Telegram commands (e.g. /watchlist)")
     subparsers.add_parser("healthcheck", help="Check scanner and Telegram runtime health")
+
+    logs_status_parser = subparsers.add_parser(
+        "logs-status",
+        help="Report managed log sizes vs rotation threshold",
+    )
+    logs_status_parser.add_argument(
+        "--notify",
+        action="store_true",
+        help="Send Telegram alerts when warn/critical thresholds are newly crossed",
+    )
 
     dash_parser = subparsers.add_parser("dashboard", help="Signal dashboard and paper P&L")
     dash_parser.add_argument("--days", type=int, default=30, help="Days of history to show")
@@ -1651,6 +1662,10 @@ async def run_healthcheck() -> None:
     await _healthcheck_run()
 
 
+async def run_logs_status(notify: bool) -> None:
+    await _logs_status_run(notify=notify)
+
+
 async def run_dashboard(days: int) -> None:
     await _dashboard_run(days)
 
@@ -1685,6 +1700,7 @@ def main() -> int:
         ),
         "telegram-poll": run_telegram_poll,
         "healthcheck": run_healthcheck,
+        "logs-status": lambda: run_logs_status(args.notify),
         "dashboard": lambda: run_dashboard(args.days),
     }
 

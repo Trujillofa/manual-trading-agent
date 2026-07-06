@@ -1,0 +1,47 @@
+{
+  "lane": "term_structure_roll_yield",
+  "schema_version": 1,
+  "stage": "paid_candidate_desk_verification",
+  "retrieved_at_utc": "2026-07-02T15:00:00+00:00",
+  "verdict": "UNVERIFIED",
+  "source": {
+    "provider": "FirstRate Data",
+    "product_url": "https://firstratedata.com/i/futures/CL",
+    "sample_url": "https://frd001.s3.us-east-2.amazonaws.com/frd_sample_futures_CL.zip",
+    "license_url": "https://firstratedata.com/about/license",
+    "pricing_note": "Per-symbol purchase; $99.95/yr updates cited on CL page"
+  },
+  "sample_archive_sha256": null,
+  "files_in_sample": [
+    "CL_1day_sample.csv",
+    "CL_1hour_sample.csv",
+    "CL_1min_sample.csv",
+    "CL_30min_sample.csv",
+    "CL_5min_sample.csv",
+    "_readme_documentation.txt"
+  ],
+  "continuous_daily_columns": [
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "open interest"
+  ],
+  "individual_contracts_in_sample": false,
+  "readme_claims": {
+    "continuous_first_date": "2008-01-01",
+    "individual_first_contract": "CLZ08",
+    "individual_last_contract_in_sample_era": "CLZ24",
+    "daily_fields": "Open, High, Low, Close, Volume, Open Interest",
+    "individual_timeframes": ["1min", "1day"]
+  },
+  "gate_gaps": [
+    "Sample contains continuous CL only; no per-contract file to verify contract-month shape",
+    "All 12 fixed-universe symbols not confirmed in sample",
+    "15-year depth not verified market-by-market without purchase",
+    "Expiry/contract metadata not present in sample CSV header"
+  ],
+  "recommendation": "Leading paid candidate pending owner-approved purchase and full 12-market verifier run"
+}

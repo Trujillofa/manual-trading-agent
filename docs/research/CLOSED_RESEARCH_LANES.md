@@ -111,7 +111,8 @@ Re-opening without a new premise violates the fail-fast discipline.
 | Event surprise drift | DISCARD |
 | Vol-regime compression breakout | DISCARD |
 | COT positioning reversal | RELATIONSHIP_FAIL / CLOSED |
-| Term-structure roll yield (commodity futures) | DATA_BLOCKED (source gate pending) |
+| Term-structure roll yield (commodity futures) | BLOCKED (data gate) |
+| PEAD | CONTRACT_DEFINED (data proof only) |
 
 **Deferred (not a standalone alpha lane):** Microstructure / execution-quality research should not proceed unless tied to an already-positive gross edge. It must not be used to rescue discarded signals.
 

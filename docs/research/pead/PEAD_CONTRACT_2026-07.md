@@ -109,14 +109,15 @@ fails, no entry/exit strategy may be built to rescue it.
 - Positive OOS top-minus-bottom returns at days 5 and 21.
 - Same spread direction in at least 60% of sectors with eligible observations.
 - No sector contributes more than 35% of OOS spread P&L.
-- The effect remains positive in the post-2012 OOS subset.
+- The effect remains positive in the late-OOS subset: events with announcement
+  dates from `2024-01-01` (inclusive) through `2026-01-01` (exclusive).
 
 `RELATIONSHIP_FAIL` is binding if any of:
 
 - OOS costed profit factor is below 1.00.
 - Day-5 or day-21 OOS spread is non-positive.
 - Realistic costs make the OOS spread non-positive.
-- The effect exists only before 2012.
+- Within OOS, the effect exists only before `2024-01-01`.
 - Results require stocks outside the fixed liquid universe.
 - Results reverse sign or depend on one sector.
 

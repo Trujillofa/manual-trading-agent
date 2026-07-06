@@ -49,9 +49,10 @@ research is **terminated** (locked + agent-guarded). The system's honest posture
   and parses all 12 fixed markets, but Tier A is data-blocked. The live public archive
   has 11.69 years (15 required) and lacks contract-month OHLC/open interest, so no
   OI-confirmed roll calendar or Tier-B strategy test is authorized.
-- PEAD: a docs-only contract defines the next data-proof lane for point-in-time
-  US equity earnings surprises. No source has passed, no purchase is authorized,
-  and no relationship or strategy code may begin before `DATA_PASS`.
+- 2026-07 update — PEAD: a docs-only contract defines the next data-proof lane
+  for point-in-time US equity earnings surprises. No source has passed, no
+  purchase is authorized, and no relationship or strategy code may begin before
+  `DATA_PASS`.
 
 ## Key evidence (the diagnostic table)
 

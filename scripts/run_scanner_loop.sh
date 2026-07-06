@@ -66,6 +66,6 @@ fi
 while true; do
   rotate_managed_logs
   echo "=== $(date) ===" >>"$LOG_DIR/scan.log"
-  python -u -m src.cli scan >>"$LOG_DIR/scan.log" 2>&1
+  python -u -m src.cli scan >>"$LOG_DIR/scan.log" 2>&1 || echo "scan failed (exit=$?)" >>"$LOG_DIR/scan.log"
   sleep "$SCAN_INTERVAL_SECONDS"
 done

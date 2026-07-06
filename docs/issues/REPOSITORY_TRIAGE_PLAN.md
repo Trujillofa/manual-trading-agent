@@ -69,7 +69,7 @@ No code changes.
 | Field | Value |
 |-------|-------|
 | **Branch** | `docs/pead-lane-contract-2026-07` |
-| **Changes** | 1 commit — defines a new research lane for Post-Earnings-Announcement Drift in FX |
+| **Changes** | 1 commit — defines a new research lane for Post-Earnings-Announcement Drift in US equities |
 | **Impact** | Documentation only (draft) |
 | **Status** | **Draft PR** |
 
@@ -120,9 +120,10 @@ src/cli.py:1309: error: Item "None" of "NearStateRecord | None" has no attribute
 src/cli.py:1369: error: TypedDict "NearCandidate" has no key "symbol" [typeddict-item]
 ```
 
-**Assessment:** These are real type bugs — `None` not being handled in comparison
-branches, TypedDict keys being accessed that don't exist. They haven't caused runtime
-crashes because those code paths may not be hit often, but they're latent bugs.
+**Assessment:** These are type-safety issues — some reflect missing `None` guards or
+TypedDict keys that don't exist; others may be incomplete or incorrect annotations
+rather than guaranteed runtime faults. Fix with explicit guards/casts or type-definition
+corrections; some paths may be latent runtime risks if hit in production.
 
 **Action:** Fix in a dedicated `fix/mypy-errors` branch. Should be done alongside or
 after the CI workflow (so CI catches regressions).

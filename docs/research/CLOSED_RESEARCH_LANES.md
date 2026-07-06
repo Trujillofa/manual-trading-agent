@@ -56,7 +56,18 @@ Re-opening without a new premise violates the fail-fast discipline.
   - Ledger rows: `research/new_edge/research_ledger.jsonl` (lane `events`)
 - **Rule**: Do not retune entry delay, hold period, surprise thresholds, or event-family filters on this prototype. Calendar data proof remains valid; the drift signal does not.
 
-## 6. Volatility Regime / Range Compression Breakout (H1 FX Majors)
+## 6. HTF Pivot/Fibonacci Directional TA (4H pivots, 15m execution)
+
+- **Status**: DISCARD (2026-06-30; archived in branch `research/archive-htf-fib-2026-07`)
+- **Core Finding**: Confirmed 4H-pivot Fibonacci setup on eight FX pairs (365d Dukascopy 15m). IS-selected grid winner (11 IS / 12 OOS trades) produced OOS net PF 0.07 and -11.53% OOS P&L. Marker baseline and hardened MTF variants also failed promotion gates. Fixed-lot account scenarios worsened under wider stops. This is **additional evidence** for the locked FX directional-TA closure — not a new edge family.
+- **References**:
+  - `docs/research/HTF_FIB_NEGATIVE_RESULT_2026-06.md`
+  - `scripts/run_htf_fib_backtest.py`, `scripts/optimize_htf_fib_backtest.py`, `scripts/evaluate_htf_fib_accounts.py`
+  - `pine_scripts/htf_pivots_fib_ema_strategy.pine`
+  - Ledger row: `research/new_edge/research_ledger.jsonl` (lane `htf_fib`, status `DISCARD`)
+- **Rule**: Do not retune pivots, Fibonacci levels, RSI thresholds, EMA filters, exits, or chart timeframe. Do not run further autosearch on this family. The optimizer requires `--override-negative-result` against the locked FX directional-TA report — that guard must remain.
+
+## 7. Volatility Regime / Range Compression Breakout (H1 FX Majors)
 
 - **Status**: DISCARD (2026-06-20; implementation merged in PR #10, commit `545fef0`)
 - **Core Finding**: Fixed H1 Donchian compression breakout on seven FX majors (2016-01-01 → 2026-06-01). Gross stage passed (pooled gross PF 1.114, 3778 trades, max year concentration 12.8%), but the edge is too small to survive 6-pip round-trip costs. Pooled costed net PF 0.802; OOS net PF 0.782 < 1.20 gate.
@@ -68,7 +79,7 @@ Re-opening without a new premise violates the fail-fast discipline.
   - Ledger row: `research/new_edge/research_ledger.jsonl` (lane `vol_regime`, status `DISCARD`)
 - **Rule**: Do not retune compression percentile, persistence, entry window (07:00-17:00 UTC), 24-bar hold, pairs, or H1 timeframe. This is not permission to reopen unconditional Donchian/ORB directional TA.
 
-## 7. CFTC COT Non-Commercial Positioning Reversal
+## 8. CFTC COT Non-Commercial Positioning Reversal
 
 - **Status**: RELATIONSHIP_FAIL / CLOSED (2026-06-30)
 - **Core Finding**: Official CFTC data proof passed for all 23 fixed markets, but the
@@ -87,11 +98,12 @@ Re-opening without a new premise violates the fail-fast discipline.
   market subset, or add price filters to rescue the reversal premise. A materially
   different positioning thesis requires a new prewritten contract.
 
-## New Edge Program Lane Scoreboard (2026-06-30)
+## New Edge Program Lane Scoreboard (2026-07-02)
 
 | Lane | Status |
 |---|---|
 | FX directional TA | CLOSED |
+| HTF pivot/Fibonacci directional TA | DISCARD |
 | Daily TSMOM | CLOSED |
 | Carry (Hetzner cTrader) | CLOSED_DISCARD |
 | Stat-arb (daily pairs) | DISCARD |
@@ -99,7 +111,7 @@ Re-opening without a new premise violates the fail-fast discipline.
 | Event surprise drift | DISCARD |
 | Vol-regime compression breakout | DISCARD |
 | COT positioning reversal | RELATIONSHIP_FAIL / CLOSED |
-| Term-structure roll yield | BLOCKED (data gate) |
+| Term-structure roll yield (commodity futures) | BLOCKED (data gate) |
 | PEAD | CONTRACT_DEFINED (data proof only) |
 
 **Deferred (not a standalone alpha lane):** Microstructure / execution-quality research should not proceed unless tied to an already-positive gross edge. It must not be used to rescue discarded signals.

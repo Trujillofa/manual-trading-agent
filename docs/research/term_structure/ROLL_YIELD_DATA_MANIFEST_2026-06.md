@@ -88,6 +88,15 @@ contract settlements but not daily OHLC or contract-month open interest, so it
 cannot derive the required OI-confirmed roll calendar. Tier A therefore exits
 `BLOCKED`; see `CME_FREE_DATA_AUDIT_2026-06-30.md`. Tier B remains unauthorized.
 
+**Source gate re-evaluation (2026-07-02):** free CME remains `BLOCKED` after a fresh
+inventory run (`CME_FREE_DATA_AUDIT_2026-07-02.md`). Paid candidates FirstRate Data
+and Norgate Data Futures are **desk-verified only** — FirstRate's public CL sample
+confirms daily OHLC + open interest on continuous data but does not include
+individual contract files for all 12 markets. No paid source was purchased. Overall
+lane source verdict: **`BLOCKED`**. See `SOURCE_GATE_DECISION_2026-07.md`. Owner must
+approve a single paid purchase before any `DATA_PASS` attempt. Tier B remains
+unauthorized.
+
 ---
 
 ## 6. Roll-yield computation and roll convention (pre-committed)

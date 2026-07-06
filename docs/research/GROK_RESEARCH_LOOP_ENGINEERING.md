@@ -86,13 +86,17 @@ Schema (one JSON object per line):
 }
 ```
 
-## Current Status (as of 2026-06-18)
+## Current Status (as of 2026-07-02)
 - FX intraday directional TA: CLOSED (locked negative)
+- HTF pivot/Fibonacci directional TA: **DISCARD** (additional evidence for FX directional-TA closure; OOS net PF 0.07; see `docs/research/HTF_FIB_NEGATIVE_RESULT_2026-06.md`)
 - Daily multi-asset TSMOM: CLOSED (gross edge ~1.03–1.04, weak Sharpe)
 - Carry / swap / funding (Hetzner cTrader): CLOSED / DISCARD (all resolved pairs returned 0.0 swap)
 - FX stat-arb pairs (daily prototype): DISCARD (gross pass on EUR/GBP + AUD/NZD, but OOS net PF < 1.20 and OOS trades < 30)
-- Event / Calendar: **DATA_PASS** (pinned HF snapshot 83k rows 2007–2025; indicator-class coverage ≥96%; live XML still broken)
-- Next action: gross-first event falsifier (avoidance or post-release drift); Actual is label-only after release time
+- Event / Calendar: **DATA_PASS** for HF snapshot; surprise-drift prototype **DISCARD** (OOS net PF 0.375)
+- Vol-regime compression breakout: **DISCARD** (OOS net PF 0.782)
+- COT positioning reversal (23-market fixed universe): relationship test failed OOS; lane closed
+- Term-structure roll yield (commodity futures, Tier A): **DATA_BLOCKED** until source gate passes (individual contract-month records, ≥10/12 markets, ≥15 years)
+- **Next action:** Run the term-structure **source gate only** (`docs/research/term_structure/ROLL_YIELD_DATA_MANIFEST_2026-06.md`). Evaluate free CME settlement stitching vs paid providers. Record `DATA_PASS` or `BLOCKED` in the ledger. Do **not** write strategy logic until the gate clears. Do **not** reopen HTF Fibonacci or any closed FX directional-TA lane.
 
 ## How to Start a New Lane
 1. Create the worktree if needed: `./scripts/worktree-create.sh research-new-edge-program main`

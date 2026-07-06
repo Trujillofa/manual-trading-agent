@@ -16,7 +16,7 @@ services:
     environment:
       - TZ=America/Bogota
       - TELEGRAM_POLL_ENABLED=${TELEGRAM_POLL_ENABLED:-true}
-      - LOG_DIR=/app/logs
+      - LOG_DIR=${LOG_DIR:-/app/logs}
       - ROTATE_THRESHOLD_BYTES=${ROTATE_THRESHOLD_BYTES:-52428800}
       - RETAIN_BYTES=${RETAIN_BYTES:-26214400}
       - SCAN_INTERVAL_SECONDS=${SCAN_INTERVAL_SECONDS:-900}

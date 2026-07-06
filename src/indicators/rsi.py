@@ -392,7 +392,7 @@ def detect_rsi_curl(
         ma_now = rsi_ma_values[idx]
         ma_prev = rsi_ma_values[idx - 1]
 
-        if any(v is None for v in (rsi_now, rsi_prev, ma_now, ma_prev)):
+        if rsi_now is None or rsi_prev is None or ma_now is None or ma_prev is None:
             continue
 
         if direction == "buy" and rsi_prev < ma_prev and rsi_now > ma_now:

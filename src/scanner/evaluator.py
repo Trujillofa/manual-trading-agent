@@ -95,13 +95,13 @@ def evaluate_entry(
     def _get_pair_param_eff(pair: str, param: str, default: float | int) -> float | int:
         # Support research overrides: flat key (e.g. "tp_atr_multiplier") or nested "pair_overrides": {pair: {param: val}}
         if param in ov:
-            return ov[param]
+            return cast(float | int, ov[param])
         po = ov.get("pair_overrides") or {}
         pconf = po.get(pair) if isinstance(po, dict) else None
         if isinstance(pconf, dict):
             val = pconf.get(param)
             if val is not None:
-                return val
+                return cast(float | int, val)
         return _get_pair_param(pair, param, default)
 
     active_state = active_signal_state or {}
@@ -164,7 +164,7 @@ def evaluate_entry(
     rsi_ma_30m = calculate_rsi_ma_series(
         [float(v) if v is not None else None for v in rsi_series_30m], ma_period=rsi_ma_period
     )
-    rsi_series_15m = (
+    rsi_series_15m: list[float | None] = (
         data_15m["rsi"].tolist()
         if "rsi" in data_15m.columns
         else calculate_rsi_series(close_15m, rsi_period)
@@ -188,6 +188,7 @@ def evaluate_entry(
     ll = previous_rolling_lowest_low(low_15m, lookback, len(low_15m) - 1)
 
     # ATR (fixed) - prefer precomputed column from driver (research fast path)
+    atr: float | None
     if pre_atr is not None:
         atr = pre_atr
     else:
@@ -195,13 +196,12 @@ def evaluate_entry(
 
     # Profile + breakout (support overrides for research param search on live family)
     profile = _get_confirmation_profile(pair)
-    profile = dict(profile)  # mutable copy
     if "variant" in ov:
-        profile["variant"] = str(ov["variant"])
+        profile = {**profile, "variant": str(ov["variant"])}
     if "buffer_pips" in ov:
-        profile["buffer_pips"] = float(ov["buffer_pips"])
+        profile = {**profile, "buffer_pips": float(ov["buffer_pips"])}
     if "confirm_bars" in ov:
-        profile["confirm_bars"] = int(ov["confirm_bars"])
+        profile = {**profile, "confirm_bars": int(ov["confirm_bars"])}
     profile_label = _profile_label(profile)
     pip_size = 0.01 if "JPY" in pair else 0.0001
     bar_high = high_15m[-1] if high_15m else None
@@ -218,6 +218,7 @@ def evaluate_entry(
     from src.indicators.adx import calculate_adx_full
 
     adx_threshold = float(_eff("adx_threshold", ADX_TREND_THRESHOLD))
+    adx_1h: float | None
     if pre_adx_1h is not None:
         adx_1h = pre_adx_1h
     else:
@@ -412,25 +413,28 @@ def evaluate_entry(
         ma_now_1h = rsi_ma_1h[-1] if rsi_ma_1h else None
         ma_now_30m = rsi_ma_30m[-1] if rsi_ma_30m else None
         ma_now_15m = rsi_ma_15m[-1] if rsi_ma_15m else None
-        if all(v is not None for v in (ma_now_1h, ma_now_30m, ma_now_15m)):
+        if ma_now_1h is not None and ma_now_30m is not None and ma_now_15m is not None:
+            ma_1h = ma_now_1h
+            ma_30m = ma_now_30m
+            ma_15m = ma_now_15m
             ob = float(rsi_overbought)
             os_ = float(rsi_oversold)
             gate_ok = True
             failing = []
             if signal_direction == "BUY":
-                gate_ok = ma_now_1h <= os_ and ma_now_30m <= os_ and ma_now_15m <= os_
+                gate_ok = ma_1h <= os_ and ma_30m <= os_ and ma_15m <= os_
                 if not gate_ok:
                     failing = [
                         f"{tf}={v:.1f}"
-                        for tf, v in (("1h", ma_now_1h), ("30m", ma_now_30m), ("15m", ma_now_15m))
+                        for tf, v in (("1h", ma_1h), ("30m", ma_30m), ("15m", ma_15m))
                         if v > os_
                     ]
             else:
-                gate_ok = ma_now_1h >= ob and ma_now_30m >= ob and ma_now_15m >= ob
+                gate_ok = ma_1h >= ob and ma_30m >= ob and ma_15m >= ob
                 if not gate_ok:
                     failing = [
                         f"{tf}={v:.1f}"
-                        for tf, v in (("1h", ma_now_1h), ("30m", ma_now_30m), ("15m", ma_now_15m))
+                        for tf, v in (("1h", ma_1h), ("30m", ma_30m), ("15m", ma_15m))
                         if v < ob
                     ]
             if not gate_ok:

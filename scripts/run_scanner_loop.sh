@@ -35,7 +35,7 @@ trap cleanup TERM INT
 
 rotate_file() {
   filepath="$1"
-  [ -f "$filepath" ] || return 0
+  [ -f "$filepath" ] && [ ! -L "$filepath" ] || return 0
 
   size=$(wc -c <"$filepath" | tr -d ' ')
   [ "$size" -ge "$ROTATE_THRESHOLD_BYTES" ] || return 0

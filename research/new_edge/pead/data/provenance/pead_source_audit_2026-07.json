@@ -1,0 +1,63 @@
+{
+  "audit": {
+    "eligible_stocks_peak": 3,
+    "events_eligible": 4,
+    "events_total": 4,
+    "issues": [
+      "coverage window is 5.54y; at least 10y required",
+      "eligible stock count peaks at 3; at least 500 required",
+      "prospective OOS extreme-quintile events min 0; at least 30 required"
+    ],
+    "prospective_oos_quintile_min": 0,
+    "requested_end": "2026-01-01",
+    "requested_start": "2016-01-01",
+    "source_label": "synthetic_minimal_fixture",
+    "stable_id_rate": 1.0,
+    "tradable_session_rate": 1.0,
+    "verdict": "BLOCKED",
+    "year_field_coverage_min": 1.0,
+    "years_covered": 5.541523782144739
+  },
+  "files": {
+    "daily_prices.csv": {
+      "bytes": 237,
+      "rows": 4,
+      "sha256": "8e15cd5ea5918350b01242c3b52d3d54e2e46f55e5317a93303dc9b561962a19"
+    },
+    "earnings_events.csv": {
+      "bytes": 487,
+      "rows": 4,
+      "sha256": "b38fcb0a62613d6bdfbeb4ba5bc4284a423558bb7365345c9abeeb991c0517f4"
+    },
+    "sectors.csv": {
+      "bytes": 145,
+      "rows": 4,
+      "sha256": "af67318e68ba85ec1619706b4a7fdda9e81ffa1fd1353bb402615b3c57fb7a64"
+    },
+    "security_master.csv": {
+      "bytes": 159,
+      "rows": 3,
+      "sha256": "b786b1dc2fa6c5d0532242100eef31575834b13e01a96516508b24087fa64bd4"
+    }
+  },
+  "gate": {
+    "minimum_eligible_stocks": 500,
+    "minimum_history_years": 10,
+    "minimum_oos_quintile_events": 30,
+    "minimum_stable_id_rate": 0.9,
+    "minimum_tradable_session_rate": 0.95,
+    "minimum_year_field_coverage": 0.8
+  },
+  "lane": "pead",
+  "retrieved_at_utc": "2026-07-06T19:32:19.014402+00:00",
+  "schema_version": 1,
+  "snapshot_dir": "research/new_edge/pead/data/fixtures/synthetic_minimal",
+  "source": {
+    "label": "synthetic_minimal_fixture",
+    "license": "research-internal",
+    "notes": "Verifier smoke fixture only. Not a production data source.",
+    "source": "local synthetic fixture"
+  },
+  "stage": "data_proof",
+  "verdict": "BLOCKED"
+}

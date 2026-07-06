@@ -1,0 +1,5 @@
+security_id,ticker,fiscal_period,announcement_ts,estimate_observed_ts,actual_eps,consensus_eps,tradable_session,stable_id
+SEC001,AAPL,2024Q4,2025-01-30T13:00:00+00:00,2025-01-29T20:00:00+00:00,2.10,2.00,true,true
+SEC002,MSFT,2024Q4,2025-01-29T21:00:00+00:00,2025-01-28T20:00:00+00:00,3.10,3.00,true,true
+SEC003,DELIST,2019Q4,2019-10-15T12:00:00+00:00,2019-10-14T20:00:00+00:00,1.00,0.90,true,true
+SEC001,AAPL,2025Q1,2025-04-30T13:00:00+00:00,2025-04-29T20:00:00+00:00,1.50,1.40,true,true

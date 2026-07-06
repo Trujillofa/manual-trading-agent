@@ -1,0 +1,4 @@
+security_id,ticker,security_type,list_date,delist_date
+SEC001,AAPL,common,2010-01-01,
+SEC002,MSFT,common,2010-01-01,
+SEC003,DELIST,common,2010-01-01,2020-06-30

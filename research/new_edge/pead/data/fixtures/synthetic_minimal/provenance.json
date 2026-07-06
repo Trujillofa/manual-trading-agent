@@ -1,0 +1,6 @@
+{
+  "label": "synthetic_minimal_fixture",
+  "source": "local synthetic fixture",
+  "license": "research-internal",
+  "notes": "Verifier smoke fixture only. Not a production data source."
+}

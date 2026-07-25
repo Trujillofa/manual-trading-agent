@@ -22,6 +22,9 @@ RUN pip install --no-cache-dir .
 # Create logs directory
 RUN mkdir -p /app/logs
 
+# Create data directory for SQLite candle persistence (bind-mounted to host ./data)
+RUN mkdir -p /app/data
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1

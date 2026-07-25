@@ -14,8 +14,10 @@ from typing import Literal, TypedDict, cast
 
 from src.config import get_settings
 from src.dashboard.report import run_dashboard as _dashboard_run
+from src.dashboard.log_status import run_logs_status as _logs_status_run
 from src.dashboard.report import run_healthcheck as _healthcheck_run
 from src.data.fetcher import DataFetcher
+from src.data.store import CandleStore
 from src.evaluation.branch_b_audit import record_branch_b_scan_decision_signal
 from src.indicators.adx import calculate_adx_full
 from src.indicators.atr import calculate_atr
@@ -25,7 +27,10 @@ from src.indicators.candlestick import (
     detect_patterns,
 )
 from src.indicators.ema import (
+    EMACrossover,
     EMACrossoverType,
+    EMAPriceTouch,
+    EMASlope,
     EMASlopeDirection,
     calculate_ema,
     detect_crossover,
@@ -47,6 +52,8 @@ from src.indicators.rsi import (
 from src.indicators.sma import calculate_sma
 from src.news.news_checker import NewsChecker
 from src.notifications.digest import (
+    EmaCandidate,
+    EmaSignalEntry,
     SetupCandidate,
     build_setup_digest_message,
     digest_fingerprint,
@@ -194,6 +201,16 @@ def create_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("telegram-poll", help="Poll Telegram commands (e.g. /watchlist)")
     subparsers.add_parser("healthcheck", help="Check scanner and Telegram runtime health")
 
+    logs_status_parser = subparsers.add_parser(
+        "logs-status",
+        help="Report managed log sizes vs rotation threshold",
+    )
+    logs_status_parser.add_argument(
+        "--notify",
+        action="store_true",
+        help="Send Telegram alerts when warn/critical thresholds are newly crossed",
+    )
+
     dash_parser = subparsers.add_parser("dashboard", help="Signal dashboard and paper P&L")
     dash_parser.add_argument("--days", type=int, default=30, help="Days of history to show")
 
@@ -203,6 +220,7 @@ def create_parser() -> argparse.ArgumentParser:
 async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     settings = get_settings()
     fetcher = DataFetcher()
+    candle_store = CandleStore()
     news_checker = NewsChecker(
         lockout_minutes_before=settings.news.lockout_minutes_before,
         lockout_minutes_after=settings.news.lockout_minutes_after,
@@ -242,7 +260,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     scan_run_id = now_utc.isoformat()
     confirmed_pairs: set[str] = set()
     ema_near_state = _load_ema_near_state() if notifier else {}
-    ema_candidates: list[dict[str, object]] = []
+    ema_candidates: list[EmaCandidate] = []
     # Expire trades older than 48 hours
     pending_trades = [t for t in pending_trades if now_ts - int(t.get("fired_at", 0)) < 48 * 3600]
 
@@ -286,6 +304,14 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             data_1h = fetcher.fetch(symbol, period=period_1h, interval="1h")
             data_30m = fetcher.fetch(symbol, period=period_30m, interval="30m")
             data_15m = fetcher.fetch(symbol, period=period_15m, interval="15m")
+
+            # Persist fetched OHLCV candles for future backtesting.
+            # Additive only: failures are logged inside CandleStore and never
+            # propagate — the scan cycle must continue regardless.
+            candle_store.save_multi_timeframe(
+                symbol,
+                {"1h": data_1h, "30m": data_30m, "15m": data_15m},
+            )
 
             if data_1h.empty or data_30m.empty or data_15m.empty:
                 telemetry_reasons = ["timeframe data unavailable"]
@@ -551,7 +577,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 print(f"  📉 Bearish Div: {bearish_div.strength:.2f}")
 
             # ── EMA Computation (only when enabled in config) ──
-            ema_signals_this_pair: list[dict[str, object]] = []
+            ema_signals_this_pair: list[EmaSignalEntry] = []
             ema_ctx_parts: list[str] = []
             if settings.strategy.ema.enabled:
                 ema_cfg = settings.strategy.ema
@@ -1306,7 +1332,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                     changed = True
                 else:
                     # Pair still in tracked state this scan: reset any miss streak.
-                    if int(prev.get("miss_count", 0)) > 0:
+                    if prev is not None and int(prev.get("miss_count", 0)) > 0:
                         near_state[pair] = {
                             **prev,
                             "miss_count": 0,
@@ -1364,13 +1390,13 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
         and notifier
         and ema_candidates
     ):
-        for candidate in ema_candidates:
-            pair = candidate["pair"]
-            symbol = candidate["symbol"]
+        for ema_candidate in ema_candidates:
+            pair = ema_candidate["pair"]
+            symbol = ema_candidate["symbol"]
             if pair in shadow_set:
                 continue
 
-            signals = candidate["signals"]
+            signals = ema_candidate["signals"]
             # Rate-limit: prioritize crossover > price_touch > slope
             priority_map = {"crossover": 0, "price_touch": 1, "slope": 2}
             signals.sort(key=lambda s: priority_map.get(str(s.get("type", "")), 99))
@@ -1403,8 +1429,12 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 should_send = prev is None
 
                 if should_send:
-                    if sig_type == "crossover":
-                        direction = "bullish" if data.crossover_type == EMACrossoverType.GOLDEN_CROSS else "bearish"
+                    if sig_type == "crossover" and isinstance(data, EMACrossover):
+                        direction = (
+                            "bullish"
+                            if data.crossover_type == EMACrossoverType.GOLDEN_CROSS
+                            else "bearish"
+                        )
                         await notifier.send_ema_crossover(
                             pair=symbol,
                             direction=direction,
@@ -1414,7 +1444,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             slow_period=data.slow_period,
                             timeframe=data.timeframe,
                         )
-                    elif sig_type == "price_touch":
+                    elif sig_type == "price_touch" and isinstance(data, EMAPriceTouch):
                         await notifier.send_ema_price_touch(
                             pair=symbol,
                             price=data.price,
@@ -1424,7 +1454,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             touch_type=data.direction,
                             distance_pips=data.distance_pips,
                         )
-                    elif sig_type == "slope":
+                    elif sig_type == "slope" and isinstance(data, EMASlope):
                         await notifier.send_ema_slope(
                             pair=symbol,
                             ema_period=data.period,
@@ -1642,6 +1672,10 @@ async def run_healthcheck() -> None:
     await _healthcheck_run()
 
 
+async def run_logs_status(notify: bool) -> None:
+    await _logs_status_run(notify=notify)
+
+
 async def run_dashboard(days: int) -> None:
     await _dashboard_run(days)
 
@@ -1676,6 +1710,7 @@ def main() -> int:
         ),
         "telegram-poll": run_telegram_poll,
         "healthcheck": run_healthcheck,
+        "logs-status": lambda: run_logs_status(args.notify),
         "dashboard": lambda: run_dashboard(args.days),
     }
 

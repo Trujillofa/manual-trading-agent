@@ -117,15 +117,20 @@ class ConfirmationProfilesConfig:
     def __post_init__(self) -> None:
         for pair, _ in self.pairs.items():
             if not _is_non_empty_string(pair):
-                raise ValueError(
-                    "confirmation_profiles.pairs keys must be non-empty strings"
-                )
+                raise ValueError("confirmation_profiles.pairs keys must be non-empty strings")
+
+
+_EMA_STANDALONE_SIGNAL_TYPES = frozenset({"crossover", "price_touch", "slope"})
 
 
 @dataclass
 class EMAConfig:
     enabled: bool = False
+    # Opt-in via YAML; keep False here so minimal configs stay quiet.
     standalone_notifications_enabled: bool = False
+    standalone_signal_types: list[str] = field(default_factory=lambda: ["crossover"])
+    standalone_timeframes: list[str] = field(default_factory=lambda: ["15m", "30m"])
+    standalone_session_filter_enabled: bool = True
     fast_period: int = 9
     slow_period: int = 21
     medium_period: int = 50
@@ -164,6 +169,23 @@ class EMAConfig:
             raise ValueError("ema.touch_threshold_pips must be >= 0")
         if self.max_signals_per_pair <= 0:
             raise ValueError("ema.max_signals_per_pair must be > 0")
+        if not isinstance(self.standalone_signal_types, list):
+            raise ValueError("ema.standalone_signal_types must be a list")
+        for sig_type in self.standalone_signal_types:
+            if not _is_non_empty_string(sig_type):
+                raise ValueError("ema.standalone_signal_types must contain only non-empty strings")
+            if sig_type not in _EMA_STANDALONE_SIGNAL_TYPES:
+                allowed = ", ".join(sorted(_EMA_STANDALONE_SIGNAL_TYPES))
+                raise ValueError(
+                    f"ema.standalone_signal_types entry '{sig_type}' invalid; allowed: {allowed}"
+                )
+        if not isinstance(self.standalone_timeframes, list):
+            raise ValueError("ema.standalone_timeframes must be a list")
+        if not self.standalone_timeframes:
+            raise ValueError("ema.standalone_timeframes must be non-empty")
+        for tf in self.standalone_timeframes:
+            if not _is_non_empty_string(tf):
+                raise ValueError("ema.standalone_timeframes must contain only non-empty strings")
 
 
 @dataclass
@@ -405,12 +427,8 @@ class Settings:
             "aligned_pending_notifications": telegram_data.get(
                 "aligned_pending_notifications", True
             ),
-            "setup_digest_notifications": telegram_data.get(
-                "setup_digest_notifications", True
-            ),
-            "setup_digest_interval_minutes": telegram_data.get(
-                "setup_digest_interval_minutes", 60
-            ),
+            "setup_digest_notifications": telegram_data.get("setup_digest_notifications", True),
+            "setup_digest_interval_minutes": telegram_data.get("setup_digest_interval_minutes", 60),
             "scan_results": telegram_data.get("scan_results", True),
         }
 
@@ -438,9 +456,7 @@ class Settings:
                 for pair_key, profile_data in raw_pairs.items():
                     if isinstance(profile_data, dict):
                         pairs_parsed[pair_key] = ConfirmationProfileEntry(**profile_data)
-            profiles_config = ConfirmationProfilesConfig(
-                default=default_entry, pairs=pairs_parsed
-            )
+            profiles_config = ConfirmationProfilesConfig(default=default_entry, pairs=pairs_parsed)
         else:
             profiles_config = ConfirmationProfilesConfig()
 

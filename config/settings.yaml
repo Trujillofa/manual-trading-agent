@@ -77,10 +77,19 @@ strategy:
     USD/JPY: 75
   pair_overrides: {}  # reverted to global defaults (sma_period=50, tp_atr=1.0, sl_atr=3.0) 2026-06 Branch B consolidation; old values from divergent-engine backtests
 
-  # EMA analysis — disabled by default, runs alongside RSI when on
+  # EMA analysis — runs alongside RSI for context; standalone GC/DC alerts are
+  # an intraday alert aid (Branch B), not a promoted entry system.
   ema:
     enabled: true
-    standalone_notifications_enabled: false
+    # Standalone Telegram for 15m/30m golden/death crosses only (session-gated).
+    # price_touch stays on for RSI ema_context; it is excluded from standalone types.
+    standalone_notifications_enabled: true
+    standalone_signal_types:
+      - crossover
+    standalone_timeframes:
+      - "15m"
+      - "30m"
+    standalone_session_filter_enabled: true
     fast_period: 9
     slow_period: 21
     medium_period: 50

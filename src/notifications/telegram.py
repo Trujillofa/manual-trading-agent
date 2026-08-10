@@ -198,8 +198,17 @@ class TelegramNotifier:
         pattern_text = ""
         if patterns:
             from src.indicators.candlestick import PatternType
-            bullish = [p for p in patterns if hasattr(p, "pattern_type") and p.pattern_type == PatternType.BULLISH]
-            bearish = [p for p in patterns if hasattr(p, "pattern_type") and p.pattern_type == PatternType.BEARISH]
+
+            bullish = [
+                p
+                for p in patterns
+                if hasattr(p, "pattern_type") and p.pattern_type == PatternType.BULLISH
+            ]
+            bearish = [
+                p
+                for p in patterns
+                if hasattr(p, "pattern_type") and p.pattern_type == PatternType.BEARISH
+            ]
             if bullish:
                 pattern_text += f"\n🟢 Patterns: {', '.join(p.name for p in bullish)}"
             if bearish:
@@ -209,6 +218,7 @@ class TelegramNotifier:
         div_text = ""
         if divergence and hasattr(divergence, "divergence_type"):
             from src.indicators.rsi import DivergenceType
+
             typed_divergence = cast(_DivergenceLike, divergence)
             if typed_divergence.divergence_type == DivergenceType.BULLISH:
                 div_text += f"\n📈 Bullish Divergence (strength: {typed_divergence.strength:.2f})"
@@ -226,7 +236,9 @@ class TelegramNotifier:
 
         # Build message with entry/TP/SL if provided
         news_text = "\nNews: `clear` (no 3-star block)"
-        invalidation_hint = "\nInvalidate on: 15m RSI cross of 50 or close back through 20-bar extreme"
+        invalidation_hint = (
+            "\nInvalidate on: 15m RSI cross of 50 or close back through 20-bar extreme"
+        )
 
         if entry is not None and tp is not None and sl is not None:
             pip_mult = 100 if "JPY" in pair else 10000
@@ -283,21 +295,27 @@ class TelegramNotifier:
         fast_period: int,
         slow_period: int,
         timeframe: str,
+        price: float | None = None,
     ) -> None:
         """Send EMA crossover signal (Golden Cross or Death Cross)."""
         if direction == "bullish":
             emoji = "🟢"
             cross_label = "Golden Cross"
+            bias = "Bullish bias"
         else:
             emoji = "🔴"
             cross_label = "Death Cross"
+            bias = "Bearish bias"
 
+        price_line = f"\nPrice: `{price:.5f}`" if price is not None else ""
         message = (
             f"{emoji} *EMA Crossover* — {cross_label}\n\n"
             f"Pair: `{pair}`\n"
             f"Timeframe: `{timeframe}`\n"
             f"EMA({fast_period}): `{fast_ema:.5f}`\n"
             f"EMA({slow_period}): `{slow_ema:.5f}`"
+            f"{price_line}\n"
+            f"Bias: `{bias}`"
         )
         _ = await self.send(message)
 

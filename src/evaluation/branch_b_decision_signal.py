@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 from src.evaluation.decision_signal_schema import (
     ENGINE_VERSION,
     KIND_DECISION_SIGNAL,
+    normalize_decision_symbol,
     validate_decision_signal,
 )
 
@@ -38,7 +39,7 @@ FieldStatus = Literal[
     "fetch_failed",
 ]
 
-_SYMBOL_RE = re.compile(r"^[A-Z]{3}/[A-Z]{3}$")
+# Compact EURUSD → EUR/USD for historical Branch B helpers; multi-asset uses registry.
 _COMPACT_PAIR_RE = re.compile(r"^[A-Z]{6}$")
 
 _SCAN_STATE_TO_ACTION: dict[BranchBScanState, Action] = {
@@ -100,14 +101,34 @@ class BranchBScanContextError(ValueError):
 
 
 def normalize_fx_symbol(pair: str) -> str:
-    """Normalize pair labels such as EURUSD or eur/usd to EUR/USD."""
+    """Normalize instrument/pair labels for Branch B decision signals.
+
+    Accepts registry instrument ids (OIL, NASDAQ, XAU/USD, …) or slash-form FX
+    pairs (EUR/USD). Also accepts compact 6-letter FX labels (EURUSD) for
+    historical helper callers. Raises ``BranchBScanContextError`` otherwise.
+    """
     text = pair.strip().upper()
-    if _SYMBOL_RE.fullmatch(text):
-        return text
-    compact = text.replace("/", "").replace("-", "")
-    if _COMPACT_PAIR_RE.fullmatch(compact):
-        return f"{compact[:3]}/{compact[3:]}"
-    raise BranchBScanContextError(f"invalid FX pair: {pair!r}")
+    # Registry + slash FX via shared helper (no hardcoded multi-asset id list).
+    try:
+        return normalize_decision_symbol(text)
+    except ValueError:
+        pass
+
+    # Compact EURUSD only — no hyphenated EUR-USD (treated as junk).
+    if _COMPACT_PAIR_RE.fullmatch(text):
+        candidate = f"{text[:3]}/{text[3:]}"
+        try:
+            return normalize_decision_symbol(candidate)
+        except ValueError as exc:
+            raise BranchBScanContextError(
+                f"invalid instrument symbol {pair!r}: must be a registry id "
+                f"(e.g. OIL, NASDAQ, XAU/USD) or FX pair like EUR/USD"
+            ) from exc
+
+    raise BranchBScanContextError(
+        f"invalid instrument symbol {pair!r}: must be a registry id "
+        f"(e.g. OIL, NASDAQ, XAU/USD) or FX pair like EUR/USD"
+    )
 
 
 def normalize_utc_timestamp(value: datetime | str) -> datetime:

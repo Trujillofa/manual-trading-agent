@@ -24,6 +24,7 @@ from src.dashboard.log_status import run_logs_status as _logs_status_run
 from src.dashboard.report import run_dashboard as _dashboard_run
 from src.dashboard.report import run_healthcheck as _healthcheck_run
 from src.data.fetcher import DataFetcher
+from src.data.store import CandleStore
 from src.evaluation.branch_b_audit import record_branch_b_scan_decision_signal
 from src.indicators.adx import calculate_adx_full
 from src.indicators.atr import calculate_atr
@@ -281,6 +282,7 @@ def create_parser() -> argparse.ArgumentParser:
 async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     settings = get_settings()
     fetcher = DataFetcher()
+    candle_store = CandleStore()
     news_checker = NewsChecker(
         lockout_minutes_before=settings.news.lockout_minutes_before,
         lockout_minutes_after=settings.news.lockout_minutes_after,
@@ -363,6 +365,14 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             data_1h = fetcher.fetch(symbol, period=period_1h, interval="1h")
             data_30m = fetcher.fetch(symbol, period=period_30m, interval="30m")
             data_15m = fetcher.fetch(symbol, period=period_15m, interval="15m")
+
+            # Persist fetched OHLCV candles for future backtesting.
+            # Additive only: failures are logged inside CandleStore and never
+            # propagate — the scan cycle must continue regardless.
+            candle_store.save_multi_timeframe(
+                symbol,
+                {"1h": data_1h, "30m": data_30m, "15m": data_15m},
+            )
 
             if data_1h.empty or data_30m.empty or data_15m.empty:
                 telemetry_reasons = ["timeframe data unavailable"]

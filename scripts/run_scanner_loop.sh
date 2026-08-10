@@ -51,6 +51,9 @@ rotate_managed_logs() {
 }
 
 mkdir -p "$LOG_DIR"
+# Best-effort: the data dir is bind-mounted in Docker; outside the container
+# (e.g. unit tests) it may be unwritable, so never fail the script over it.
+mkdir -p "${DATA_DIR:-/app/data}" 2>/dev/null || true
 
 rotate_managed_logs
 

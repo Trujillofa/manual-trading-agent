@@ -1,35 +1,14 @@
 trading:
   mode: "paper"
   pairs:
+    # Multi-asset Branch B watchlist (scanner + Telegram only; not a KEEP claim).
+    # Continuous futures (GC=F / CL=F / NQ=F) roll — levels are approximate.
     majors:
-      - EUR/USD
-      - GBP/USD
-      - USD/JPY
-      - USD/CHF
-      - AUD/USD
-      - USD/CAD
-      - NZD/USD
-    minors:
-      - EUR/JPY
-      - EUR/CHF
-      - EUR/AUD
-      - EUR/CAD
-      - EUR/NZD
-      - GBP/JPY
-      - GBP/CHF
-      - GBP/AUD
-      - GBP/CAD
-      - GBP/NZD
-      - AUD/JPY
-      - AUD/CAD
-      - AUD/CHF
-      - AUD/NZD
-      - NZD/JPY
-      - NZD/CAD
-      - NZD/CHF
-      - CAD/JPY
-      - CAD/CHF
-      - CHF/JPY
+      - XAU/USD
+      - BTC/USD
+      - OIL
+      - NASDAQ
+    minors: []
     shadow: []
   lot_size: 3
 
@@ -49,40 +28,33 @@ strategy:
   lookback_bars: 20
   cooldown_minutes: 60
   session_filter_enabled: true
+  # Global fallback; per-instrument session_allowed_utc in instruments: overrides via evaluate_entry overrides.
   session_allowed_utc:
-    - "06-17"
-    - "12-21"
-  breakout_buffer_pips: 0.0
-  # Confirmation profiles. Per-pair overrides retired 2026-06 (Branch B: numbers came from divergent engine).
-  # All pairs now use global default (V2 reversal with b0.5 c2). See CLAUDE.md research note.
+    - "00-24"
+  breakout_buffer_pips: 0.5  # FX/legacy only; multi-asset uses ATR fraction below
+  breakout_buffer_atr_frac: 0.05  # buffer = ATR(14,15m) * frac (scale-free across assets)
+  # Confirmation profiles. Multi-asset uses ATR-scaled buffer via cli overrides.
   confirmation_profiles:
     default:
       variant: "V2"
       buffer_pips: 0.5
       confirm_bars: 2
-    pairs: {}  # no per-pair overrides (reverted to default for consistency with honest R1)
-  spread_filter_enabled: true
-  max_spread_pips: 2.0
-  spread_limits_pips:
-    GBP/CHF: 2.5
-    AUD/CAD: 2.5
-    USD/JPY: 2.0
-    GBP/JPY: 3.0
-    NZD/JPY: 3.0
+    pairs: {}
+  # No reliable free bid/ask for GC/CL/NQ/BTC on this stack.
+  spread_filter_enabled: false
+  max_spread_pips: 50.0
+  spread_limits_pips: {}
   pair_priorities:
-    GBP/CHF: 100
-    NZD/JPY: 90
-    GBP/JPY: 85
-    AUD/CAD: 80
-    USD/JPY: 75
-  pair_overrides: {}  # reverted to global defaults (sma_period=50, tp_atr=1.0, sl_atr=3.0) 2026-06 Branch B consolidation; old values from divergent-engine backtests
+    XAU/USD: 100
+    BTC/USD: 90
+    OIL: 80
+    NASDAQ: 85
+  pair_overrides: {}
 
-  # EMA analysis — runs alongside RSI for context; standalone GC/DC alerts are
-  # an intraday alert aid (Branch B), not a promoted entry system.
+  # EMA: 20/50 golden/death cross for intraday multi-asset alerts (Branch B).
+  # medium_period stays 100 (not 50) so it does not duplicate slow.
   ema:
     enabled: true
-    # Standalone Telegram for 15m/30m golden/death crosses only (session-gated).
-    # price_touch stays on for RSI ema_context; it is excluded from standalone types.
     standalone_notifications_enabled: true
     standalone_signal_types:
       - crossover
@@ -90,25 +62,45 @@ strategy:
       - "15m"
       - "30m"
     standalone_session_filter_enabled: true
-    fast_period: 9
-    slow_period: 21
-    medium_period: 50
+    fast_period: 20
+    slow_period: 50
+    medium_period: 100
     long_period: 200
     crossover_enabled: true
     price_touch_enabled: true
     slope_enabled: false
     touch_threshold_pips: 1.0
     max_signals_per_pair: 3
-    # EMA trend-alignment confidence modifier (scales RSI signal confidence,
-    # not a gate). Default off — no effect on existing signals until enabled.
     confidence_modifier_enabled: false
     confidence_ref_period: 200
     confidence_boost: 1.10
     confidence_dampen: 0.85
 
+# Instrument metadata (yf tickers, point size for display, news currencies, sessions).
+# Session windows: _session_allowed cannot wrap midnight — use two windows for CME gaps.
+instruments:
+  XAU/USD:
+    yf_symbol: GC=F
+    point_size: 0.1
+    currencies: [XAU, USD]
+    session_allowed_utc: ["00-21", "22-24"]
+  BTC/USD:
+    yf_symbol: BTC-USD
+    point_size: 1.0
+    currencies: [USD]
+    session_allowed_utc: ["00-24"]
+  OIL:
+    yf_symbol: CL=F
+    point_size: 0.01
+    currencies: []
+    session_allowed_utc: ["00-21", "22-24"]
+  NASDAQ:
+    yf_symbol: NQ=F
+    point_size: 0.25
+    currencies: [USD]
+    session_allowed_utc: ["00-21", "22-24"]
+
 risk:
-  # TP/SL: fixed-dollar values per AGENTS.md (~$500 TP, ~$1800 SL)
-  # ATR-based multipliers kept for reference (tp_atr_multiplier: 1.0, sl_atr_multiplier: 3.0)
   tp_atr_multiplier: 1.0
   sl_atr_multiplier: 3.0
   tp_usd_legacy: 500

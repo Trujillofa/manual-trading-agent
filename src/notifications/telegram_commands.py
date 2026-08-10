@@ -191,11 +191,24 @@ class TelegramCommandHandler:
         return "\n".join(parts)
 
     def _extract_pairs(self) -> str:
-        return (
-            "*Tracked Pairs*\n\n"
-            "Majors: EUR/USD, GBP/USD, USD/JPY, USD/CHF, USD/CAD, AUD/USD, NZD/USD\n\n"
-            "Minors: EUR/GBP, EUR/JPY, EUR/CHF, EUR/AUD, EUR/CAD, GBP/JPY, GBP/CHF, GBP/AUD, GBP/CAD, GBP/NZD, AUD/JPY, AUD/CAD, AUD/CHF, AUD/NZD, CAD/JPY, CHF/JPY, NZD/JPY"
-        )
+        try:
+            from src.config import get_settings
+
+            settings = get_settings()
+            majors = ", ".join(settings.trading.majors) or "(none)"
+            minors = ", ".join(settings.trading.minors) or "(none)"
+            return (
+                "*Tracked instruments*\n\n"
+                f"Majors: {majors}\n\n"
+                f"Minors: {minors}\n\n"
+                "_Multi-asset Branch B alerts (XAU/BTC/OIL/NASDAQ) — not a validated edge._"
+            )
+        except Exception:
+            return (
+                "*Tracked instruments*\n\n"
+                "Majors: XAU/USD, BTC/USD, OIL, NASDAQ\n\n"
+                "Minors: (none)"
+            )
 
     async def _run_fresh_scan(self, pair: str | None = None) -> str:
         try:

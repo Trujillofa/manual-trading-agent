@@ -280,6 +280,20 @@ class NewsChecker:
 
     @staticmethod
     def _extract_currencies(symbol: str) -> set[str]:
+        """Currencies for news lockout.
+
+        Prefer instrument registry (NASDAQ → {USD}, not {NAS, DAQ}; OIL → {}).
+        Fall back to FX pair string splitting for unregistered symbols.
+        """
+        try:
+            from src.config.instruments import get_instrument_optional
+
+            inst = get_instrument_optional(symbol)
+            if inst is not None:
+                return {c.upper() for c in inst.currencies}
+        except Exception:
+            pass
+
         normalized = symbol.strip().upper().replace("-", "/")
         if "/" in normalized:
             parts = [part.strip() for part in normalized.split("/") if part.strip()]

@@ -12,6 +12,17 @@ from src.config.settings import Settings, TelegramConfig
 from src.dashboard import report as dashboard_report
 
 
+@pytest.fixture(autouse=True)
+def _isolate_telegram_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TelegramConfig.__post_init__ reads token/chat/poll from the process env.
+
+    Clear those so unit tests control configuration via the constructor only.
+    """
+    monkeypatch.delenv("TELEGRAM_POLL_ENABLED", raising=False)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+
+
 def test_healthcheck_requires_recent_scan_and_telegram_heartbeat(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

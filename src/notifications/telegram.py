@@ -241,7 +241,15 @@ class TelegramNotifier:
         )
 
         if entry is not None and tp is not None and sl is not None:
-            pip_mult = 100 if "JPY" in pair else 10000
+            try:
+                from src.config.instruments import distance_unit_label, point_size
+
+                pt = point_size(pair)
+                unit = distance_unit_label(pair)
+            except Exception:
+                pt = 0.01 if "JPY" in pair else 0.0001
+                unit = "pips"
+            pip_mult = (1.0 / pt) if pt > 0 else 1.0
             tp_pips = abs(tp - entry) * pip_mult
             sl_pips = abs(sl - entry) * pip_mult
 
@@ -249,8 +257,8 @@ class TelegramNotifier:
                 f"{emoji} *{direction} Signal*\n\n"
                 f"Pair: `{pair}`\n"
                 f"Entry: `{entry:.5f}`\n"
-                f"TP: `{tp:.5f}` ({tp_pips:.1f} pips)\n"
-                f"SL: `{sl:.5f}` ({sl_pips:.1f} pips)\n\n"
+                f"TP: `{tp:.5f}` ({tp_pips:.1f} {unit})\n"
+                f"SL: `{sl:.5f}` ({sl_pips:.1f} {unit})\n\n"
                 f"RSI(14):\n"
                 f"  15m: `{rsi_15m:.1f}`"
                 f"{adx_text}\n\n"

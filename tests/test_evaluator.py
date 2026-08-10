@@ -137,9 +137,19 @@ class TestEvaluateEntryInjectedValues:
         d15 = _make_ohlc_df(_down_plunge(25))
         d30 = _make_ohlc_df(_down_plunge(25))
         d1h = _make_ohlc_df(_down_plunge(60))
-        # 03:00 UTC is outside common 06-17 / 12-21 windows
+        # Inject classic FX windows so 03:00 is outside regardless of multi-asset YAML.
         early = datetime(2024, 6, 1, 3, 0, tzinfo=UTC)
-        res = evaluate_entry("EUR/USD", d1h, d30, d15, now_utc=early)
+        res = evaluate_entry(
+            "EUR/USD",
+            d1h,
+            d30,
+            d15,
+            now_utc=early,
+            overrides={
+                "session_filter_enabled": True,
+                "session_allowed_utc": ["06-17", "12-21"],
+            },
+        )
         # may or may not be the blocking reason (depends if MTF dir set), but if session filter on it should appear when dir candidate
         if any("MTF RSI" in r for r in res.get("reasons", [])):
             assert any("session" in r.lower() for r in res.get("no_trade_reasons", []))

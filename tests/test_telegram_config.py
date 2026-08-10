@@ -129,6 +129,9 @@ def test_repo_settings_yaml_enables_intraday_ema_crossover_alerts() -> None:
     assert ema.standalone_signal_types == ["crossover"]
     assert ema.standalone_timeframes == ["15m", "30m"]
     assert ema.standalone_session_filter_enabled is True
+    assert ema.fast_period == 20
+    assert ema.slow_period == 50
+    assert ema.medium_period == 100
 
 
 def test_ema_config_rejects_invalid_standalone_signal_type() -> None:

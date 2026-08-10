@@ -131,9 +131,9 @@ class EMAConfig:
     standalone_signal_types: list[str] = field(default_factory=lambda: ["crossover"])
     standalone_timeframes: list[str] = field(default_factory=lambda: ["15m", "30m"])
     standalone_session_filter_enabled: bool = True
-    fast_period: int = 9
-    slow_period: int = 21
-    medium_period: int = 50
+    fast_period: int = 20
+    slow_period: int = 50
+    medium_period: int = 100  # do not set equal to slow_period
     long_period: int = 200
     crossover_enabled: bool = True
     price_touch_enabled: bool = True
@@ -198,6 +198,8 @@ class StrategyConfig:
     session_filter_enabled: bool = True
     session_allowed_utc: list[str] = field(default_factory=lambda: ["06-17", "12-21"])
     breakout_buffer_pips: float = 0.0
+    # Multi-asset: absolute breakout buffer = ATR(14) * this fraction (scale-free).
+    breakout_buffer_atr_frac: float = 0.05
     spread_filter_enabled: bool = False
     max_spread_pips: float = 2.0
     spread_limits_pips: dict[str, float] = field(default_factory=dict)
@@ -231,6 +233,8 @@ class StrategyConfig:
             raise ValueError("strategy.lookback_bars must be greater than 0")
         if self.cooldown_minutes < 0:
             raise ValueError("strategy.cooldown_minutes must be >= 0")
+        if self.breakout_buffer_atr_frac < 0:
+            raise ValueError("strategy.breakout_buffer_atr_frac must be >= 0")
         if self.max_spread_pips < 0:
             raise ValueError("strategy.max_spread_pips must be >= 0")
         if self.sma_period <= 0:
@@ -465,6 +469,17 @@ class Settings:
         if not isinstance(raw_ema, dict):
             raise ValueError("'strategy.ema' must be a YAML object")
         ema_config = EMAConfig(**raw_ema)
+
+        # Multi-asset instrument overlays (optional top-level instruments: block)
+        raw_instruments = payload.get("instruments", {})
+        if raw_instruments:
+            from src.config.instruments import apply_yaml_instruments, reset_registry_to_defaults
+
+            # Start from built-ins each load so reloads don't stack stale overlays.
+            reset_registry_to_defaults()
+            if not isinstance(raw_instruments, dict):
+                raise ValueError("'instruments' must be a YAML object")
+            apply_yaml_instruments(raw_instruments)
 
         strategy_payload = {
             k: v

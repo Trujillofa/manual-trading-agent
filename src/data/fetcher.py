@@ -152,10 +152,37 @@ class DataFetcher:
 
     def __init__(self) -> None:
         self._td_api_key = os.environ.get("TWELVE_DATA_API_KEY", "")
+        # Overlay multi-asset registry into SYMBOL_MAP so product IDs never
+        # fall through to the FX ``=X`` mangler (e.g. NASDAQ → NASDAQ=X).
+        self._apply_instrument_registry()
 
-    def _to_td_symbol(self, symbol: str) -> str:
-        """Convert symbol to Twelve Data format (EUR/USD)."""
+    def _apply_instrument_registry(self) -> None:
+        try:
+            from src.config.instruments import yfinance_symbol_map
+        except Exception:
+            return
+        for product_id, yf_ticker in yfinance_symbol_map().items():
+            # Mutate class maps (shared) — one source of truth with the registry.
+            type(self).YFINANCE_MAP[product_id] = yf_ticker
+            type(self).SYMBOL_MAP[product_id] = yf_ticker
+
+    def _to_td_symbol(self, symbol: str) -> str | None:
+        """Convert symbol to Twelve Data format, or None when TD must be skipped.
+
+        Multi-asset registry instruments with ``td_symbol is None`` never hit TD
+        (avoids BTC-USD → BTC/-USD and GC=F → GC/=F splits).
+        """
+        try:
+            from src.config.instruments import get_instrument_optional
+
+            inst = get_instrument_optional(symbol)
+            if inst is not None:
+                return inst.td_symbol
+        except Exception:
+            pass
         clean = symbol.upper().replace("=X", "").replace("/", "").strip()
+        if len(clean) < 6:
+            return None
         return f"{clean[:3]}/{clean[3:]}"
 
     def _fetch_twelve_data(
@@ -172,6 +199,8 @@ class DataFetcher:
             return pd.DataFrame()
 
         td_symbol = self._to_td_symbol(symbol)
+        if not td_symbol:
+            return pd.DataFrame()
         outputsize = self._TD_PERIOD_BARS.get(period or "", 200)
 
         import requests
@@ -239,6 +268,8 @@ class DataFetcher:
         chunk_days = max(1, int(5000 / bars_per_day))
 
         td_symbol = self._to_td_symbol(symbol)
+        if not td_symbol:
+            return pd.DataFrame()
         start_dt = datetime.strptime(start, "%Y-%m-%d")
         end_dt = datetime.strptime(end, "%Y-%m-%d")
         chunks: list[pd.DataFrame] = []
@@ -299,9 +330,19 @@ class DataFetcher:
         if mapped:
             return mapped
 
+        try:
+            from src.config.instruments import get_instrument_optional
+
+            inst = get_instrument_optional(symbol)
+            if inst is not None:
+                return inst.yf_symbol
+        except Exception:
+            pass
+
         normalized = symbol.replace("/", "").strip().upper()
-        if normalized.endswith("=X"):
+        if normalized.endswith("=X") or normalized.endswith("=F") or "-" in normalized:
             return normalized
+        # Legacy FX fallback only
         return f"{normalized}=X"
 
     def _normalize_columns(self, data: pd.DataFrame) -> pd.DataFrame:

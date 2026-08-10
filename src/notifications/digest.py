@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Literal, TypedDict, cast
+from typing import Literal, NotRequired, TypedDict, cast
 
 from src.indicators.ema import EMACrossover, EMAPriceTouch, EMASlope
 
@@ -21,6 +21,8 @@ class EmaCandidate(TypedDict):
     pair: str
     symbol: str
     signals: list[EmaSignalEntry]
+    price: NotRequired[float | None]
+
 
 SetupState = Literal["breakout_pending", "aligned", "near"]
 Direction = Literal["BUY", "SELL"]
@@ -106,8 +108,7 @@ class SetupCandidate:
 def digest_fingerprint(candidates: list[SetupCandidate]) -> str:
     """Fingerprint meaningful digest state, ignoring RSI/distance ticks and ordering."""
     tokens = sorted(
-        f"{candidate.pair}:{candidate.direction}:{candidate.state}"
-        for candidate in candidates[:3]
+        f"{candidate.pair}:{candidate.direction}:{candidate.state}" for candidate in candidates[:3]
     )
     return "|".join(tokens)
 

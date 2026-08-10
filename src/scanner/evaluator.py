@@ -203,7 +203,13 @@ def evaluate_entry(
     if "confirm_bars" in ov:
         profile = {**profile, "confirm_bars": int(ov["confirm_bars"])}
     profile_label = _profile_label(profile)
-    pip_size = 0.01 if "JPY" in pair else 0.0001
+    # pip_size injectable for multi-asset ATR-scaled buffers (cli sets absolute
+    # buffer via buffer_pips + pip_size=1.0). No instrument registry I/O here.
+    pip_size = (
+        float(ov["pip_size"])
+        if "pip_size" in ov
+        else (0.01 if "JPY" in pair else 0.0001)
+    )
     bar_high = high_15m[-1] if high_15m else None
     bar_low = low_15m[-1] if low_15m else None
 
@@ -532,15 +538,11 @@ def evaluate_entry(
                 tp = entry + (atr * tp_mult)
                 sl = entry - (atr * sl_mult)
         else:
-            # fallback (should be rare post-fix)
-            pips = 30
+            # No fixed-pip fallback: absurd on BTC/NQ/XAU. No ATR → no signal.
             entry = close_price
-            tp = (
-                entry + (pips * pip_size)
-                if signal_direction == "BUY"
-                else entry - (pips * pip_size)
-            )
-            sl = entry - (90 * pip_size) if signal_direction == "BUY" else entry + (90 * pip_size)
+            tp = None
+            sl = None
+            no_trade_reasons.append("ATR unavailable")
 
     fired = bool(signal_direction and not no_trade_reasons)
 

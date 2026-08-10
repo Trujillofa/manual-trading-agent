@@ -13,8 +13,15 @@ from datetime import UTC, datetime
 from typing import Literal, TypedDict, cast
 
 from src.config import get_settings
-from src.dashboard.report import run_dashboard as _dashboard_run
+from src.config.instruments import (
+    distance_unit_label,
+    get_instrument_optional,
+    require_backtest_supported,
+)
+from src.config.instruments import point_size as instrument_point_size
+from src.config.instruments import session_windows as instrument_session_windows
 from src.dashboard.log_status import run_logs_status as _logs_status_run
+from src.dashboard.report import run_dashboard as _dashboard_run
 from src.dashboard.report import run_healthcheck as _healthcheck_run
 from src.data.fetcher import DataFetcher
 from src.data.store import CandleStore
@@ -76,6 +83,7 @@ from src.scanner.gates import (
     _mtf_distance_to_sell,
     _priority_for_pair,
     _profile_label,
+    _session_allowed,
 )
 from src.scanner.state import (
     INVALIDATION_MISS_THRESHOLD,
@@ -95,6 +103,51 @@ from src.scanner.state import (
     _save_setup_digest_state,
 )
 from src.scanner.telemetry import _build_scan_telemetry_payload
+
+
+def _ema_standalone_fingerprint(sig_type: str, data: object, pair: str) -> str:
+    """Build anti-flicker fingerprint for a standalone EMA notification.
+
+    Crossovers use fast/slow periods (EMACrossover has no ``ema_period``).
+    """
+    if isinstance(data, EMACrossover):
+        period_str = f"{data.fast_period}/{data.slow_period}"
+        tf_str = data.timeframe
+        dir_str = data.crossover_type.value
+    elif isinstance(data, EMAPriceTouch):
+        period_str = str(data.ema_period)
+        tf_str = data.timeframe
+        dir_str = str(data.direction)
+    elif isinstance(data, EMASlope):
+        period_str = str(data.period)
+        tf_str = data.timeframe
+        dir_str = data.slope_direction.value
+    else:
+        period_str = ""
+        tf_str = str(getattr(data, "timeframe", "") or "")
+        dir_str = ""
+    return f"ema_{sig_type}_{tf_str}_{pair}_{period_str}_{dir_str}"
+
+
+def _filter_standalone_ema_signals(
+    signals: list[EmaSignalEntry],
+    *,
+    allowed_types: list[str],
+    allowed_timeframes: list[str],
+) -> list[EmaSignalEntry]:
+    """Keep only standalone-eligible EMA signals by type and timeframe."""
+    type_set = set(allowed_types)
+    tf_set = set(allowed_timeframes)
+    filtered: list[EmaSignalEntry] = []
+    for sig in signals:
+        if str(sig.get("type", "")) not in type_set:
+            continue
+        data = sig["data"]
+        tf = getattr(data, "timeframe", "") or ""
+        if tf not in tf_set:
+            continue
+        filtered.append(sig)
+    return filtered
 
 
 class NearCandidate(TypedDict):
@@ -189,13 +242,22 @@ def create_parser() -> argparse.ArgumentParser:
         help="Enable EMA trend-alignment confidence modifier (boost when price agrees with EMA-ref trend, dampen when counter)",
     )
     enhanced_backtest_parser.add_argument(
-        "--ema-confidence-ref", type=int, default=200, help="EMA period for trend reference (default: 200)"
+        "--ema-confidence-ref",
+        type=int,
+        default=200,
+        help="EMA period for trend reference (default: 200)",
     )
     enhanced_backtest_parser.add_argument(
-        "--ema-confidence-boost", type=float, default=1.10, help="Confidence multiplier when trend-aligned (default: 1.10)"
+        "--ema-confidence-boost",
+        type=float,
+        default=1.10,
+        help="Confidence multiplier when trend-aligned (default: 1.10)",
     )
     enhanced_backtest_parser.add_argument(
-        "--ema-confidence-dampen", type=float, default=0.85, help="Confidence multiplier when trend-counter (default: 0.85)"
+        "--ema-confidence-dampen",
+        type=float,
+        default=0.85,
+        help="Confidence multiplier when trend-counter (default: 0.85)",
     )
 
     subparsers.add_parser("telegram-poll", help="Poll Telegram commands (e.g. /watchlist)")
@@ -295,8 +357,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             # Widen windows when EMA alerts OR the EMA confidence modifier is on
             # (EMA-200 on 1h needs >=200 bars).
             ema_enabled = (
-                settings.strategy.ema.enabled
-                or settings.strategy.ema.confidence_modifier_enabled
+                settings.strategy.ema.enabled or settings.strategy.ema.confidence_modifier_enabled
             )
             period_1h = "30d" if ema_enabled else "5d"
             period_30m = "7d" if ema_enabled else "3d"
@@ -358,7 +419,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 outcome = _check_trade_outcome(trade, bar_times_unix, high_15m, low_15m)
                 if outcome:
                     pending_trades = [t for t in pending_trades if t is not trade]
-                    pip_mult = 100.0 if "JPY" in pair else 10000.0
+                    pt = instrument_point_size(pair)
+                    pip_mult = (1.0 / pt) if pt > 0 else 1.0
                     tp_pips = abs(float(trade["tp"]) - float(trade["entry"])) * pip_mult
                     sl_pips = abs(float(trade["sl"]) - float(trade["entry"])) * pip_mult
                     result_pips = tp_pips if outcome == "tp" else -sl_pips
@@ -431,17 +493,44 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             # Calculate ATR for TP/SL
             # Use period+1 bars so the shared calculate_atr (fixed) can produce a full ATR(14).
             atr = calculate_atr(high_15m[-(14 + 1) :], low_15m[-(14 + 1) :], close_15m[-(14 + 1) :])
-            pip_size = 0.01 if "JPY" in pair else 0.0001
+            inst = get_instrument_optional(pair)
+            display_point_size = instrument_point_size(pair)
+            profile = _get_confirmation_profile(pair)
+            # Multi-asset: absolute ATR-scaled breakout buffer (scale-free across price levels).
+            # Injected as buffer_pips * pip_size=1.0 into gates + evaluate_entry overrides.
+            atr_frac = float(getattr(settings.strategy, "breakout_buffer_atr_frac", 0.05))
+            entry_overrides: dict[str, object] = {}
+            if inst is not None:
+                entry_overrides["session_allowed_utc"] = instrument_session_windows(
+                    pair, list(settings.strategy.session_allowed_utc)
+                )
+                entry_overrides["spread_filter_enabled"] = bool(inst.spread_filter_enabled)
+                if atr is not None and atr > 0 and atr_frac > 0:
+                    entry_overrides["pip_size"] = 1.0
+                    entry_overrides["buffer_pips"] = float(atr) * atr_frac
+                    breakout_pip_size = 1.0
+                    breakout_profile = {
+                        **profile,
+                        "buffer_pips": float(entry_overrides["buffer_pips"]),
+                    }
+                else:
+                    breakout_pip_size = display_point_size
+                    breakout_profile = profile
+            else:
+                breakout_pip_size = display_point_size
+                breakout_profile = profile
+
             bar_high = high_15m[-1] if high_15m else None
             bar_low = low_15m[-1] if low_15m else None
-            profile = _get_confirmation_profile(pair)
 
             breakout_buy = _check_breakout_with_profile(
-                profile, "BUY", close_price, hh, ll, pip_size, bar_high, bar_low
+                breakout_profile, "BUY", close_price, hh, ll, breakout_pip_size, bar_high, bar_low
             )
             breakout_sell = _check_breakout_with_profile(
-                profile, "SELL", close_price, hh, ll, pip_size, bar_high, bar_low
+                breakout_profile, "SELL", close_price, hh, ll, breakout_pip_size, bar_high, bar_low
             )
+            # Spread / touch math still uses display point size (not ATR buffer unit).
+            pip_size = display_point_size
 
             # ADX trend filter on 1h timeframe — also capture +DI/-DI for signal context
             adx_1h_full = calculate_adx_full(
@@ -582,11 +671,16 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             if settings.strategy.ema.enabled:
                 ema_cfg = settings.strategy.ema
                 close_by_tf = {"1h": close_1h_list, "30m": close_30m_list, "15m": close_15m}
+                # Keys are period strings so 20/50 (or any config) never mis-label series.
+                fast_key = str(ema_cfg.fast_period)
+                slow_key = str(ema_cfg.slow_period)
+                med_key = str(ema_cfg.medium_period)
+                long_key = str(ema_cfg.long_period)
                 ema_periods = {
-                    "9": ema_cfg.fast_period,
-                    "21": ema_cfg.slow_period,
-                    "50": ema_cfg.medium_period,
-                    "200": ema_cfg.long_period,
+                    fast_key: ema_cfg.fast_period,
+                    slow_key: ema_cfg.slow_period,
+                    med_key: ema_cfg.medium_period,
+                    long_key: ema_cfg.long_period,
                 }
 
                 # Compute all EMA series: 4 periods × 3 timeframes
@@ -600,10 +694,10 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 # Detection passes per timeframe
                 for tf in ("15m", "30m", "1h"):
                     ed = ema_series[tf]
-                    fast = ed["9"]
-                    slow = ed["21"]
-                    med = ed["50"]
-                    long_ema = ed["200"]
+                    fast = ed[fast_key]
+                    slow = ed[slow_key]
+                    med = ed[med_key]
+                    long_ema = ed[long_key]
                     tf_close_vals = close_by_tf[tf]
                     current_price_tf = tf_close_vals[-1] if tf_close_vals else close_price
                     prev_price_tf = tf_close_vals[-2] if len(tf_close_vals) >= 2 else None
@@ -613,53 +707,96 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                         crossover = detect_crossover(
                             fast, slow, tf, ema_cfg.fast_period, ema_cfg.slow_period
                         )
-                        if crossover is not None and crossover.crossover_type != EMACrossoverType.NO_CROSS:
-                            ema_signals_this_pair.append({
-                                "type": "crossover",
-                                "data": crossover,
-                                "pair": pair,
-                            })
-                            label = "GC" if crossover.crossover_type == EMACrossoverType.GOLDEN_CROSS else "DC"
-                            ema_ctx_parts.append(f"EMA{crossover.fast_period}/{crossover.slow_period} {label} {tf}")
+                        if (
+                            crossover is not None
+                            and crossover.crossover_type != EMACrossoverType.NO_CROSS
+                        ):
+                            ema_signals_this_pair.append(
+                                {
+                                    "type": "crossover",
+                                    "data": crossover,
+                                    "pair": pair,
+                                }
+                            )
+                            label = (
+                                "GC"
+                                if crossover.crossover_type == EMACrossoverType.GOLDEN_CROSS
+                                else "DC"
+                            )
+                            ema_ctx_parts.append(
+                                f"EMA{crossover.fast_period}/{crossover.slow_period} {label} {tf}"
+                            )
 
-                    # 2) Price vs EMA touch
+                    # 2) Price vs EMA touch (medium + long periods)
                     if ema_cfg.price_touch_enabled:
-                        for ema_label, ema_series_vals in [("50", med), ("200", long_ema)]:
+                        for ema_label, ema_series_vals in [
+                            (med_key, med),
+                            (long_key, long_ema),
+                        ]:
                             touch = detect_price_touch(
-                                current_price_tf, ema_series_vals, int(ema_label), tf,
-                                ema_cfg.touch_threshold_pips, pip_size,
+                                current_price_tf,
+                                ema_series_vals,
+                                int(ema_label),
+                                tf,
+                                ema_cfg.touch_threshold_pips,
+                                pip_size,
                             )
                             if touch is not None:
-                                ema_signals_this_pair.append({
-                                    "type": "price_touch",
-                                    "data": touch,
-                                    "pair": pair,
-                                })
-                                emoji = "🟢" if touch.direction in ("cross_above", "above") else "🔴"
-                                ema_ctx_parts.append(f"{emoji} EMA{touch.ema_period} {touch.direction} {tf}")
+                                ema_signals_this_pair.append(
+                                    {
+                                        "type": "price_touch",
+                                        "data": touch,
+                                        "pair": pair,
+                                    }
+                                )
+                                emoji = (
+                                    "🟢" if touch.direction in ("cross_above", "above") else "🔴"
+                                )
+                                ema_ctx_parts.append(
+                                    f"{emoji} EMA{touch.ema_period} {touch.direction} {tf}"
+                                )
 
                             cross = detect_price_cross(
-                                current_price_tf, prev_price_tf, ema_series_vals, int(ema_label), tf,
-                                ema_cfg.touch_threshold_pips, pip_size,
+                                current_price_tf,
+                                prev_price_tf,
+                                ema_series_vals,
+                                int(ema_label),
+                                tf,
+                                ema_cfg.touch_threshold_pips,
+                                pip_size,
                             )
                             if cross is not None:
-                                ema_signals_this_pair.append({
-                                    "type": "price_touch",
-                                    "data": cross,
-                                    "pair": pair,
-                                })
+                                ema_signals_this_pair.append(
+                                    {
+                                        "type": "price_touch",
+                                        "data": cross,
+                                        "pair": pair,
+                                    }
+                                )
 
                     # 3) EMA slope
                     if ema_cfg.slope_enabled:
-                        for ema_label, ema_series_vals in [("9", fast), ("21", slow)]:
+                        for ema_label, ema_series_vals in [
+                            (fast_key, fast),
+                            (slow_key, slow),
+                        ]:
                             slope = detect_slope(ema_series_vals, int(ema_label), tf)
-                            if slope is not None and slope.slope_direction != EMASlopeDirection.FLAT:
-                                ema_signals_this_pair.append({
-                                    "type": "slope",
-                                    "data": slope,
-                                    "pair": pair,
-                                })
-                                arrow = "↑" if slope.slope_direction == EMASlopeDirection.RISING else "↓"
+                            if (
+                                slope is not None
+                                and slope.slope_direction != EMASlopeDirection.FLAT
+                            ):
+                                ema_signals_this_pair.append(
+                                    {
+                                        "type": "slope",
+                                        "data": slope,
+                                        "pair": pair,
+                                    }
+                                )
+                                arrow = (
+                                    "↑"
+                                    if slope.slope_direction == EMASlopeDirection.RISING
+                                    else "↓"
+                                )
                                 ema_ctx_parts.append(f"EMA{slope.period} {arrow} {tf}")
 
             ema_context_str: str | None = None
@@ -781,6 +918,13 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             signal_reasons: list[str] = []
             no_trade_reasons: list[str] = []
 
+            # Per-instrument session/buffer/spread injected via overrides only
+            # (evaluate_entry stays pure — no registry I/O inside evaluator).
+            eval_spread_filter = (
+                bool(inst.spread_filter_enabled)
+                if inst is not None
+                else settings.strategy.spread_filter_enabled
+            )
             decision = evaluate_entry(
                 pair,
                 data_1h,
@@ -791,9 +935,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 now_utc=now_utc,
                 spread_quote=quote,
                 news_blocked=news_blocked,
-                spread_filter_enabled=settings.strategy.spread_filter_enabled,
+                spread_filter_enabled=eval_spread_filter,
                 bars_aligned=bars_aligned,
-                overrides=None,  # cli always uses live settings.yaml (research harness uses overrides for param search)
+                overrides=entry_overrides or None,
             )
             # Drive from evaluator (it returns direction even for !fired blocked cases, so telemetry can show
             # the candidate + full no_trade_reasons list from all gates).
@@ -912,7 +1056,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 sl = decision.get("sl")
                 entry = decision.get("entry", close_price)
                 if tp is None or sl is None:
-                    # Fallback (ATR missing or evaluator chose legacy path) — keep behavior but rare post-fix
+                    # ATR-only levels. No fixed-pip fallback (absurd on BTC/NQ/XAU).
                     tp_mult = float(
                         _get_pair_param(pair, "tp_atr_multiplier", settings.risk.tp_atr_multiplier)
                     )
@@ -929,109 +1073,120 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             tp = entry + (atr * tp_mult)
                             sl = entry - (atr * sl_mult)
                     else:
-                        pip_size = 0.0001 if "JPY" not in pair else 0.01
-                        if signal_direction == "SELL":
-                            entry = close_price
-                            tp = entry - (30 * pip_size)
-                            sl = entry + (90 * pip_size)
-                        else:
-                            entry = close_price
-                            tp = entry + (30 * pip_size)
-                            sl = entry - (90 * pip_size)
+                        print("  🚫 NO TRADE: ATR unavailable (no fixed-pip TP/SL fallback)")
+                        signal_direction = None
 
-                micro_context = _fetch_micro_context(fetcher, symbol, rsi_period)
-                exec_note = _execution_note(
-                    signal_direction,
-                    micro_context["rsi_5m"],
-                    micro_context["rsi_1m"],
-                )
+                if signal_direction is not None and tp is not None and sl is not None:
+                    micro_context = _fetch_micro_context(fetcher, symbol, rsi_period)
+                    exec_note = _execution_note(
+                        signal_direction,
+                        micro_context["rsi_5m"],
+                        micro_context["rsi_1m"],
+                    )
 
-                print(f"     Entry: {entry:.5f}")
-                print(f"     TP: {tp:.5f}")
-                print(f"     SL: {sl:.5f}")
-                if isinstance(micro_context["rsi_5m"], float):
-                    print(f"     RSI 5m: {micro_context['rsi_5m']:.1f}")
-                if isinstance(micro_context["rsi_1m"], float):
-                    print(f"     RSI 1m: {micro_context['rsi_1m']:.1f}")
-                print(f"     Execution: {exec_note}")
+                    print(f"     Entry: {entry:.5f}")
+                    print(f"     TP: {tp:.5f}")
+                    print(f"     SL: {sl:.5f}")
+                    if isinstance(micro_context["rsi_5m"], float):
+                        print(f"     RSI 5m: {micro_context['rsi_5m']:.1f}")
+                    if isinstance(micro_context["rsi_1m"], float):
+                        print(f"     RSI 1m: {micro_context['rsi_1m']:.1f}")
+                    print(f"     Execution: {exec_note}")
 
-                # Send Telegram notification (skip for shadow pairs)
-                is_shadow = pair in shadow_set
-                if notifier and hh and ll and not is_shadow:
-                    confirmed_pairs.add(pair)
-                    entry_fp = f"entry|{signal_direction}"
-                    prev = near_state.get(pair)
-                    should_send_entry = not prev or str(prev.get("fingerprint", "")) != entry_fp
-                    if should_send_entry:
-                        await notifier.send_signal(
-                            pair=symbol,
-                            direction=signal_direction,
-                            rsi_1h=float(rsi_1h),
-                            rsi_30m=float(rsi_30m),
-                            rsi_15m=float(rsi_15m_val),
-                            price=close_price,
-                            hh=hh,
-                            ll=ll,
-                            entry=entry,
-                            tp=tp,
-                            sl=sl,
-                            patterns=candle_patterns,
-                            divergence=bullish_div if all_oversold else bearish_div,
-                            adx=adx_1h,
-                            plus_di=plus_di_1h,
-                            minus_di=minus_di_1h,
-                            ema_context=ema_context_str,
+                    # Send Telegram notification (skip for shadow pairs)
+                    is_shadow = pair in shadow_set
+                    if notifier and hh and ll and not is_shadow:
+                        confirmed_pairs.add(pair)
+                        entry_fp = f"entry|{signal_direction}"
+                        prev = near_state.get(pair)
+                        should_send_entry = (
+                            not prev or str(prev.get("fingerprint", "")) != entry_fp
                         )
-                    near_state[pair] = {"fingerprint": entry_fp, "sent_at": now_ts, "kind": "entry"}
-                    sma_side = "below" if signal_direction == "BUY" else "above"
-                    active_signal_state[pair] = {
-                        "direction": signal_direction,
-                        "fired_at": int(now_ts),
-                        "entry": float(entry),
-                        "tp": float(tp),
-                        "sl": float(sl),
-                        "sma_side": sma_side,
-                    }
-                    # Track for outcome notification
-                    pip_mult = 100.0 if "JPY" in pair else 10000.0
-                    signal_id = now_utc.isoformat()
-                    entry_signal_id = signal_id
-                    pending_trades.append(
-                        {
-                            "signal_id": signal_id,
-                            "pair": pair,
-                            "direction": signal_direction,
-                            "entry": entry,
-                            "tp": tp,
-                            "sl": sl,
-                            "tp_pips": abs(tp - entry) * pip_mult,
-                            "sl_pips": abs(sl - entry) * pip_mult,
-                            "fired_at": now_ts,
+                        if should_send_entry:
+                            await notifier.send_signal(
+                                pair=symbol,
+                                direction=signal_direction,
+                                rsi_1h=float(rsi_1h),
+                                rsi_30m=float(rsi_30m),
+                                rsi_15m=float(rsi_15m_val),
+                                price=close_price,
+                                hh=hh,
+                                ll=ll,
+                                entry=entry,
+                                tp=tp,
+                                sl=sl,
+                                patterns=candle_patterns,
+                                divergence=bullish_div if all_oversold else bearish_div,
+                                adx=adx_1h,
+                                plus_di=plus_di_1h,
+                                minus_di=minus_di_1h,
+                                ema_context=ema_context_str,
+                            )
+                        near_state[pair] = {
+                            "fingerprint": entry_fp,
+                            "sent_at": now_ts,
+                            "kind": "entry",
                         }
-                    )
-                    _append_audit_log(
-                        {
-                            "ts": now_utc.isoformat(),
-                            "pair": pair,
-                            "state": "entry",
-                            "signal_id": signal_id,
+                        sma_side = "below" if signal_direction == "BUY" else "above"
+                        active_signal_state[pair] = {
                             "direction": signal_direction,
-                            "confidence": signal_confidence,
-                            "reasons": signal_reasons,
-                            "entry": entry,
-                            "tp": tp,
-                            "sl": sl,
-                            "rsi_1h": float(rsi_1h),
-                            "rsi_30m": float(rsi_30m),
-                            "rsi_15m": float(rsi_15m_val),
-                            "adx_1h": adx_1h,
-                            "plus_di_1h": plus_di_1h,
-                            "minus_di_1h": minus_di_1h,
-                            "breakout_buy": breakout_buy,
-                            "breakout_sell": breakout_sell,
-                            "shadow": is_shadow,
+                            "fired_at": int(now_ts),
+                            "entry": float(entry),
+                            "tp": float(tp),
+                            "sl": float(sl),
+                            "sma_side": sma_side,
                         }
-                    )
+                        # Display/audit distance in points (multi-asset) or pips (FX)
+                        pt = instrument_point_size(pair)
+                        pip_mult = (1.0 / pt) if pt > 0 else 1.0
+                        signal_id = now_utc.isoformat()
+                        entry_signal_id = signal_id
+                        pending_trades.append(
+                            {
+                                "signal_id": signal_id,
+                                "pair": pair,
+                                "direction": signal_direction,
+                                "entry": entry,
+                                "tp": tp,
+                                "sl": sl,
+                                "tp_pips": abs(tp - entry) * pip_mult,
+                                "sl_pips": abs(sl - entry) * pip_mult,
+                                "distance_unit": distance_unit_label(pair),
+                                "fired_at": now_ts,
+                            }
+                        )
+                        _append_audit_log(
+                            {
+                                "ts": now_utc.isoformat(),
+                                "pair": pair,
+                                "state": "entry",
+                                "signal_id": signal_id,
+                                "direction": signal_direction,
+                                "confidence": signal_confidence,
+                                "reasons": signal_reasons,
+                                "entry": entry,
+                                "tp": tp,
+                                "sl": sl,
+                                "tp_pips": abs(tp - entry) * pip_mult,
+                                "sl_pips": abs(sl - entry) * pip_mult,
+                                "distance_unit": distance_unit_label(pair),
+                                "rsi_1h": float(rsi_1h),
+                                "rsi_30m": float(rsi_30m),
+                                "rsi_15m": float(rsi_15m_val),
+                                "adx_1h": adx_1h,
+                                "plus_di_1h": plus_di_1h,
+                                "minus_di_1h": minus_di_1h,
+                                "breakout_buy": breakout_buy,
+                                "breakout_sell": breakout_sell,
+                                "shadow": is_shadow,
+                            }
+                        )
+                else:
+                    # ATR/levels missing: demote telemetry so we do not record a false entry.
+                    if telemetry_state == "entry":
+                        telemetry_state = "blocked"
+                        telemetry_entry_triggered = False
+                        telemetry_reasons = list(no_trade_reasons) + ["ATR unavailable"]
 
             near_candidates.append(
                 {
@@ -1062,13 +1217,17 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                 }
             )
 
-            # Collect EMA candidates for separate notifications (when no RSI signal)
-            if ema_signals_this_pair and not signal_direction:
-                ema_candidates.append({
-                    "pair": pair,
-                    "symbol": symbol,
-                    "signals": list(ema_signals_this_pair),
-                })
+            # Collect EMA candidates for standalone GC/DC alerts + digest context.
+            # Always collect (even when an RSI signal fires) so crossovers still alert.
+            if ema_signals_this_pair:
+                ema_candidates.append(
+                    {
+                        "pair": pair,
+                        "symbol": symbol,
+                        "signals": list(ema_signals_this_pair),
+                        "price": float(close_price),
+                    }
+                )
 
             if telemetry_state == "data_unavailable" and not telemetry_reasons:
                 telemetry_state = "neutral"
@@ -1104,7 +1263,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             entry_tp_pips: float | None = None
             entry_sl_pips: float | None = None
             if entry_val is not None and tp_val is not None and sl_val is not None:
-                pip_mult = 100.0 if "JPY" in pair else 10000.0
+                pt = instrument_point_size(pair)
+                pip_mult = (1.0 / pt) if pt > 0 else 1.0
                 entry_tp_pips = abs(float(tp_val) - float(entry_val)) * pip_mult
                 entry_sl_pips = abs(float(sl_val) - float(entry_val)) * pip_mult
             record_branch_b_scan_decision_signal(
@@ -1210,9 +1370,9 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             )
             if digest_message:
                 digest_state = _load_setup_digest_state()
-                interval_seconds = int(
-                    getattr(settings.telegram, "setup_digest_interval_minutes", 60)
-                ) * 60
+                interval_seconds = (
+                    int(getattr(settings.telegram, "setup_digest_interval_minutes", 60)) * 60
+                )
                 fingerprint = digest_fingerprint(
                     [candidate for candidate in digest_candidates if candidate.watchable]
                 )
@@ -1383,45 +1543,38 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
     # ── EMA Notification Dispatch (independent of near_candidates) ──
     ema_state_ttl = 7200  # 2 hours — fingerprints older than this are eligible for re-send
     ema_changed = False
+    ema_cfg = settings.strategy.ema
 
-    if (
-        settings.strategy.ema.enabled
-        and settings.strategy.ema.standalone_notifications_enabled
-        and notifier
-        and ema_candidates
-    ):
+    if ema_cfg.enabled and ema_cfg.standalone_notifications_enabled and notifier and ema_candidates:
         for ema_candidate in ema_candidates:
             pair = ema_candidate["pair"]
             symbol = ema_candidate["symbol"]
             if pair in shadow_set:
                 continue
 
-            signals = ema_candidate["signals"]
+            # Per-instrument session (BTC 24/7; futures two-window CME gap).
+            if ema_cfg.standalone_session_filter_enabled:
+                windows = instrument_session_windows(
+                    pair, list(settings.strategy.session_allowed_utc)
+                )
+                if not _session_allowed(now_utc, windows):
+                    continue
+
+            candidate_price = ema_candidate.get("price")
+            signals = _filter_standalone_ema_signals(
+                list(ema_candidate["signals"]),
+                allowed_types=list(ema_cfg.standalone_signal_types),
+                allowed_timeframes=list(ema_cfg.standalone_timeframes),
+            )
             # Rate-limit: prioritize crossover > price_touch > slope
             priority_map = {"crossover": 0, "price_touch": 1, "slope": 2}
             signals.sort(key=lambda s: priority_map.get(str(s.get("type", "")), 99))
-            signals = signals[:settings.strategy.ema.max_signals_per_pair]
+            signals = signals[: ema_cfg.max_signals_per_pair]
 
             for sig in signals:
                 data = sig["data"]
                 sig_type = sig["type"]
-
-                # Build unique fingerprint
-                if hasattr(data, "ema_period") and data.ema_period is not None:
-                    period_str = str(data.ema_period)
-                elif hasattr(data, "period") and data.period is not None:
-                    period_str = str(data.period)
-                else:
-                    period_str = ""
-                tf_str = data.timeframe if hasattr(data, "timeframe") else ""
-                dir_str = ""
-                if hasattr(data, "crossover_type"):
-                    dir_str = data.crossover_type.value
-                elif hasattr(data, "slope_direction"):
-                    dir_str = data.slope_direction.value
-                elif hasattr(data, "direction"):
-                    dir_str = str(data.direction)
-                ema_fp = f"ema_{sig_type}_{tf_str}_{pair}_{period_str}_{dir_str}"
+                ema_fp = _ema_standalone_fingerprint(sig_type, data, pair)
 
                 # Anti-flicker: keyed by fingerprint (not pair), so each
                 # unique signal type/timeframe/direction gets its own slot.
@@ -1443,6 +1596,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             fast_period=data.fast_period,
                             slow_period=data.slow_period,
                             timeframe=data.timeframe,
+                            price=candidate_price,
                         )
                     elif sig_type == "price_touch" and isinstance(data, EMAPriceTouch):
                         await notifier.send_ema_price_touch(
@@ -1473,7 +1627,8 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
 
     # TTL sweep: drop fingerprints whose sent_at is older than the TTL window.
     stale_keys = [
-        fp for fp, rec in ema_near_state.items()
+        fp
+        for fp, rec in ema_near_state.items()
         if now_ts - int(rec.get("sent_at", 0)) > ema_state_ttl
     ]
     if stale_keys:
@@ -1487,6 +1642,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
 
 async def run_analyze(pair: str, timeframe: str) -> None:
     _ = get_settings()
+    # Analyze is live OHLC only — allowed for multi-asset.
     fetcher = DataFetcher()
 
     print(f"\n[ANALYZE] {pair} on {timeframe}")
@@ -1545,6 +1701,7 @@ async def run_enhanced_backtest(
     ema_confidence_dampen: float = 0.85,
 ) -> None:
     """Run enhanced backtest with realistic TP/SL simulation."""
+    require_backtest_supported(pair)
     from src.backtest.enhanced_engine import EnhancedBacktestEngine
 
     fetcher = DataFetcher()

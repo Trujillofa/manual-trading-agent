@@ -142,7 +142,7 @@ def test_builds_valid_avoid_signal_for_blocked_context() -> None:
 def test_normalizes_symbols_and_utc_timestamps() -> None:
     payload = build_branch_b_decision_signal(
         _base_context(
-            pair="eur-usd",
+            pair="eur/usd",  # slash form; hyphenated EUR-USD is rejected as junk
             ts="2026-06-20T08:15:00+00:00",
         )
     )

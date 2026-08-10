@@ -45,7 +45,42 @@ _DATA_QUALITY_BLOCK_KEYS = frozenset(
         "broker_account",
     }
 )
-_SYMBOL_RE = re.compile(r"^[A-Z]{3}/[A-Z]{3}$")
+# Legacy FX majors/minors form (EUR/USD). Multi-asset IDs use the instrument registry.
+_FX_PAIR_RE = re.compile(r"^[A-Z]{3}/[A-Z]{3}$")
+
+
+def normalize_decision_symbol(symbol: str) -> str:
+    """Normalize a decision-signal symbol to a canonical id.
+
+    Accepts either:
+    - a multi-asset instrument id from ``src.config.instruments`` (e.g. OIL, NASDAQ,
+      XAU/USD, BTC/USD), resolved via the public registry lookup; or
+    - a slash-form FX pair matching ``AAA/BBB`` after strip/upper (e.g. EUR/USD).
+
+    Returns the registry's canonical ``id`` when registered, otherwise the uppercased
+    FX pair. Raises ``ValueError`` when neither form matches.
+    """
+    text = symbol.strip().upper()
+    if not text:
+        raise ValueError(
+            "symbol must be a non-empty registry instrument id "
+            "(e.g. OIL, NASDAQ, XAU/USD) or a normalized FX pair like EUR/USD"
+        )
+
+    # Registry first — do not hardcode multi-asset ids here.
+    from src.config.instruments import get_instrument_optional
+
+    inst = get_instrument_optional(text)
+    if inst is not None:
+        return inst.id
+
+    if _FX_PAIR_RE.fullmatch(text):
+        return text
+
+    raise ValueError(
+        "symbol must be a registry instrument id (e.g. OIL, NASDAQ, XAU/USD) "
+        "or a normalized FX pair like EUR/USD"
+    )
 
 
 def _require_utc_datetime(value: datetime, *, field_name: str) -> datetime:
@@ -122,11 +157,9 @@ class DecisionSignalRecord(BaseModel):
 
     @field_validator("symbol")
     @classmethod
-    def symbol_is_fx_pair(cls, value: str) -> str:
-        normalized = value.strip().upper()
-        if not _SYMBOL_RE.fullmatch(normalized):
-            raise ValueError("symbol must be a normalized FX pair like EUR/USD")
-        return normalized
+    def symbol_is_known_instrument_or_fx_pair(cls, value: str) -> str:
+        # strip/upper inside normalize_decision_symbol; registry ids stay canonical.
+        return normalize_decision_symbol(value)
 
     @field_validator("watch_conditions")
     @classmethod

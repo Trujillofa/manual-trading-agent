@@ -65,19 +65,45 @@ class StrategyConfig:
     tp_atr: float = 1.5
     sl_atr: float = 1.5
     max_hold_bars: int = 32
+    # Tool-combo gates (see docs/research/HTF_FIB_TOOL_COMBINATIONS_2026-07.md).
+    # When require_liquidity_sweep is True, swing invalidation uses close-through
+    # the origin so wick-through + reclaim can fire; otherwise wick invalidation.
+    require_liquidity_sweep: bool = False
+    require_anchored_vwap: bool = False
+    # Refinement dims (2026-07 iterative search).
+    # golden=618-786, mid=500-786, wide=382-786, shallow=382-618.
+    fib_zone: Literal["golden", "mid", "wide", "shallow"] = "golden"
+    # none=never clear swing; wick=any pierce; close=close-through only.
+    # When require_liquidity_sweep, close mode is forced for reclaim semantics.
+    invalidate_mode: Literal["none", "wick", "close"] = "wick"
+
+
+def hardened_base(**overrides: object) -> StrategyConfig:
+    """Hardened MTF defaults with optional combo overrides."""
+
+    payload: dict[str, object] = {
+        "name": "hardened_mtf",
+        "rsi_long": 30.0,
+        "rsi_short": 70.0,
+        "require_mtf_rsi": True,
+        "require_ema_stack": True,
+        "require_candle": True,
+        "invalidate_swing": True,
+        "one_entry_per_swing": True,
+    }
+    payload.update(overrides)
+    return StrategyConfig(**payload)  # type: ignore[arg-type]
 
 
 CONFIGS = (
     StrategyConfig(name="marker_baseline"),
-    StrategyConfig(
-        name="hardened_mtf",
-        rsi_long=30.0,
-        rsi_short=70.0,
-        require_mtf_rsi=True,
-        require_ema_stack=True,
-        require_candle=True,
-        invalidate_swing=True,
-        one_entry_per_swing=True,
+    hardened_base(name="hardened_mtf"),
+    hardened_base(name="hardened_sweep", require_liquidity_sweep=True),
+    hardened_base(name="hardened_avwap", require_anchored_vwap=True),
+    hardened_base(
+        name="hardened_sweep_avwap",
+        require_liquidity_sweep=True,
+        require_anchored_vwap=True,
     ),
 )
 
@@ -125,6 +151,8 @@ class SwingState:
     low_time: pd.Timestamp | None = None
     direction: int = 0
     version: int = 0
+    fib382: float | None = None
+    fib500: float | None = None
     fib618: float | None = None
     fib786: float | None = None
 
@@ -133,9 +161,13 @@ class SwingState:
             return False
         swing_range = self.high - self.low
         if self.direction == 1:
+            self.fib382 = self.high - swing_range * 0.382
+            self.fib500 = self.high - swing_range * 0.500
             self.fib618 = self.high - swing_range * 0.618
             self.fib786 = self.high - swing_range * 0.786
         elif self.direction == -1:
+            self.fib382 = self.low + swing_range * 0.382
+            self.fib500 = self.low + swing_range * 0.500
             self.fib618 = self.low + swing_range * 0.618
             self.fib786 = self.low + swing_range * 0.786
         else:
@@ -209,9 +241,44 @@ class SwingState:
         self.high_time = None
         self.low = None
         self.low_time = None
+        self.fib382 = None
+        self.fib500 = None
         self.fib618 = None
         self.fib786 = None
         self.version += 1
+
+
+def fib_zone_bounds(
+    direction: int,
+    fib_zone: str,
+    fib382: float,
+    fib500: float,
+    fib618: float,
+    fib786: float,
+) -> tuple[float, float]:
+    """Return (lo, hi) inclusive price band for the configured Fib zone."""
+
+    if direction == 1:
+        # Bullish retrace: deeper = lower prices.
+        if fib_zone == "golden":
+            return fib786, fib618
+        if fib_zone == "mid":
+            return fib786, fib500
+        if fib_zone == "wide":
+            return fib786, fib382
+        if fib_zone == "shallow":
+            return fib618, fib382
+    else:
+        # Bearish retrace: deeper = higher prices.
+        if fib_zone == "golden":
+            return fib618, fib786
+        if fib_zone == "mid":
+            return fib500, fib786
+        if fib_zone == "wide":
+            return fib382, fib786
+        if fib_zone == "shallow":
+            return fib382, fib618
+    raise ValueError(f"unknown fib_zone={fib_zone!r} for direction={direction}")
 
 
 @dataclass(frozen=True)
@@ -251,6 +318,7 @@ class PreparedBacktestData:
     highs: list[float]
     lows: list[float]
     closes: list[float]
+    volumes: list[float]
     ema50: list[float]
     ema200: list[float]
     rsi15: list[float]
@@ -448,7 +516,15 @@ def _usd_per_quote_values(
     if usd_quote_close is None:
         raise ValueError(f"{pair} requires {usd_conversion_pair(pair)} data for USD P&L")
     aligned = usd_quote_close.sort_index().reindex(data.index, method="ffill")
-    return [float(value) for value in (1.0 / aligned.astype(float)).tolist()]
+    # Cover leading gaps when conversion cache starts later than the pair.
+    aligned = aligned.bfill()
+    values: list[float] = []
+    for value in aligned.astype(float).tolist():
+        if value is None or (isinstance(value, float) and math.isnan(value)) or value == 0.0:
+            values.append(math.nan)
+        else:
+            values.append(float(1.0 / value))
+    return values
 
 
 def fixed_lot_net_pnl_usd(
@@ -493,7 +569,12 @@ def prepare_backtest_data(
 ) -> PreparedBacktestData:
     """Calculate invariant market features once for a bounded search."""
 
-    data = data_15m[["open", "high", "low", "close"]].copy().sort_index()
+    cols = ["open", "high", "low", "close"]
+    if "volume" in data_15m.columns:
+        cols = [*cols, "volume"]
+    data = data_15m[cols].copy().sort_index()
+    if "volume" not in data.columns:
+        data["volume"] = 0.0
     events_by_spec: dict[
         tuple[str, int, int],
         dict[pd.Timestamp, list[PivotEvent]],
@@ -514,6 +595,7 @@ def prepare_backtest_data(
         highs=data["high"].astype(float).tolist(),
         lows=data["low"].astype(float).tolist(),
         closes=data["close"].astype(float).tolist(),
+        volumes=data["volume"].astype(float).fillna(0.0).tolist(),
         ema50=data["close"].ewm(span=50, adjust=False).mean().astype(float).tolist(),
         ema200=data["close"].ewm(span=200, adjust=False).mean().astype(float).tolist(),
         rsi15=_wilder_rsi(data["close"], 14).astype(float).tolist(),
@@ -571,9 +653,47 @@ def run_prepared_backtest(
     previous_long_condition = False
     previous_short_condition = False
     traded_swing_version = -1
+    avwap_version = -1
+    avwap_cum_pv = 0.0
+    avwap_cum_v = 0.0
+    avwap_value = math.nan
+    timestamp_to_index = {ts: idx for idx, ts in enumerate(prepared.timestamps)}
     pip = _pip_size(pair)
     spread = spread_pips * pip
     slippage = slippage_pips * pip
+
+    def _seed_anchored_vwap(through_index: int) -> None:
+        """Rebuild tick-volume AVWAP from the knowable swing origin through ``through_index``."""
+
+        nonlocal avwap_cum_pv, avwap_cum_v, avwap_value, avwap_version
+        avwap_cum_pv = 0.0
+        avwap_cum_v = 0.0
+        avwap_value = math.nan
+        avwap_version = state.version
+        if state.direction == 0:
+            return
+        anchor_time = state.low_time if state.direction == 1 else state.high_time
+        if anchor_time is None:
+            return
+        start_index = timestamp_to_index.get(anchor_time)
+        if start_index is None:
+            # Pivot may sit on an HTF boundary not present as a 15m open; start at first bar ≥ pivot.
+            start_index = next(
+                (
+                    idx
+                    for idx, ts in enumerate(prepared.timestamps)
+                    if ts >= anchor_time
+                ),
+                through_index,
+            )
+        start_index = min(start_index, through_index)
+        for j in range(start_index, through_index + 1):
+            typical = (prepared.highs[j] + prepared.lows[j] + prepared.closes[j]) / 3.0
+            weight = prepared.volumes[j] if prepared.volumes[j] > 0.0 else 1.0
+            avwap_cum_pv += typical * weight
+            avwap_cum_v += weight
+        if avwap_cum_v > 0.0:
+            avwap_value = avwap_cum_pv / avwap_cum_v
 
     for i, timestamp in enumerate(prepared.timestamps):
         open_price = prepared.opens[i]
@@ -648,9 +768,9 @@ def run_prepared_backtest(
                     gross_r = mid_move / risk_distance
                 usd_per_quote = prepared.usd_per_quote[i]
                 if math.isnan(usd_per_quote):
-                    raise ValueError(
-                        f"missing {usd_conversion_pair(pair)} conversion at {timestamp}"
-                    )
+                    # Skip P&L for this exit if conversion is unavailable (cache gap).
+                    position = None
+                    continue
                 if account is None:
                     risk_cash = balance * risk_fraction
                     quantity = risk_cash / (risk_distance * usd_per_quote)
@@ -696,19 +816,41 @@ def run_prepared_backtest(
             and current_events[0].pivot_time == current_events[1].pivot_time
         ):
             current_events = []
+        fib_changed = False
         for event in current_events:
-            state.update(event)
+            fib_changed = state.update(event) or fib_changed
 
-        if config.invalidate_swing and state.direction == 1 and state.low is not None:
-            if low < state.low:
+        # Invalidation: none | wick | close. Sweep stacks force close so reclaim works.
+        inv_mode = config.invalidate_mode
+        if config.require_liquidity_sweep:
+            inv_mode = "close"
+        elif not config.invalidate_swing:
+            inv_mode = "none"
+        if inv_mode != "none" and state.direction == 1 and state.low is not None:
+            broken = close < state.low if inv_mode == "close" else low < state.low
+            if broken:
                 state.invalidate()
-        elif (
-            config.invalidate_swing
-            and state.direction == -1
-            and state.high is not None
-            and high > state.high
-        ):
-            state.invalidate()
+                fib_changed = True
+        elif inv_mode != "none" and state.direction == -1 and state.high is not None:
+            broken = close > state.high if inv_mode == "close" else high > state.high
+            if broken:
+                state.invalidate()
+                fib_changed = True
+
+        if config.require_anchored_vwap:
+            if state.direction == 0:
+                avwap_version = -1
+                avwap_cum_pv = 0.0
+                avwap_cum_v = 0.0
+                avwap_value = math.nan
+            elif fib_changed or state.version != avwap_version:
+                _seed_anchored_vwap(i)
+            else:
+                typical = (high + low + close) / 3.0
+                weight = prepared.volumes[i] if prepared.volumes[i] > 0.0 else 1.0
+                avwap_cum_pv += typical * weight
+                avwap_cum_v += weight
+                avwap_value = avwap_cum_pv / avwap_cum_v if avwap_cum_v > 0.0 else math.nan
 
         current_atr = atr[i]
         current_rsi15 = rsi15[i]
@@ -718,6 +860,8 @@ def run_prepared_backtest(
             position is not None
             or pending_direction is not None
             or state.direction == 0
+            or state.fib382 is None
+            or state.fib500 is None
             or state.fib618 is None
             or state.fib786 is None
             or any(
@@ -729,8 +873,16 @@ def run_prepared_backtest(
             previous_short_condition = False
             continue
 
-        bull_zone = state.direction == 1 and state.fib786 <= close <= state.fib618
-        bear_zone = state.direction == -1 and state.fib618 <= close <= state.fib786
+        zone_lo, zone_hi = fib_zone_bounds(
+            state.direction,
+            config.fib_zone,
+            state.fib382,
+            state.fib500,
+            state.fib618,
+            state.fib786,
+        )
+        bull_zone = state.direction == 1 and zone_lo <= close <= zone_hi
+        bear_zone = state.direction == -1 and zone_lo <= close <= zone_hi
         long_rsi_ok = current_rsi15 <= config.rsi_long
         short_rsi_ok = current_rsi15 >= config.rsi_short
         if config.require_mtf_rsi:
@@ -749,16 +901,42 @@ def run_prepared_backtest(
         previous_close = prepared.closes[i - 1] if i else close
         bullish_candle = close > open_price and close > previous_close
         bearish_candle = close < open_price and close < previous_close
+
+        long_sweep_ok = True
+        short_sweep_ok = True
+        if config.require_liquidity_sweep:
+            # Wick beyond swing origin liquidity, close reclaims back above/below it.
+            long_sweep_ok = (
+                state.low is not None and low < state.low and close > state.low
+            )
+            short_sweep_ok = (
+                state.high is not None and high > state.high and close < state.high
+            )
+
+        long_vwap_ok = True
+        short_vwap_ok = True
+        if config.require_anchored_vwap:
+            if math.isnan(avwap_value):
+                long_vwap_ok = False
+                short_vwap_ok = False
+            else:
+                long_vwap_ok = close >= avwap_value
+                short_vwap_ok = close <= avwap_value
+
         long_condition = (
             bull_zone
             and long_trend_ok
             and long_rsi_ok
+            and long_sweep_ok
+            and long_vwap_ok
             and (not config.require_candle or bullish_candle)
         )
         short_condition = (
             bear_zone
             and short_trend_ok
             and short_rsi_ok
+            and short_sweep_ok
+            and short_vwap_ok
             and (not config.require_candle or bearish_candle)
         )
         long_trigger = long_condition and not previous_long_condition

@@ -1,0 +1,401 @@
+ts	score	is_pf	is_pnl_pct	is_trades	oos_pf	oos_pnl_pct	oos_trades	status	description
+20260710T095600	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_mtf
+20260710T095600	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_sweep
+20260710T095601	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_avwap
+20260710T095601	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_sweep_avwap
+20260710T095601	-15.0000	0.000	0.000	0	0.000	0.000	0	baseline	baseline after combo rank
+20260710T095607	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	atr_period=10
+20260710T095607	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	sl_atr=2.5
+20260710T095608	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_long=40.0
+20260710T095608	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	max_hold_bars=32
+20260710T095609	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	left_bars=5, left_bars=2
+20260710T095609	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_long=45.0, max_hold_bars=32
+20260710T095609	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	fib_timeframe=4h
+20260710T095610	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_short=65.0, sl_atr=1.0
+20260710T095610	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	atr_period=14
+20260710T095611	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	right_bars=7, tp_atr=3.0
+20260710T095611	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	combo_id=hardened_mtf
+20260710T095617	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	atr_period=21
+20260710T095617	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	combo_id=hardened_sweep_avwap, rsi_short=55.0
+20260710T095618	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_short=75.0, fib_timeframe=4h
+20260710T095618	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	right_bars=3, left_bars=7
+20260710T095618	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	fib_timeframe=1d
+20260710T095619	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	tp_atr=1.0, rsi_long=45.0
+20260710T095619	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	fib_timeframe=1d
+20260710T095620	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	right_bars=5, tp_atr=1.0
+20260710T095620	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	atr_period=14, max_hold_bars=32
+20260710T095621	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	left_bars=3
+20260710T095621	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	combo_id=hardened_avwap
+20260710T095621	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	fib_timeframe=4h
+20260710T095622	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	left_bars=3, combo_id=hardened_mtf
+20260710T095724	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_mtf
+20260710T095724	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_sweep
+20260710T095725	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_avwap
+20260710T095725	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_sweep_avwap
+20260710T095726	-27.9373	1.303	1.401	11	0.068	-11.991	12	combo	preregistered soft_baseline
+20260710T095726	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered soft_sweep
+20260710T095727	-16.7200	99.000	0.804	1	0.000	-1.212	1	combo	preregistered soft_avwap
+20260710T095727	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered soft_sweep_avwap
+20260710T095727	-15.0000	0.000	0.000	0	0.000	0.000	0	baseline	baseline after combo rank
+20260710T095733	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	atr_period=10
+20260710T095733	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	sl_atr=2.5
+20260710T095734	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_long=40.0
+20260710T095734	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	max_hold_bars=32
+20260710T095734	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	left_bars=5, left_bars=2
+20260710T095735	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_long=45.0, max_hold_bars=32
+20260710T095735	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	fib_timeframe=4h
+20260710T095736	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_short=65.0, sl_atr=1.0
+20260710T095736	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	atr_period=14
+20260710T095736	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	right_bars=7, tp_atr=3.0
+20260710T095737	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	combo_id=hardened_mtf
+20260710T095742	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	atr_period=21
+20260710T095743	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	combo_id=soft_sweep_avwap, rsi_short=55.0
+20260710T095743	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_short=75.0, fib_timeframe=4h
+20260710T095744	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	right_bars=3, left_bars=7
+20260710T095744	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	fib_timeframe=1d
+20260710T095745	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	tp_atr=1.0, rsi_long=45.0
+20260710T095745	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	fib_timeframe=1d
+20260710T095745	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	right_bars=5, tp_atr=1.0
+20260710T095746	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	atr_period=14, max_hold_bars=32
+20260710T095746	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	left_bars=3
+20260710T095747	-27.9373	1.303	1.401	11	0.068	-11.991	12	discard	combo_id=soft_baseline
+20260710T095747	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	fib_timeframe=4h
+20260710T095748	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	left_bars=3, combo_id=hardened_sweep
+20260710T095748	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	sl_atr=2.5, sl_atr=2.0
+20260710T095748	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	right_bars=3, max_hold_bars=64
+20260710T095749	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_long=40.0, tp_atr=2.0
+20260710T095749	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_short=70.0
+20260710T095750	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	tp_atr=3.0
+20260710T095750	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_short=55.0, right_bars=2
+20260710T095819	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_mtf
+20260710T095820	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_sweep
+20260710T095820	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_avwap
+20260710T095821	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_sweep_avwap
+20260710T095821	-27.9373	1.303	1.401	11	0.068	-11.991	12	combo	preregistered soft_baseline
+20260710T095822	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered soft_sweep
+20260710T095822	-16.7200	99.000	0.804	1	0.000	-1.212	1	combo	preregistered soft_avwap
+20260710T095823	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered soft_sweep_avwap
+20260710T095823	-15.0000	0.000	0.000	0	0.000	0.000	0	baseline	baseline after combo rank
+20260710T095823	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	max_hold_bars=16
+20260710T095824	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	fib_timeframe=1d
+20260710T095824	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	tp_atr=2.5
+20260710T095825	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	fib_timeframe=1d
+20260710T095825	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	atr_period=14
+20260710T095826	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	combo_id=soft_sweep_avwap, rsi_long=50.0
+20260710T095826	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	max_hold_bars=16
+20260710T095826	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	combo_id=hardened_mtf
+20260710T095827	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	sl_atr=1.0
+20260710T095827	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	right_bars=7
+20260710T095828	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	combo_id=hardened_sweep_avwap, tp_atr=2.5
+20260710T095828	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	right_bars=5, right_bars=3
+20260710T100339	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_mtf
+20260710T100339	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_sweep
+20260710T100340	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_avwap
+20260710T100340	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered hardened_sweep_avwap
+20260710T100341	-27.9373	1.303	1.401	11	0.068	-11.991	12	combo	preregistered soft_baseline
+20260710T100341	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered soft_sweep
+20260710T100342	-16.7200	99.000	0.804	1	0.000	-1.212	1	combo	preregistered soft_avwap
+20260710T100342	-15.0000	0.000	0.000	0	0.000	0.000	0	combo	preregistered soft_sweep_avwap
+20260710T100342	-15.0000	0.000	0.000	0	0.000	0.000	0	baseline	baseline after combo rank
+20260710T100343	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	fib_timeframe=4h
+20260710T100343	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	left_bars=5
+20260710T100343	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	max_hold_bars=32
+20260710T100344	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	combo_id=hardened_avwap, max_hold_bars=64
+20260710T100344	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	atr_period=14, sl_atr=3.0
+20260710T100345	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	sl_atr=2.0
+20260710T100345	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	combo_id=soft_sweep
+20260710T100346	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_short=65.0
+20260710T100346	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	sl_atr=1.5
+20260710T100347	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	left_bars=3, right_bars=2
+20260710T100347	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	rsi_short=55.0
+20260710T100347	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	sl_atr=3.0
+20260710T100348	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	sl_atr=3.0
+20260710T100348	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	tp_atr=2.5
+20260710T100349	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	sl_atr=3.0, rsi_short=60.0
+20260710T100349	-15.0000	0.000	0.000	0	0.000	0.000	0	discard	tp_atr=1.5
+20260710T101644	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume_seed	Widen Fib entry bands (golden/mid/wide/shallow) and soft RSI; raise informative trade count without new AND filters.
+20260710T101644	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	fib_timeframe=1d
+20260710T101645	-inf	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	combo_id=soft_baseline, fib_zone=wide
+20260710T101645	-inf	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	combo_id=soft_baseline, one_entry_per_swing=True
+20260710T101646	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	rsi_short=55.0
+20260710T101646	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	left_bars=2
+20260710T101647	-inf	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	combo_id=soft_baseline, rsi_short=50.0
+20260710T101647	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	sl_atr=1.5, tp_atr=2.5
+20260710T101648	-inf	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	combo_id=soft_baseline, rsi_short=50.0
+20260710T101648	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	fib_timeframe=1d, right_bars=2
+20260710T101648	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	fib_zone=wide, tp_atr=2.5
+20260710T101649	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	fib_timeframe=4h, fib_zone=wide
+20260710T101649	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	one_entry_per_swing=True
+20260710T101650	-inf	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	combo_id=soft_baseline, tp_atr=2.0
+20260710T101650	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	one_entry_per_swing=False, rsi_short=55.0
+20260710T101651	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	require_candle=False, rsi_long=40.0
+20260710T101651	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	max_hold_bars=32
+20260710T101652	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	tp_atr=2.0
+20260710T101652	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	require_candle=False, rsi_long=45.0
+20260710T101653	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	fib_zone=shallow, fib_zone=mid
+20260710T101653	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	fib_timeframe=1d
+20260710T101654	-inf	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	combo_id=soft_baseline
+20260710T101654	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	tp_atr=2.0, atr_period=14
+20260710T101655	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	rsi_long=45.0, tp_atr=2.5
+20260710T101655	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	fib_zone=golden
+20260710T101656	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	require_candle=True
+20260710T101656	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	max_hold_bars=96
+20260710T101657	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	sl_atr=2.5
+20260710T101657	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	require_candle=False, right_bars=5
+20260710T101658	-inf	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	combo_id=soft_avwap
+20260710T101658	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	fib_timeframe=4h
+20260710T101659	-inf	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	combo_id=soft_baseline
+20260710T101659	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	fib_timeframe=4h
+20260710T101700	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	rsi_short=55.0
+20260710T101700	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	fib_timeframe=1d
+20260710T101701	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	one_entry_per_swing=False
+20260710T101701	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	rsi_short=60.0
+20260710T101702	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	max_hold_bars=64
+20260710T101702	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	sl_atr=2.0
+20260710T101703	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	fib_timeframe=4h
+20260710T101703	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R1_zone_volume	fib_timeframe=4h
+20260710T101704	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits_seed	Exit/hold grid on soft wide-zone family: TP/SL ATR mults and max hold; candle on/off. Distinct from R1 zone focus.
+20260710T101704	-inf	0.000	0.000	0	0.000	0.000	0	round_R2_exits	combo_id=soft_baseline, sl_atr=3.0
+20260710T101704	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	max_hold_bars=32
+20260710T101705	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	tp_atr=2.5
+20260710T101705	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	require_candle=False, left_bars=3
+20260710T101706	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	rsi_short=60.0, left_bars=3
+20260710T101706	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	right_bars=5
+20260710T101707	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	atr_period=14
+20260710T101707	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	fib_zone=wide
+20260710T101712	-inf	0.000	0.000	0	0.000	0.000	0	round_R2_exits	combo_id=soft_baseline, atr_period=10
+20260710T101713	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	rsi_long=40.0
+20260710T101713	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	require_candle=True
+20260710T101714	-inf	0.000	0.000	0	0.000	0.000	0	round_R2_exits	combo_id=soft_baseline
+20260710T101714	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	fib_zone=mid, require_candle=True
+20260710T101715	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	left_bars=5
+20260710T101715	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	right_bars=3
+20260710T101716	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	left_bars=5
+20260710T101716	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	fib_zone=mid
+20260710T101717	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	rsi_long=45.0
+20260710T101717	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	max_hold_bars=16
+20260710T101718	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	fib_zone=wide
+20260710T101718	-16.4305	0.200	-5.014	7	0.000	-2.348	2	round_R2_exits	max_hold_bars=128, rsi_long=50.0
+20260710T101719	-13.8516	0.617	-1.427	5	0.611	-1.543	6	round_R2_exits	rsi_short=50.0
+20260710T101719	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	rsi_short=55.0
+20260710T101720	-13.8516	0.617	-1.427	5	0.611	-1.543	6	round_R2_exits	rsi_short=50.0
+20260710T101720	-13.8516	0.617	-1.427	5	0.611	-1.543	6	round_R2_exits	max_hold_bars=128, right_bars=2
+20260710T101721	-13.8516	0.617	-1.427	5	0.611	-1.543	6	round_R2_exits	max_hold_bars=32, rsi_short=50.0
+20260710T101721	-11.7754	0.933	-0.117	5	1.911	1.066	6	round_R2_exits	sl_atr=3.0
+20260710T101722	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	rsi_short=60.0, require_candle=True
+20260710T101722	-13.8516	0.617	-1.427	5	0.611	-1.543	6	round_R2_exits	sl_atr=2.5, sl_atr=1.5
+20260710T101723	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R2_exits	rsi_short=55.0
+20260710T101723	-inf	0.000	0.000	0	0.000	0.000	0	round_R2_exits	combo_id=soft_baseline
+20260710T101724	-11.7754	0.933	-0.117	5	1.911	1.066	6	round_R2_exits	rsi_long=45.0
+20260710T101724	-11.7754	0.933	-0.117	5	1.911	1.066	6	round_R2_exits	left_bars=5
+20260710T101725	-11.7754	0.933	-0.117	5	1.911	1.066	6	round_R2_exits	require_candle=False
+20260710T101725	-17.6647	0.329	-3.627	5	0.257	-4.819	6	round_R2_exits	sl_atr=1.0
+20260710T101726	-11.7754	0.933	-0.117	5	1.911	1.066	6	round_R2_exits	rsi_long=40.0
+20260710T101726	-11.6334	0.886	-0.255	5	2.237	1.488	6	round_R2_exits	sl_atr=2.5
+20260710T101727	-inf	0.000	0.000	0	0.000	0.000	0	round_R2_exits	combo_id=soft_baseline, left_bars=5
+20260710T101727	-14.3005	0.584	-0.973	4	0.000	-0.128	1	round_R2_exits	fib_zone=mid, right_bars=3
+20260710T101728	-13.8516	0.617	-1.427	5	0.611	-1.543	6	round_R2_exits	sl_atr=1.5, rsi_long=45.0
+20260710T101728	-11.6334	0.886	-0.255	5	2.237	1.488	6	round_R2_exits	require_candle=False, fib_zone=wide
+20260710T101729	-14.3375	1.269	0.291	3	0.000	-0.128	1	round_R2_exits	fib_zone=mid
+20260710T101729	-12.3857	0.944	-0.058	5	0.904	-0.110	6	round_R2_exits	tp_atr=1.0
+20260710T101730	-11.6334	0.886	-0.255	5	2.237	1.488	6	round_R2_exits	left_bars=5
+20260710T101730	-11.3394	0.626	-1.271	5	3.571	3.092	6	round_R2_exits	tp_atr=3.0, left_bars=5
+20260710T101731	-13.0995	0.761	-0.254	4	0.731	-0.318	5	round_R2_exits	require_candle=True, tp_atr=1.0
+20260710T101731	-11.3394	0.626	-1.271	5	3.571	3.092	6	round_R2_exits	right_bars=2
+20260710T101732	-12.3080	0.634	-0.817	5	1.580	0.701	6	round_R2_exits	tp_atr=1.5, atr_period=10
+20260710T101733	-12.0639	0.386	-2.080	5	3.049	2.452	6	round_R2_exits	max_hold_bars=24
+20260710T101733	-11.3394	0.626	-1.271	5	3.571	3.092	6	round_R2_exits	rsi_short=50.0
+20260710T101734	-20.2894	0.578	-2.403	9	0.282	-8.161	14	round_R3_structure_seed	Invalidation mode (none/wick/close) + one-entry + EMA stack toggle on soft mid/wide zones; structural A/B vs prior round
+20260710T101734	-20.2894	0.578	-2.403	9	0.282	-8.161	14	round_R3_structure	require_ema_stack=False, require_candle=True
+20260710T101735	-20.2894	0.578	-2.403	9	0.282	-8.161	14	round_R3_structure	left_bars=5
+20260710T101735	-19.6616	99.000	0.793	1	0.000	-3.510	3	round_R3_structure	rsi_short=65.0
+20260710T101736	-19.6616	99.000	0.793	1	0.000	-3.510	3	round_R3_structure	tp_atr=2.0, max_hold_bars=96
+20260710T101736	-19.6616	99.000	0.793	1	0.000	-3.510	3	round_R3_structure	max_hold_bars=96
+20260710T101737	-20.0457	99.000	1.059	1	0.000	-3.677	3	round_R3_structure	sl_atr=1.5
+20260710T101737	-inf	0.000	0.000	0	0.000	0.000	0	round_R3_structure	combo_id=soft_baseline, right_bars=2
+20260710T101738	-19.1843	99.000	0.633	1	0.000	-3.245	3	round_R3_structure	sl_atr=2.5
+20260710T101738	-16.5129	99.000	0.633	1	0.000	-1.131	1	round_R3_structure	fib_zone=golden, max_hold_bars=64
+20260710T101739	-16.5129	99.000	0.633	1	0.000	-1.131	1	round_R3_structure	max_hold_bars=96, max_hold_bars=64
+20260710T101739	-16.5129	99.000	0.633	1	0.000	-1.131	1	round_R3_structure	max_hold_bars=32
+20260710T101739	-16.5129	99.000	0.633	1	0.000	-1.131	1	round_R3_structure	one_entry_per_swing=False
+20260710T101740	-16.5129	99.000	0.633	1	0.000	-1.131	1	round_R3_structure	right_bars=2
+20260710T101740	-16.8508	99.000	1.059	1	0.000	-1.214	1	round_R3_structure	sl_atr=1.5, max_hold_bars=32
+20260710T101741	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	require_ema_stack=True
+20260710T101741	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	require_candle=False, sl_atr=2.5
+20260710T101742	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	left_bars=7
+20260710T101742	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	max_hold_bars=32
+20260710T101743	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	invalidate_mode=wick
+20260710T101743	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	tp_atr=3.0
+20260710T101744	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	fib_zone=wide
+20260710T101744	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	tp_atr=1.5
+20260710T101745	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	rsi_short=60.0
+20260710T101745	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	right_bars=2
+20260710T101746	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	rsi_short=60.0, rsi_short=55.0
+20260710T101746	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	invalidate_mode=wick
+20260710T101747	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	left_bars=3
+20260710T101747	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	sl_atr=1.5
+20260710T101747	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	one_entry_per_swing=False, invalidate_mode=close
+20260710T101748	-16.5129	99.000	0.633	1	0.000	-1.131	1	round_R3_structure	require_ema_stack=False
+20260710T101748	-16.5129	99.000	0.633	1	0.000	-1.131	1	round_R3_structure	require_ema_stack=False
+20260710T101749	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	left_bars=5
+20260710T101749	-16.5129	99.000	0.633	1	0.000	-1.131	1	round_R3_structure	require_ema_stack=False
+20260710T101750	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	left_bars=3
+20260710T101750	-16.5129	99.000	0.633	1	0.000	-1.131	1	round_R3_structure	require_ema_stack=False
+20260710T101751	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	fib_zone=golden, fib_zone=golden
+20260710T101751	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	require_candle=False
+20260710T101752	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	right_bars=2
+20260710T101752	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	right_bars=2
+20260710T101753	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	rsi_short=60.0
+20260710T101753	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	invalidate_mode=close
+20260710T101753	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	rsi_long=45.0, sl_atr=2.0
+20260710T101754	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	require_candle=True
+20260710T101754	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	invalidate_mode=none, tp_atr=2.5
+20260710T101755	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	rsi_short=55.0
+20260710T101755	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	fib_zone=wide
+20260710T101756	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	fib_zone=mid
+20260710T101756	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	sl_atr=1.5
+20260710T101757	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	max_hold_bars=64
+20260710T101757	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	rsi_long=35.0
+20260710T101927	-246.5303	0.266	-297.516	474	0.175	-195.545	305	round_R1_zone_volume_seed	Widen Fib entry bands (golden/mid/wide/shallow) and soft RSI; raise informative trade count without new AND filters.
+20260710T101928	-74.8243	0.347	-112.464	246	0.374	-37.184	95	round_R1_zone_volume	fib_timeframe=1d
+20260710T101928	-39.7814	0.458	-52.438	146	0.314	-27.125	56	round_R1_zone_volume	combo_id=soft_baseline, fib_zone=wide
+20260710T101929	-18.4802	0.553	-17.422	61	0.198	-17.038	25	round_R1_zone_volume	combo_id=soft_baseline, one_entry_per_swing=True
+20260710T101929	-18.4802	0.553	-17.422	61	0.198	-17.038	25	round_R1_zone_volume	rsi_short=55.0
+20260710T101930	-24.6099	0.451	-27.059	72	0.353	-22.161	46	round_R1_zone_volume	left_bars=2
+20260710T101930	-58.9546	0.431	-78.573	204	0.364	-39.337	97	round_R1_zone_volume	combo_id=soft_baseline, rsi_short=50.0
+20260710T101931	-22.8174	0.493	-25.833	61	0.246	-17.302	25	round_R1_zone_volume	sl_atr=1.5, tp_atr=2.5
+20260710T101931	-58.9546	0.431	-78.573	204	0.364	-39.337	97	round_R1_zone_volume	combo_id=soft_baseline, rsi_short=50.0
+20260710T101932	-18.4802	0.553	-17.422	61	0.198	-17.038	25	round_R1_zone_volume	fib_timeframe=1d, right_bars=2
+20260710T101932	-19.9121	0.547	-19.369	61	0.192	-17.955	25	round_R1_zone_volume	fib_zone=wide, tp_atr=2.5
+20260710T101933	-65.7864	0.377	-80.568	180	0.334	-51.005	115	round_R1_zone_volume	fib_timeframe=4h, fib_zone=wide
+20260710T101933	-18.4802	0.553	-17.422	61	0.198	-17.038	25	round_R1_zone_volume	one_entry_per_swing=True
+20260710T101934	-39.7814	0.458	-52.438	146	0.314	-27.125	56	round_R1_zone_volume	combo_id=soft_baseline, tp_atr=2.0
+20260710T101934	-39.7814	0.458	-52.438	146	0.314	-27.125	56	round_R1_zone_volume	one_entry_per_swing=False, rsi_short=55.0
+20260710T101935	-24.9034	0.344	-32.707	66	0.302	-17.099	31	round_R1_zone_volume	require_candle=False, rsi_long=40.0
+20260710T101935	-18.6426	0.485	-20.393	61	0.232	-14.392	25	round_R1_zone_volume	max_hold_bars=32
+20260710T101936	-18.4802	0.553	-17.422	61	0.198	-17.038	25	round_R1_zone_volume	tp_atr=2.0
+20260710T101936	-33.0923	0.200	-53.381	78	0.466	-12.803	36	round_R1_zone_volume	require_candle=False, rsi_long=45.0
+20260710T101936	-6.3563	0.770	-5.130	40	0.982	-0.083	15	round_R1_zone_volume	fib_zone=shallow, fib_zone=mid
+20260710T101937	-6.3563	0.770	-5.130	40	0.982	-0.083	15	round_R1_zone_volume	fib_timeframe=1d
+20260710T101937	-18.9154	0.480	-25.884	75	0.444	-11.947	32	round_R1_zone_volume	combo_id=soft_baseline
+20260710T101938	-6.3563	0.770	-5.130	40	0.982	-0.083	15	round_R1_zone_volume	tp_atr=2.0, atr_period=14
+20260710T101938	-7.5242	0.745	-6.268	40	0.860	-1.280	15	round_R1_zone_volume	rsi_long=45.0, tp_atr=2.5
+20260710T101939	-9.5317	0.834	-1.529	18	0.980	-0.035	7	round_R1_zone_volume	fib_zone=golden
+20260710T101939	-6.3563	0.770	-5.130	40	0.982	-0.083	15	round_R1_zone_volume	require_candle=True
+20260710T101940	-5.6077	0.793	-4.624	40	1.126	0.909	15	round_R1_zone_volume	max_hold_bars=96
+20260710T101940	-4.7488	0.915	-1.531	40	0.923	-0.466	15	round_R1_zone_volume	sl_atr=2.5
+20260710T101941	-23.6224	0.369	-33.380	79	0.429	-13.865	41	round_R1_zone_volume	require_candle=False, right_bars=5
+20260710T101941	-12.2145	2.221	4.283	13	1.048	0.118	6	round_R1_zone_volume	combo_id=soft_avwap
+20260710T101942	-19.2386	0.362	-16.530	37	0.370	-18.336	43	round_R1_zone_volume	fib_timeframe=4h
+20260710T101942	-18.9154	0.480	-25.884	75	0.444	-11.947	32	round_R1_zone_volume	combo_id=soft_baseline
+20260710T101943	-19.2386	0.362	-16.530	37	0.370	-18.336	43	round_R1_zone_volume	fib_timeframe=4h
+20260710T101943	-4.7488	0.915	-1.531	40	0.923	-0.466	15	round_R1_zone_volume	rsi_short=55.0
+20260710T101944	-4.7488	0.915	-1.531	40	0.923	-0.466	15	round_R1_zone_volume	fib_timeframe=1d
+20260710T101944	-13.3621	0.531	-18.577	69	0.541	-7.147	28	round_R1_zone_volume	one_entry_per_swing=False
+20260710T101945	-10.9346	1.123	1.316	29	0.520	-3.851	13	round_R1_zone_volume	rsi_short=60.0
+20260710T101945	-5.3502	0.892	-1.940	40	0.807	-1.260	15	round_R1_zone_volume	max_hold_bars=64
+20260710T101945	-5.6077	0.793	-4.624	40	1.126	0.909	15	round_R1_zone_volume	sl_atr=2.0
+20260710T101946	-19.2386	0.362	-16.530	37	0.370	-18.336	43	round_R1_zone_volume	fib_timeframe=4h
+20260710T101946	-19.2386	0.362	-16.530	37	0.370	-18.336	43	round_R1_zone_volume	fib_timeframe=4h
+20260710T101947	-206.9965	0.302	-281.243	541	0.266	-132.750	350	round_R2_exits_seed	Exit/hold grid on soft wide-zone family: TP/SL ATR mults and max hold; candle on/off. Distinct from R1 zone focus.
+20260710T101947	-44.1699	0.492	-57.416	219	0.547	-30.924	145	round_R2_exits	combo_id=soft_baseline, sl_atr=3.0
+20260710T101948	-46.3749	0.469	-58.411	221	0.492	-34.339	145	round_R2_exits	max_hold_bars=32
+20260710T101948	-41.5799	0.507	-59.098	213	0.651	-24.062	141	round_R2_exits	tp_atr=2.5
+20260710T101949	-182.3182	0.341	-214.596	436	0.232	-150.040	285	round_R2_exits	require_candle=False, left_bars=3
+20260710T101949	-40.5789	0.467	-56.917	180	0.613	-24.241	121	round_R2_exits	rsi_short=60.0, left_bars=3
+20260710T101950	-9.4965	0.536	-15.056	57	0.756	-2.937	28	round_R2_exits	right_bars=5
+20260710T101950	-9.4965	0.536	-15.056	57	0.756	-2.937	28	round_R2_exits	atr_period=14
+20260710T101951	-9.4965	0.536	-15.056	57	0.756	-2.937	28	round_R2_exits	fib_zone=wide
+20260710T101956	-83.6065	0.411	-103.765	260	0.385	-63.448	167	round_R2_exits	combo_id=soft_baseline, atr_period=10
+20260710T101957	-7.0697	0.831	-1.970	25	0.753	-1.169	13	round_R2_exits	rsi_long=40.0
+20260710T101957	-7.0697	0.831	-1.970	25	0.753	-1.169	13	round_R2_exits	require_candle=True
+20260710T101958	-88.5012	0.392	-108.464	260	0.350	-68.538	169	round_R2_exits	combo_id=soft_baseline
+20260710T101958	-12.4278	1.148	0.674	13	0.597	-1.394	7	round_R2_exits	fib_zone=mid, require_candle=True
+20260710T101959	-7.1831	0.858	-1.414	22	1.003	0.047	12	round_R2_exits	left_bars=5
+20260710T101959	-9.3382	0.631	-9.501	49	0.587	-9.175	41	round_R2_exits	right_bars=3
+20260710T102000	-7.1831	0.858	-1.414	22	1.003	0.047	12	round_R2_exits	left_bars=5
+20260710T102000	-12.4278	1.148	0.674	13	0.597	-1.394	7	round_R2_exits	fib_zone=mid
+20260710T102001	-9.4965	0.536	-15.056	57	0.756	-2.937	28	round_R2_exits	rsi_long=45.0
+20260710T102001	-8.6041	0.823	-1.833	25	0.538	-2.680	13	round_R2_exits	max_hold_bars=16
+20260710T102002	-7.0697	0.831	-1.970	25	0.753	-1.169	13	round_R2_exits	fib_zone=wide
+20260710T102002	-25.2320	0.398	-43.974	113	0.770	-6.490	63	round_R2_exits	max_hold_bars=128, rsi_long=50.0
+20260710T102002	-25.2075	0.416	-43.556	121	0.796	-6.859	83	round_R2_exits	rsi_short=50.0
+20260710T102003	-10.7713	0.498	-16.842	58	0.693	-4.700	33	round_R2_exits	rsi_short=55.0
+20260710T102003	-25.2075	0.416	-43.556	121	0.796	-6.859	83	round_R2_exits	rsi_short=50.0
+20260710T102004	-20.3018	0.555	-27.719	109	0.689	-12.884	81	round_R2_exits	max_hold_bars=128, right_bars=2
+20260710T102004	-26.5921	0.379	-45.398	124	0.765	-7.786	83	round_R2_exits	max_hold_bars=32, rsi_short=50.0
+20260710T102005	-7.0697	0.831	-1.970	25	0.753	-1.169	13	round_R2_exits	sl_atr=3.0
+20260710T102005	-7.0697	0.831	-1.970	25	0.753	-1.169	13	round_R2_exits	rsi_short=60.0, require_candle=True
+20260710T102006	-12.4759	0.443	-13.996	28	0.788	-1.956	14	round_R2_exits	sl_atr=2.5, sl_atr=1.5
+20260710T102006	-10.7713	0.498	-16.842	58	0.693	-4.700	33	round_R2_exits	rsi_short=55.0
+20260710T102007	-88.5012	0.392	-108.464	260	0.350	-68.538	169	round_R2_exits	combo_id=soft_baseline
+20260710T102007	-9.4965	0.536	-15.056	57	0.756	-2.937	28	round_R2_exits	rsi_long=45.0
+20260710T102008	-7.1831	0.858	-1.414	22	1.003	0.047	12	round_R2_exits	left_bars=5
+20260710T102008	-92.8060	0.116	-131.176	73	0.195	-54.436	52	round_R2_exits	require_candle=False
+20260710T102009	-27.3147	0.053	-39.107	31	0.455	-8.522	16	round_R2_exits	sl_atr=1.0
+20260710T102009	-7.0697	0.831	-1.970	25	0.753	-1.169	13	round_R2_exits	rsi_long=40.0
+20260710T102010	-7.3916	0.822	-2.359	25	0.750	-1.424	13	round_R2_exits	sl_atr=2.5
+20260710T102010	-88.5012	0.392	-108.464	260	0.350	-68.538	169	round_R2_exits	combo_id=soft_baseline, left_bars=5
+20260710T102011	-15.8045	1.200	0.722	10	0.541	-4.962	18	round_R2_exits	fib_zone=mid, right_bars=3
+20260710T102011	-22.1789	0.440	-30.114	62	0.469	-14.244	34	round_R2_exits	sl_atr=1.5, rsi_long=45.0
+20260710T102012	-92.8060	0.116	-131.176	73	0.195	-54.436	52	round_R2_exits	require_candle=False, fib_zone=wide
+20260710T102012	-12.4278	1.148	0.674	13	0.597	-1.394	7	round_R2_exits	fib_zone=mid
+20260710T102012	-10.5006	0.251	-8.731	25	0.628	-1.270	13	round_R2_exits	tp_atr=1.0
+20260710T102013	-7.1831	0.858	-1.414	22	1.003	0.047	12	round_R2_exits	left_bars=5
+20260710T102013	-8.3722	0.784	-2.491	22	0.720	-1.253	12	round_R2_exits	tp_atr=3.0, left_bars=5
+20260710T102014	-10.5006	0.251	-8.731	25	0.628	-1.270	13	round_R2_exits	require_candle=True, tp_atr=1.0
+20260710T102014	-20.6630	0.552	-27.360	109	0.666	-13.966	81	round_R2_exits	right_bars=2
+20260710T102015	-9.6804	0.445	-6.502	25	0.603	-1.859	13	round_R2_exits	tp_atr=1.5, atr_period=10
+20260710T102015	-7.1591	0.813	-2.120	25	0.741	-1.198	13	round_R2_exits	max_hold_bars=24
+20260710T102016	-25.2075	0.416	-43.556	121	0.796	-6.859	83	round_R2_exits	rsi_short=50.0
+20260710T102016	-24.0104	0.210	-25.533	36	0.291	-22.488	40	round_R3_structure_seed	Invalidation mode (none/wick/close) + one-entry + EMA stack toggle on soft mid/wide zones; structural A/B vs prior round
+20260710T102017	-24.0104	0.210	-25.533	36	0.291	-22.488	40	round_R3_structure	require_ema_stack=False, require_candle=True
+20260710T102017	-24.0104	0.210	-25.533	36	0.291	-22.488	40	round_R3_structure	left_bars=5
+20260710T102018	-16.9816	0.215	-12.154	17	0.342	-8.309	16	round_R3_structure	rsi_short=65.0
+20260710T102018	-16.9816	0.215	-12.154	17	0.342	-8.309	16	round_R3_structure	tp_atr=2.0, max_hold_bars=96
+20260710T102019	-16.9816	0.215	-12.154	17	0.342	-8.309	16	round_R3_structure	max_hold_bars=96
+20260710T102019	-16.4265	0.273	-11.865	17	0.434	-7.488	16	round_R3_structure	sl_atr=1.5
+20260710T102019	-29.7915	0.320	-29.920	55	0.296	-29.663	55	round_R3_structure	combo_id=soft_baseline, right_bars=2
+20260710T102020	-12.8889	0.396	-7.011	17	0.477	-5.267	16	round_R3_structure	sl_atr=2.5
+20260710T102020	-19.9469	99.000	1.955	3	0.151	-3.979	5	round_R3_structure	fib_zone=golden, max_hold_bars=64
+20260710T102021	-12.8889	0.396	-7.011	17	0.477	-5.267	16	round_R3_structure	max_hold_bars=96, max_hold_bars=64
+20260710T102021	-12.7189	0.344	-7.468	17	0.518	-4.469	16	round_R3_structure	max_hold_bars=32
+20260710T102022	-12.6494	0.374	-8.650	21	0.421	-6.649	19	round_R3_structure	one_entry_per_swing=False
+20260710T102022	-12.6494	0.374	-8.650	21	0.421	-6.649	19	round_R3_structure	right_bars=2
+20260710T102023	-16.6399	0.344	-15.005	26	0.344	-12.274	22	round_R3_structure	sl_atr=1.5, max_hold_bars=32
+20260710T102023	-15.0000	0.000	0.000	0	0.000	0.000	0	round_R3_structure	require_ema_stack=True
+20260710T102024	-12.9288	0.529	-12.870	48	0.535	-12.909	50	round_R3_structure	require_candle=False, sl_atr=2.5
+20260710T102024	-12.2800	0.491	-4.606	16	0.504	-3.454	11	round_R3_structure	left_bars=7
+20260710T102024	-12.2800	0.491	-4.606	16	0.504	-3.454	11	round_R3_structure	max_hold_bars=32
+20260710T102025	-12.2800	0.491	-4.606	16	0.504	-3.454	11	round_R3_structure	invalidate_mode=wick
+20260710T102025	-11.1008	0.645	-3.223	15	0.720	-1.979	11	round_R3_structure	tp_atr=3.0
+20260710T102026	-22.9514	0.409	-37.262	96	0.749	-8.640	61	round_R3_structure	fib_zone=wide
+20260710T102026	-10.5297	0.337	-6.003	16	1.259	0.943	12	round_R3_structure	tp_atr=1.5
+20260710T102027	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	rsi_short=60.0
+20260710T102027	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	right_bars=2
+20260710T102028	-10.9690	0.359	-13.082	35	0.485	-8.856	33	round_R3_structure	rsi_short=60.0, rsi_short=55.0
+20260710T102028	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	invalidate_mode=wick
+20260710T102029	-23.2320	0.203	-31.122	55	0.384	-15.342	44	round_R3_structure	left_bars=3
+20260710T102029	-11.4079	0.294	-15.063	26	0.973	-0.253	19	round_R3_structure	sl_atr=1.5
+20260710T102030	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	one_entry_per_swing=False, invalidate_mode=close
+20260710T102030	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	require_ema_stack=False
+20260710T102030	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	require_ema_stack=False
+20260710T102031	-10.1997	0.249	-13.666	27	0.648	-4.234	28	round_R3_structure	left_bars=5
+20260710T102031	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	require_ema_stack=False
+20260710T102032	-23.2320	0.203	-31.122	55	0.384	-15.342	44	round_R3_structure	left_bars=3
+20260710T102032	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	require_ema_stack=False
+20260710T102033	-14.1199	76.807	1.352	4	0.890	-0.129	3	round_R3_structure	fib_zone=golden, fib_zone=golden
+20260710T102033	-12.6135	0.469	-13.800	51	0.565	-11.427	52	round_R3_structure	require_candle=False
+20260710T102034	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	right_bars=2
+20260710T102034	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	right_bars=2
+20260710T102035	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	rsi_short=60.0
+20260710T102035	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	invalidate_mode=close
+20260710T102035	-10.7518	0.313	-11.424	24	0.859	-1.080	18	round_R3_structure	rsi_long=45.0, sl_atr=2.0
+20260710T102036	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	require_candle=True
+20260710T102036	-12.8188	0.595	-4.579	19	0.487	-6.239	18	round_R3_structure	invalidate_mode=none, tp_atr=2.5
+20260710T102037	-10.9690	0.359	-13.082	35	0.485	-8.856	33	round_R3_structure	rsi_short=55.0
+20260710T102037	-26.7515	0.388	-43.853	135	0.711	-9.650	84	round_R3_structure	fib_zone=wide
+20260710T102038	-9.5049	0.353	-7.311	20	0.891	-0.699	18	round_R3_structure	fib_zone=mid
+20260710T102038	-11.4079	0.294	-15.063	26	0.973	-0.253	19	round_R3_structure	sl_atr=1.5
+20260710T102039	-9.3809	0.388	-7.061	20	0.891	-0.701	18	round_R3_structure	max_hold_bars=64
+20260710T102039	-10.8424	0.821	-0.415	6	0.941	-0.270	12	round_R3_structure	rsi_long=35.0

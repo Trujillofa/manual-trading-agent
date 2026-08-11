@@ -129,6 +129,36 @@ def _ema_standalone_fingerprint(sig_type: str, data: object, pair: str) -> str:
     return f"ema_{sig_type}_{tf_str}_{pair}_{period_str}_{dir_str}"
 
 
+def _ema_alert_audit_payload(
+    *,
+    ts_iso: str,
+    pair: str,
+    crossover: EMACrossover,
+    price: float | None,
+    adx_1h: float | None,
+    fingerprint: str,
+) -> dict[str, object]:
+    """Audit record for a sent standalone EMA crossover alert.
+
+    Captures the 1h ADX regime at send time so a week of live alerts can show
+    how many crossovers fire in low-ADX (whipsaw-prone) conditions before
+    deciding whether the standalone path needs an ADX gate.
+    """
+    return {
+        "ts": ts_iso,
+        "kind": "ema_alert",
+        "pair": pair,
+        "signal_type": "crossover",
+        "crossover": crossover.crossover_type.value,
+        "timeframe": crossover.timeframe,
+        "fast_period": crossover.fast_period,
+        "slow_period": crossover.slow_period,
+        "price": price,
+        "adx_1h": adx_1h,
+        "fingerprint": fingerprint,
+    }
+
+
 def _filter_standalone_ema_signals(
     signals: list[EmaSignalEntry],
     *,
@@ -1226,6 +1256,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                         "symbol": symbol,
                         "signals": list(ema_signals_this_pair),
                         "price": float(close_price),
+                        "adx_1h": adx_1h,
                     }
                 )
 
@@ -1597,6 +1628,16 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             slow_period=data.slow_period,
                             timeframe=data.timeframe,
                             price=candidate_price,
+                        )
+                        _append_audit_log(
+                            _ema_alert_audit_payload(
+                                ts_iso=now_utc.isoformat(),
+                                pair=pair,
+                                crossover=data,
+                                price=candidate_price,
+                                adx_1h=ema_candidate.get("adx_1h"),
+                                fingerprint=ema_fp,
+                            )
                         )
                     elif sig_type == "price_touch" and isinstance(data, EMAPriceTouch):
                         await notifier.send_ema_price_touch(

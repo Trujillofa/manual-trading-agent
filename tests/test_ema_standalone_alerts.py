@@ -171,3 +171,40 @@ async def test_send_ema_crossover_death_bias_without_price() -> None:
     assert "Death Cross" in message
     assert "Bearish bias" in message
     assert "Price:" not in message
+
+
+def test_ema_alert_audit_payload_records_adx_regime() -> None:
+    from src.cli import _ema_alert_audit_payload
+
+    data = _crossover(kind=EMACrossoverType.DEATH_CROSS, timeframe="30m", fast=20, slow=50)
+    payload = _ema_alert_audit_payload(
+        ts_iso="2026-08-11T12:00:00+00:00",
+        pair="NASDAQ",
+        crossover=data,
+        price=29749.5,
+        adx_1h=17.4,
+        fingerprint="ema_crossover_30m_NASDAQ_20/50_death_cross",
+    )
+    assert payload["kind"] == "ema_alert"
+    assert payload["pair"] == "NASDAQ"
+    assert payload["crossover"] == "death_cross"
+    assert payload["timeframe"] == "30m"
+    assert payload["fast_period"] == 20
+    assert payload["slow_period"] == 50
+    assert payload["adx_1h"] == 17.4
+    assert payload["fingerprint"] == "ema_crossover_30m_NASDAQ_20/50_death_cross"
+
+
+def test_ema_alert_audit_payload_tolerates_missing_adx() -> None:
+    from src.cli import _ema_alert_audit_payload
+
+    payload = _ema_alert_audit_payload(
+        ts_iso="2026-08-11T12:00:00+00:00",
+        pair="BTC/USD",
+        crossover=_crossover(fast=20, slow=50),
+        price=None,
+        adx_1h=None,
+        fingerprint="fp",
+    )
+    assert payload["adx_1h"] is None
+    assert payload["price"] is None

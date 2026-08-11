@@ -70,6 +70,7 @@ from src.notifications.telegram import TelegramNotifier
 from src.scanner.evaluator import evaluate_entry
 from src.scanner.gates import (
     ADX_TREND_THRESHOLD,
+    ConfirmationProfile,
     MicroContext,
     SpreadQuote,
     _check_breakout_with_profile,
@@ -530,19 +531,18 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             # Injected as buffer_pips * pip_size=1.0 into gates + evaluate_entry overrides.
             atr_frac = float(getattr(settings.strategy, "breakout_buffer_atr_frac", 0.05))
             entry_overrides: dict[str, object] = {}
+            breakout_profile: ConfirmationProfile
             if inst is not None:
                 entry_overrides["session_allowed_utc"] = instrument_session_windows(
                     pair, list(settings.strategy.session_allowed_utc)
                 )
                 entry_overrides["spread_filter_enabled"] = bool(inst.spread_filter_enabled)
                 if atr is not None and atr > 0 and atr_frac > 0:
+                    buffer_abs = float(atr) * atr_frac
                     entry_overrides["pip_size"] = 1.0
-                    entry_overrides["buffer_pips"] = float(atr) * atr_frac
+                    entry_overrides["buffer_pips"] = buffer_abs
                     breakout_pip_size = 1.0
-                    breakout_profile = {
-                        **profile,
-                        "buffer_pips": float(entry_overrides["buffer_pips"]),
-                    }
+                    breakout_profile = {**profile, "buffer_pips": buffer_abs}
                 else:
                     breakout_pip_size = display_point_size
                     breakout_profile = profile

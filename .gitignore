@@ -72,3 +72,15 @@ pi-session-*.html
 *.pine
 !pine_scripts/htf_pivots_fib_ema_strategy.pine
 scripts/run_tradingview_strategy_backtest.py
+
+# Grok agent local workflows/state
+.grok/
+
+# Omo local plans/run state
+.omo/
+
+# uv lockfile (project resolves via pip/setuptools, not uv)
+uv.lock
+
+# Local MetaTrader desk templates (not production strategy)
+plantillas/

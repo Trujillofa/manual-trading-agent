@@ -22,6 +22,7 @@ class EmaCandidate(TypedDict):
     symbol: str
     signals: list[EmaSignalEntry]
     price: NotRequired[float | None]
+    adx_1h: NotRequired[float | None]
 
 
 SetupState = Literal["breakout_pending", "aligned", "near"]

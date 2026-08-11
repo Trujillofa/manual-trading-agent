@@ -70,6 +70,7 @@ from src.notifications.telegram import TelegramNotifier
 from src.scanner.evaluator import evaluate_entry
 from src.scanner.gates import (
     ADX_TREND_THRESHOLD,
+    ConfirmationProfile,
     MicroContext,
     SpreadQuote,
     _check_breakout_with_profile,
@@ -127,6 +128,36 @@ def _ema_standalone_fingerprint(sig_type: str, data: object, pair: str) -> str:
         tf_str = str(getattr(data, "timeframe", "") or "")
         dir_str = ""
     return f"ema_{sig_type}_{tf_str}_{pair}_{period_str}_{dir_str}"
+
+
+def _ema_alert_audit_payload(
+    *,
+    ts_iso: str,
+    pair: str,
+    crossover: EMACrossover,
+    price: float | None,
+    adx_1h: float | None,
+    fingerprint: str,
+) -> dict[str, object]:
+    """Audit record for a sent standalone EMA crossover alert.
+
+    Captures the 1h ADX regime at send time so a week of live alerts can show
+    how many crossovers fire in low-ADX (whipsaw-prone) conditions before
+    deciding whether the standalone path needs an ADX gate.
+    """
+    return {
+        "ts": ts_iso,
+        "kind": "ema_alert",
+        "pair": pair,
+        "signal_type": "crossover",
+        "crossover": crossover.crossover_type.value,
+        "timeframe": crossover.timeframe,
+        "fast_period": crossover.fast_period,
+        "slow_period": crossover.slow_period,
+        "price": price,
+        "adx_1h": adx_1h,
+        "fingerprint": fingerprint,
+    }
 
 
 def _filter_standalone_ema_signals(
@@ -500,19 +531,18 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
             # Injected as buffer_pips * pip_size=1.0 into gates + evaluate_entry overrides.
             atr_frac = float(getattr(settings.strategy, "breakout_buffer_atr_frac", 0.05))
             entry_overrides: dict[str, object] = {}
+            breakout_profile: ConfirmationProfile
             if inst is not None:
                 entry_overrides["session_allowed_utc"] = instrument_session_windows(
                     pair, list(settings.strategy.session_allowed_utc)
                 )
                 entry_overrides["spread_filter_enabled"] = bool(inst.spread_filter_enabled)
                 if atr is not None and atr > 0 and atr_frac > 0:
+                    buffer_abs = float(atr) * atr_frac
                     entry_overrides["pip_size"] = 1.0
-                    entry_overrides["buffer_pips"] = float(atr) * atr_frac
+                    entry_overrides["buffer_pips"] = buffer_abs
                     breakout_pip_size = 1.0
-                    breakout_profile = {
-                        **profile,
-                        "buffer_pips": float(entry_overrides["buffer_pips"]),
-                    }
+                    breakout_profile = {**profile, "buffer_pips": buffer_abs}
                 else:
                     breakout_pip_size = display_point_size
                     breakout_profile = profile
@@ -1226,6 +1256,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                         "symbol": symbol,
                         "signals": list(ema_signals_this_pair),
                         "price": float(close_price),
+                        "adx_1h": adx_1h,
                     }
                 )
 
@@ -1597,6 +1628,16 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                             slow_period=data.slow_period,
                             timeframe=data.timeframe,
                             price=candidate_price,
+                        )
+                        _append_audit_log(
+                            _ema_alert_audit_payload(
+                                ts_iso=now_utc.isoformat(),
+                                pair=pair,
+                                crossover=data,
+                                price=candidate_price,
+                                adx_1h=ema_candidate.get("adx_1h"),
+                                fingerprint=ema_fp,
+                            )
                         )
                     elif sig_type == "price_touch" and isinstance(data, EMAPriceTouch):
                         await notifier.send_ema_price_touch(

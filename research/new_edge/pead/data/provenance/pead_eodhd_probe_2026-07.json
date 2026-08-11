@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "lane": "pead",
+  "stage": "source_probe",
+  "verdict": "INSUFFICIENT",
+  "retrieved_at_utc": "2026-07-06T21:30:00+00:00",
+  "source": {
+    "publisher": "EOD Historical Data",
+    "api_base": "https://eodhd.com/api",
+    "endpoints_probed": [
+      "/calendar/earnings",
+      "/calendar/trends",
+      "/fundamentals/AAPL.US",
+      "/eod/AAPL.US",
+      "/exchange-symbol-list/US"
+    ],
+    "user_key_present": true,
+    "subscription_tier_observed": "free_eod_only",
+    "calendar_earnings_status": "free_tier_eod_only",
+    "calendar_trends_status": "free_tier_eod_only",
+    "fundamentals_status": "free_tier_eod_only",
+    "eod_prices_status": "probed",
+    "exchange_symbol_list_status": "probed"
+  },
+  "documented_earnings_fields": [
+    "code",
+    "report_date",
+    "date",
+    "before_after_market",
+    "currency",
+    "actual",
+    "estimate",
+    "difference",
+    "percent"
+  ],
+  "eod_price_fields_observed": [
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "adjusted_close",
+    "volume",
+    "warning"
+  ],
+  "coverage_probe": {
+    "earnings_rows": 0,
+    "eod_sample_rows": 1,
+    "us_symbol_list_count": 51683,
+    "eod_free_tier_warning": "Data is limited by one year as you have free subscription"
+  },
+  "pead_gate_gaps": [
+    "earnings calendar blocked on free EOD-only subscription (403)",
+    "no estimate_observation_timestamp in documented field matrix",
+    "report_date is date-only with before_after_market label",
+    "cannot verify actual/estimate/surprise on current key",
+    "symbol list lacks list/delist dates for survivorship control"
+  ],
+  "reference": "https://eodhd.com/financial-apis/calendar-upcoming-earnings-ipos-and-splits"
+}

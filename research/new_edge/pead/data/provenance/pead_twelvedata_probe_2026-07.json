@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "lane": "pead",
+  "stage": "source_probe",
+  "verdict": "INSUFFICIENT",
+  "retrieved_at_utc": "2026-07-06T20:15:00+00:00",
+  "source": {
+    "publisher": "Twelve Data",
+    "api_base": "https://api.twelvedata.com",
+    "endpoints_probed": [
+      "earnings",
+      "earnings_calendar",
+      "earnings_estimate",
+      "eps_trend"
+    ],
+    "user_key_present": true,
+    "user_earnings_probe": "rate_limited",
+    "user_calendar_probe": "forbidden",
+    "demo_earnings_probe": "probed"
+  },
+  "earnings_fields_observed": [
+    "date",
+    "time",
+    "eps_estimate",
+    "eps_actual",
+    "difference",
+    "surprise_prc"
+  ],
+  "sample_row": {
+    "date": "2026-06-10",
+    "time": "",
+    "eps_estimate": -0.77,
+    "eps_actual": -1.36,
+    "difference": -0.59,
+    "surprise_prc": 76.62
+  },
+  "coverage_probe": {
+    "symbol": "AAPL",
+    "rows_returned": 66,
+    "oldest_date": "2010-10-17",
+    "newest_date": "2026-06-10",
+    "empty_time_rows": 66
+  },
+  "pead_gate_gaps": [
+    "no estimate_observation_timestamp",
+    "announcement time empty on all probed rows (date-only)",
+    "per-symbol endpoint; no survivorship-safe 500+ stock archive",
+    "earnings_calendar requires grow/pro/ultra plan",
+    "user key hit daily credit limit (800/day) during probe",
+    "vendor surprise_prc is not acceptable point-in-time proof"
+  ],
+  "reference": "https://twelvedata.com/docs/fundamentals/earnings"
+}

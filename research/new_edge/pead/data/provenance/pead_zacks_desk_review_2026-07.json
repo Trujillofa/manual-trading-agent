@@ -1,0 +1,186 @@
+{
+  "schema_version": 3,
+  "lane": "pead",
+  "stage": "desk_review",
+  "verdict": "UNVERIFIED",
+  "reviewed_at_utc": "2026-07-07T16:25:00+00:00",
+  "revised_at_utc": "2026-07-07T20:00:00+00:00",
+  "focus": "estimate_observation_timestamp for PEAD data gate",
+  "publisher": "Zacks Investment Research / Zacks Data",
+  "delivery_channels": [
+    "https://zacksdata.com/ (direct enterprise)",
+    "https://data.nasdaq.com/ (Nasdaq Data Link premium tables)",
+    "WRDS academic/institutional"
+  ],
+  "table_code_verification": {
+    "verified_at_utc": "2026-07-07T19:25:39+00:00",
+    "method": "HTTP 200 on /databases/{code} + Nasdaq column-definition pages (incl. SPA render)",
+    "pead_required_pair": {
+      "estimate_history": {
+        "database_code": "ZEEH",
+        "table_code": "ZACKS/EEH",
+        "product_name": "North American Consensus Earnings Estimate History",
+        "url": "https://data.nasdaq.com/databases/ZEEH",
+        "url_resolves": true,
+        "notes": "Distinct from ZEE; carries obs_date revision history"
+      },
+      "earnings_surprises": {
+        "database_code": "ZES",
+        "table_code": "ZACKS/ES",
+        "product_name": "North American Earnings Surprises",
+        "url": "https://data.nasdaq.com/databases/ZES",
+        "url_resolves": true,
+        "notes": "Distinct from ZEA; carries act_rpt_date/time and eps_act"
+      }
+    },
+    "related_not_pead_substitutes": {
+      "ZEE": {
+        "table_code": "ZACKS/EE",
+        "url": "https://data.nasdaq.com/databases/ZEE",
+        "url_resolves": true,
+        "why_insufficient": "Current consensus snapshot only; no obs_date or revision history"
+      },
+      "ZEA": {
+        "table_code": "ZACKS/EA",
+        "url": "https://data.nasdaq.com/databases/ZEA",
+        "url_resolves": true,
+        "why_insufficient": "Forward earnings calendar (exp_rpt_date, time_of_day_code); not historical realized announcements with act_rpt_time"
+      }
+    }
+  },
+  "datasets_reviewed": [
+    {
+      "code": "ZEEH",
+      "table": "ZACKS/EEH",
+      "name": "North American Consensus Earnings Estimate History",
+      "url": "https://data.nasdaq.com/databases/ZEEH",
+      "history_from": "1979",
+      "coverage": "23000+ US and Canadian listed and delisted",
+      "update_cadence": "daily; EEH table updated 10:00 AM UTC with previous day's data",
+      "key_fields": {
+        "estimate_observation": "obs_date",
+        "estimate_observation_definition": "Observation date (YYYY-MM-DD) corresponding to the date on which contributed estimates were changed and the consensus was revised",
+        "estimate_observation_granularity": "date_only",
+        "estimate_observation_timezone_documented": "partial",
+        "estimate_observation_vendor_quotes": [
+          "obs_date: date on which contributed estimates were changed and the consensus was revised (Nasdaq ZEEH column definitions)",
+          "Delivery: EEH table updated at 10:00 AM UTC every day with the previous day's data"
+        ],
+        "consensus_eps": "eps_mean_est",
+        "period_key": ["m_ticker", "per_end_date", "per_type", "obs_date"]
+      }
+    },
+    {
+      "code": "ZES",
+      "table": "ZACKS/ES",
+      "name": "North American Earnings Surprises",
+      "url": "https://data.nasdaq.com/databases/ZES",
+      "history_from": "2000",
+      "coverage": "17000+ active and delisted US and Canadian",
+      "update_cadence": "daily; ES table updated 12:30 PM UTC with previous day's data",
+      "key_fields": {
+        "announcement_date": "act_rpt_date",
+        "announcement_time": "act_rpt_time",
+        "announcement_timezone": "America/New_York",
+        "announcement_session_code": "act_rpt_code",
+        "announcement_session_values": {
+          "BTO": "Before the Open",
+          "DTM": "During the Market",
+          "AMC": "After Market Close"
+        },
+        "actual_eps": "eps_act",
+        "bundled_consensus_eps": "eps_mean_est",
+        "vendor_surprise_fields_forbidden": ["eps_amt_diff_surp", "eps_pct_diff_surp"]
+      }
+    }
+  ],
+  "obs_date_semantics": {
+    "documentation_status": "partial",
+    "vendor_documented": [
+      "obs_date labels the date on which contributed estimates changed and consensus revised",
+      "EEH batch delivers prior-day revisions at 10:00 UTC (D+1 publication lag from obs_date)"
+    ],
+    "residual_ambiguity": [
+      "Whether obs_date=D uses US/Eastern business date or UTC calendar date of receipt",
+      "Whether multiple intraday revisions on one obs_date retain ordering or collapse to EOD consensus"
+    ],
+    "lookahead_mitigation": "1-day publication lag means obs_date=D revisions are not consumable until D+1 10:00 UTC; same-clock look-ahead within the EEH feed is structurally unlikely",
+    "amc_same_day_inference": "For AMC releases (~21:00 UTC), a same-calendar-day obs_date revision was contributed during day D and published next UTC morning — likely predates the announcement; relaxed join more defensible for AMC than artifact v2 credited",
+    "eeh_delivery_utc": "10:00",
+    "zes_delivery_utc": "12:30"
+  },
+  "same_day_attrition_risk": {
+    "status": "open_empirical",
+    "summary": "Strict obs_date < act_rpt_date rejects all same-calendar-day collisions; likely over-conservative for AMC given D+1 EEH delivery",
+    "likely_concentration": "BTO/DTM events where morning announce may precede same-day revision receipt",
+    "academic_precedent": "none_found_in_desk_pass",
+    "verifier_authority": "PEAD contract allows project-defined join convention once documented in pinned manifest",
+    "sample_must_quantify": [
+      "Count ZACKS/ES rows where max(obs_date) == act_rpt_date for AAPL 2015-2020",
+      "Count by act_rpt_code (BTO/DTM/AMC)",
+      "Report retained vs rejected event rate under strict vs relaxed same-day policies"
+    ]
+  },
+  "pead_contract_alignment": {
+    "announcement_timestamp_tz": {
+      "status": "likely_pass_with_sample",
+      "rationale": "ZACKS/ES act_rpt_date + act_rpt_time (ET) + BTO/DTM/AMC maps to PEAD event-timing rules; desk review only"
+    },
+    "estimate_observation_timestamp": {
+      "status": "conditional_unverified",
+      "rationale": "EEH obs_date + D+1 10:00 UTC delivery partially documented; NY/UTC calendar date and BTO/DTM same-day attrition still need sample"
+    },
+    "recompute_surprise": {
+      "status": "required",
+      "rationale": "Use joined eps_mean_est from EEH at last qualifying obs_date and eps_act from ES; ignore vendor surprise columns"
+    },
+    "coverage_gate_2016_2026": {
+      "status": "likely_pass_if_attrition_allows",
+      "rationale": "ZES from 2000; EEH from 1979; attrition from join policy may shrink eligible N"
+    }
+  },
+  "contract_governance": {
+    "current_contract": "docs/research/pead/PEAD_CONTRACT_2026-07.md",
+    "trial_sample": "Contract-compliant — no purchase; read-only verify_pead_data on pinned non-committed snapshot",
+    "paid_full_license": "Requires contract amendment — current contract does not authorize paid-data purchase for 10y cross-section",
+    "reference": "PEAD_CONTRACT_2026-07.md:8"
+  },
+  "join_recipe_for_verifier": {
+    "strict_policy": [
+      "Match ZACKS/ES to ZACKS/EEH on m_ticker + per_end_date + per_type",
+      "Require max(obs_date) < act_rpt_date (strict inequality on calendar date)",
+      "Reject if no qualifying EEH row",
+      "Compute surprise = (eps_act - eps_mean_est) / abs(eps_mean_est); reject estimate == 0"
+    ],
+    "relaxed_policy_documented_in_manifest": [
+      "Allow obs_date == act_rpt_date when act_rpt_code=AMC and EEH D+1 delivery implies revision predates announce",
+      "Require explicit manifest note — no academic precedent found; verifier is authority"
+    ]
+  },
+  "blocking_gaps_before_data_pass": [
+    "No licensed sample pinned — public docs only",
+    "Residual obs_date calendar timezone (NY vs UTC) unspecified by vendor",
+    "Same-day obs_date == act_rpt_date collision rate unquantified — likely BTO/DTM-heavy",
+    "BNRI methodology must be documented in pinned manifest",
+    "License must allow local snapshot + verify_pead_data without redistribution violation",
+    "Reseller APIs (e.g. Intrinio Zacks EPS) lack EEH obs_date history — insufficient substitute",
+    "Paid production license requires PEAD contract amendment beyond trial sample"
+  ],
+  "sample_request_checklist": [
+    "ZACKS/EEH + ZACKS/ES (not ZEE/ZEA) for AAPL + 50 delisted names, 2015-2020",
+    "Collision table: count where max(obs_date) == act_rpt_date, split by BTO/DTM/AMC",
+    "Retained-event rates under strict vs relaxed same-day join policies",
+    "BNRI methodology note for eps_act and eps_mean_est comparability",
+    "License snippet confirming local pin + verification without redistribution"
+  ],
+  "recommended_next_step": "Owner-approved free trial sample only (contract-compliant). Quantify same-day attrition on sample; document join convention in pinned manifest before any paid license or contract amendment.",
+  "references": [
+    "https://zacksdata.com/datasets/consensus-data/",
+    "https://data.nasdaq.com/databases/ZEEH",
+    "https://data.nasdaq.com/databases/ZES",
+    "https://data.nasdaq.com/databases/ZEE",
+    "https://data.nasdaq.com/databases/ZEA",
+    "https://wrds-www.wharton.upenn.edu/documents/1174/Zacks-One-Sheet.pdf",
+    "docs/research/pead/PEAD_CONTRACT_2026-07.md"
+  ]
+}

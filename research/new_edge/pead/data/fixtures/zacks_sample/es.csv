@@ -1,0 +1,4 @@
+m_ticker,ticker,per_end_date,per_type,act_rpt_date,act_rpt_time,act_rpt_code,eps_act,eps_mean_est,per_fisc_year,per_fisc_qtr
+AAPL,AAPL,2019-12-31,Q,2020-01-29,16:30,AMC,2.65,2.60,2020,1
+MSFT,MSFT,2019-12-31,Q,2020-01-29,16:05,AMC,1.35,1.32,2020,1
+MSFT,MSFT,2019-12-31,Q,2020-01-29,09:30,BTO,1.35,1.32,2020,1

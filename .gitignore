@@ -84,3 +84,7 @@ uv.lock
 
 # Local MetaTrader desk templates (not production strategy)
 plantillas/
+
+# Pinned research bulk data (provenance JSON tracked; CSV local-only)
+research/new_edge/events/data/pinned/*.csv
+research/new_edge/events/data/pinned/*.parquet

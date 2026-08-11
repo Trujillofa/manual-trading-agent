@@ -347,6 +347,68 @@ class DataConfig:
 
 
 @dataclass
+class EtrConfig:
+    """ETR Edge Market Terminal integration (change-only Telegram alerts)."""
+
+    enabled: bool = True
+    assets: list[str] = field(default_factory=lambda: ["btc", "gold", "nasdaq", "oil"])
+    poll_with_scan: bool = True
+    min_poll_interval_seconds: int = 900
+    score_alert_low: float = 50.0
+    score_alert_high: float = 80.0
+    score_delta_alert: float = 10.0
+    error_alert_cooldown_minutes: int = 360
+    telegram_alerts: bool = True
+    login: str | None = None
+    password: str | None = None
+    supabase_url: str | None = None
+    supabase_anon_key: str | None = None
+
+    def __post_init__(self) -> None:
+        self.login = _resolve_env_placeholder(self.login)
+        self.password = _resolve_env_placeholder(self.password)
+        self.supabase_url = _resolve_env_placeholder(self.supabase_url)
+        self.supabase_anon_key = _resolve_env_placeholder(self.supabase_anon_key)
+
+        if not _is_non_empty_string(self.login):
+            self.login = os.environ.get("ETRACADEMY_LOGIN")
+        if not _is_non_empty_string(self.password):
+            self.password = os.environ.get("ETRACADEMY_PASSWORD")
+        if not _is_non_empty_string(self.supabase_url):
+            self.supabase_url = os.environ.get("ETR_SUPABASE_URL")
+        if not _is_non_empty_string(self.supabase_anon_key):
+            self.supabase_anon_key = os.environ.get("ETR_SUPABASE_ANON_KEY")
+
+        etr_enabled_env = os.environ.get("ETR_ENABLED")
+        if etr_enabled_env is not None:
+            self.enabled = etr_enabled_env.strip().lower() in {"1", "true", "yes", "on"}
+
+        self.assets = [str(a).strip().lower() for a in self.assets if str(a).strip()]
+        valid = {"btc", "gold", "nasdaq", "oil"}
+        invalid = [a for a in self.assets if a not in valid]
+        if invalid:
+            raise ValueError(f"etr.assets invalid: {invalid}; allowed={sorted(valid)}")
+        if not self.assets:
+            raise ValueError("etr.assets must not be empty")
+        if self.min_poll_interval_seconds <= 0:
+            raise ValueError("etr.min_poll_interval_seconds must be > 0")
+        if self.error_alert_cooldown_minutes < 0:
+            raise ValueError("etr.error_alert_cooldown_minutes must be >= 0")
+        if self.score_alert_low < 0 or self.score_alert_high < 0:
+            raise ValueError("etr score thresholds must be >= 0")
+        if self.score_delta_alert < 0:
+            raise ValueError("etr.score_delta_alert must be >= 0")
+
+        # Soft-disable when credentials missing so the FX scanner still runs.
+        if self.enabled and not self.has_credentials:
+            self.enabled = False
+
+    @property
+    def has_credentials(self) -> bool:
+        return _is_non_empty_string(self.login) and _is_non_empty_string(self.password)
+
+
+@dataclass
 class Settings:
     trading: TradingConfig = field(default_factory=TradingConfig)
     timeframes: TimeframesConfig = field(default_factory=TimeframesConfig)
@@ -355,6 +417,7 @@ class Settings:
     news: NewsConfig = field(default_factory=NewsConfig)
     data: DataConfig = field(default_factory=DataConfig)
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
+    etr: EtrConfig = field(default_factory=EtrConfig)
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> Settings:
@@ -397,6 +460,9 @@ class Settings:
         news_data = payload.get("news", {})
         data_data = payload.get("data", {})
         telegram_data = payload.get("telegram", {})
+        etr_data = payload.get("etr", {})
+        if etr_data is None:
+            etr_data = {}
         oanda_data = data_data.get("oanda", {}) if isinstance(data_data.get("oanda"), dict) else {}
 
         for section_name, section_data in (
@@ -406,6 +472,7 @@ class Settings:
             ("news", news_data),
             ("data", data_data),
             ("telegram", telegram_data),
+            ("etr", etr_data),
         ):
             if not isinstance(section_data, dict):
                 raise ValueError(f"'{section_name}' must be a YAML object")
@@ -490,6 +557,22 @@ class Settings:
         strategy_payload["confirmation_profiles"] = profiles_config
         strategy_payload["ema"] = ema_config
 
+        etr_payload: dict[str, Any] = {
+            "enabled": etr_data.get("enabled", True),
+            "assets": etr_data.get("assets", ["btc", "gold", "nasdaq", "oil"]),
+            "poll_with_scan": etr_data.get("poll_with_scan", True),
+            "min_poll_interval_seconds": etr_data.get("min_poll_interval_seconds", 900),
+            "score_alert_low": etr_data.get("score_alert_low", 50.0),
+            "score_alert_high": etr_data.get("score_alert_high", 80.0),
+            "score_delta_alert": etr_data.get("score_delta_alert", 10.0),
+            "error_alert_cooldown_minutes": etr_data.get("error_alert_cooldown_minutes", 360),
+            "telegram_alerts": etr_data.get("telegram_alerts", True),
+            "login": etr_data.get("login"),
+            "password": etr_data.get("password"),
+            "supabase_url": etr_data.get("supabase_url"),
+            "supabase_anon_key": etr_data.get("supabase_anon_key"),
+        }
+
         return cls(
             trading=TradingConfig(**trading_payload),
             timeframes=TimeframesConfig(**timeframes_data),
@@ -498,6 +581,7 @@ class Settings:
             news=NewsConfig(**news_data),
             data=data_config,
             telegram=TelegramConfig(**telegram_payload),
+            etr=EtrConfig(**etr_payload),
         )
 
 

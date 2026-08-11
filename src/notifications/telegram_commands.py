@@ -268,6 +268,9 @@ class TelegramCommandHandler:
             return
 
         command = text.split()[0].lower()
+        # Strip @botname suffix from group commands
+        if "@" in command:
+            command = command.split("@", 1)[0]
         if command == "/watchlist":
             await self.send_message(self._extract_last_watchlist())
         elif command == "/signal":
@@ -288,6 +291,8 @@ class TelegramCommandHandler:
             else:
                 await self.send_message(f"Running pair scan for {parts[1]}...")
                 await self.send_message(await self._run_fresh_scan(parts[1]))
+        elif command == "/etr":
+            await self._handle_etr(text)
         elif command in {"/help", "/start"}:
             await self.send_message(
                 "*Manual Trading Bot Commands*\n\n"
@@ -297,10 +302,47 @@ class TelegramCommandHandler:
                 "/news — blocked currencies + cached events\n"
                 "/pairs — tracked forex pairs\n"
                 "/pair GBP/USD — explain one pair right now\n"
-                "/scan — run a fresh scan now"
+                "/scan — run a fresh scan now\n"
+                "/etr — ETR Market Terminal summary (cached)\n"
+                "/etr btc|gold|nasdaq|oil — live full report"
             )
         else:
             await self.send_message("Unknown command. Try /help")
+
+    async def _handle_etr(self, text: str) -> None:
+        """Handle /etr and /etr <asset> commands."""
+        from src.config.settings import get_settings
+        from src.etr.alerts import chunk_telegram, format_full_report
+        from src.etr.models import VALID_ASSETS
+        from src.etr.service import cached_reports, fetch_one_report, format_cached_summary
+
+        parts = text.split()
+        asset = parts[1].lower().strip() if len(parts) >= 2 else None
+        if asset is None:
+            summary = format_cached_summary()
+            await self.send_message(summary)
+            return
+        if asset not in VALID_ASSETS:
+            await self.send_message(
+                f"Unknown asset `{asset}`. Use: btc, gold, nasdaq, oil"
+            )
+            return
+        await self.send_message(f"Fetching ETR {asset.upper()}...")
+        try:
+            settings = get_settings()
+            report = await fetch_one_report(settings, asset)
+            for chunk in chunk_telegram(format_full_report(report)):
+                await self.send_message(chunk)
+        except Exception as exc:
+            # Fall back to cache if live fetch fails
+            cached = cached_reports([asset])
+            if cached:
+                await self.send_message(
+                    f"Live fetch failed (`{exc}`). Cached snapshot:\n\n"
+                    + format_full_report(cached[0])
+                )
+            else:
+                await self.send_message(f"ETR fetch failed: `{exc}`")
 
     async def run_forever(self) -> None:
         self._write_heartbeat("starting")

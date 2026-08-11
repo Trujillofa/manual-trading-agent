@@ -212,6 +212,13 @@ def _parse_pairs(raw_pairs: str | None) -> list[str] | None:
     return pairs or None
 
 
+def _parse_etr_assets(raw_assets: str | None) -> list[str] | None:
+    if raw_assets is None:
+        return None
+    assets = [a.strip().lower() for a in raw_assets.split(",") if a.strip()]
+    return assets or None
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Manual Forex Trading Agent - RSI Multi-Timeframe Strategy"
@@ -306,6 +313,45 @@ def create_parser() -> argparse.ArgumentParser:
 
     dash_parser = subparsers.add_parser("dashboard", help="Signal dashboard and paper P&L")
     dash_parser.add_argument("--days", type=int, default=30, help="Days of history to show")
+
+    etr_parser = subparsers.add_parser(
+        "etr",
+        help="Fetch ETR Market Terminal report (btc|gold|nasdaq|oil)",
+    )
+    etr_parser.add_argument(
+        "--asset",
+        default="btc",
+        help="Asset slug: btc, gold, nasdaq, oil (default: btc)",
+    )
+    etr_parser.add_argument(
+        "--notify",
+        action="store_true",
+        help="Also send the full report to Telegram",
+    )
+    etr_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print structured JSON instead of human text",
+    )
+
+    etr_scan_parser = subparsers.add_parser(
+        "etr-scan",
+        help="Poll all configured ETR assets; Telegram on structural changes only",
+    )
+    etr_scan_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Ignore min_poll_interval_seconds",
+    )
+    etr_scan_parser.add_argument(
+        "--no-notify",
+        action="store_true",
+        help="Update state/audit without sending Telegram",
+    )
+    etr_scan_parser.add_argument(
+        "--assets",
+        help="Comma-separated asset list (default: settings.etr.assets)",
+    )
 
     return parser
 
@@ -1870,6 +1916,64 @@ async def run_healthcheck() -> None:
     await _healthcheck_run()
 
 
+async def run_etr(asset: str, *, notify: bool = False, as_json: bool = False) -> None:
+    """Fetch one ETR Market Terminal report and print it."""
+    import json as json_lib
+
+    from src.etr.alerts import chunk_telegram, format_full_report
+    from src.etr.service import fetch_one_report
+    from src.notifications.telegram import TelegramNotifier
+
+    settings = get_settings()
+    report = await fetch_one_report(settings, asset.lower().strip())
+    if as_json:
+        print(json_lib.dumps(report.to_dict(), indent=2, ensure_ascii=False))
+    else:
+        print(format_full_report(report))
+
+    if notify and settings.telegram.enabled and settings.telegram.is_configured:
+        notifier = TelegramNotifier(settings.telegram.bot_token, settings.telegram.chat_id)
+        for chunk in chunk_telegram(format_full_report(report)):
+            await notifier.send(chunk)
+
+
+async def run_etr_scan(
+    *,
+    force: bool = False,
+    no_notify: bool = False,
+    assets: list[str] | None = None,
+) -> None:
+    """Poll ETR assets and send change-only Telegram alerts."""
+    from src.etr.service import poll_and_notify
+    from src.notifications.telegram import TelegramNotifier
+
+    settings = get_settings()
+    notifier = None
+    if settings.telegram.enabled and settings.telegram.is_configured and not no_notify:
+        notifier = TelegramNotifier(settings.telegram.bot_token, settings.telegram.chat_id)
+
+    summary = await poll_and_notify(
+        settings,
+        notifier,
+        assets=assets,
+        force=force,
+        notify=False if no_notify else None,
+    )
+    print(summary.message)
+    for result in summary.results:
+        if result.error:
+            print(f"  {result.asset}: ERROR {result.error}")
+        elif result.seeded:
+            print(f"  {result.asset}: baseline seeded")
+        elif result.changes:
+            fields = ", ".join(c.field for c in result.changes)
+            flag = "NOTIFIED" if result.notified else "changed"
+            print(f"  {result.asset}: {flag} [{fields}]")
+        else:
+            print(f"  {result.asset}: no structural change")
+
+
+
 async def run_logs_status(notify: bool) -> None:
     await _logs_status_run(notify=notify)
 
@@ -1910,6 +2014,12 @@ def main() -> int:
         "healthcheck": run_healthcheck,
         "logs-status": lambda: run_logs_status(args.notify),
         "dashboard": lambda: run_dashboard(args.days),
+        "etr": lambda: run_etr(args.asset, notify=args.notify, as_json=args.json),
+        "etr-scan": lambda: run_etr_scan(
+            force=args.force,
+            no_notify=args.no_notify,
+            assets=_parse_etr_assets(getattr(args, "assets", None)),
+        ),
     }
 
     handler = handlers.get(args.command)

@@ -131,3 +131,18 @@ telegram:
   setup_digest_interval_minutes: 60
   bot_token: "${TELEGRAM_BOT_TOKEN}"
   chat_id: "${TELEGRAM_CHAT_ID}"
+
+# ETR Edge Market Terminal (https://etracademy.com/analisis/*)
+# Change-only Telegram alerts. Credentials: ETRACADEMY_LOGIN / ETRACADEMY_PASSWORD.
+etr:
+  enabled: true
+  assets: [btc, gold, nasdaq, oil]
+  poll_with_scan: true
+  min_poll_interval_seconds: 900
+  score_alert_low: 50
+  score_alert_high: 80
+  score_delta_alert: 10
+  error_alert_cooldown_minutes: 360
+  telegram_alerts: true
+  login: "${ETRACADEMY_LOGIN}"
+  password: "${ETRACADEMY_PASSWORD}"

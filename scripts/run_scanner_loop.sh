@@ -48,6 +48,8 @@ rotate_file() {
 rotate_managed_logs() {
   rotate_file "$LOG_DIR/scan.log"
   rotate_file "$LOG_DIR/signal_audit.jsonl"
+  rotate_file "$LOG_DIR/etr.log"
+  rotate_file "$LOG_DIR/etr_audit.jsonl"
 }
 
 mkdir -p "$LOG_DIR"
@@ -70,5 +72,8 @@ while true; do
   rotate_managed_logs
   echo "=== $(date) ===" >>"$LOG_DIR/scan.log"
   python -u -m src.cli scan >>"$LOG_DIR/scan.log" 2>&1 || echo "scan failed (exit=$?)" >>"$LOG_DIR/scan.log"
+  # ETR Market Terminal change-only alerts (best-effort; never fail the loop).
+  echo "=== $(date) ===" >>"$LOG_DIR/etr.log"
+  python -u -m src.cli etr-scan >>"$LOG_DIR/etr.log" 2>&1 || echo "etr-scan failed (exit=$?)" >>"$LOG_DIR/etr.log"
   sleep "$SCAN_INTERVAL_SECONDS"
 done

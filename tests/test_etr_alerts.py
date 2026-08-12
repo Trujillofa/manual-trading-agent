@@ -48,8 +48,28 @@ def test_change_alert_contains_fields() -> None:
     assert "BTC" in msg
     assert "bajista" in msg
     assert len(msg) < 4000
-    # Code spans must not contain Markdown escapes for underscores
-    assert "\\_" not in msg.split("→")[0] or "alcista" in msg
+    # Code spans must not Markdown-escape (would show as \_)
+    assert "\\_" not in msg
+    assert "`alcista`" in msg
+    assert "`bajista`" in msg
+
+
+def test_change_alert_no_escape_inside_code_with_underscore() -> None:
+    """Values with underscores stay literal inside backticks."""
+    msg = format_change_alert(
+        _sample(),
+        [
+            EtrChange(
+                field="primary_status",
+                old="waiting_confirm",
+                new="active_now",
+                severity="info",
+            )
+        ],
+    )
+    assert "`waiting_confirm`" in msg
+    assert "`active_now`" in msg
+    assert "\\_" not in msg
 
 
 def test_full_report_has_disclaimer() -> None:

@@ -268,9 +268,11 @@ def process_shadow_for_report(
             still_open[key] = event
             summary["updated"] += 1
 
-    # Open on zone entry (diff edge) — not on seed unless already in zone with no open
+    # Open only on explicit zone-entry edge (diff). Re-entry on restart / in-zone
+    # without an edge is intentionally disabled so we never open every poll.
+    # `seed` is accepted for call-site clarity but does not open events.
+    _ = seed
     entered = any(c.field == "price_in_primary_zone" and c.new == "yes" for c in changes)
-    in_zone = report.price_in_primary_zone() is True
     zone = _zone_key(report)
     direction = _direction(report)
     key = _event_key(report.asset, direction, zone) if zone and direction else ""
@@ -280,19 +282,7 @@ def process_shadow_for_report(
         for e in still_open.values()
     )
 
-    should_open = False
-    if entered and key and not already_open:
-        should_open = True
-    elif (
-        not seed
-        and in_zone
-        and key
-        and not already_open
-        and not any(e.get("key") == key for e in still_open.values())
-    ):
-        # Re-entry path if state missed the edge (restart) — only when in zone
-        # and no open event. Avoid opening every poll: only if no open for asset.
-        should_open = False  # stick to explicit zone-entry edge for cleanliness
+    should_open = bool(entered and key and not already_open)
 
     if should_open:
         event = _open_event(report, now_iso)

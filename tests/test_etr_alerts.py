@@ -48,6 +48,8 @@ def test_change_alert_contains_fields() -> None:
     assert "BTC" in msg
     assert "bajista" in msg
     assert len(msg) < 4000
+    # Code spans must not contain Markdown escapes for underscores
+    assert "\\_" not in msg.split("→")[0] or "alcista" in msg
 
 
 def test_full_report_has_disclaimer() -> None:

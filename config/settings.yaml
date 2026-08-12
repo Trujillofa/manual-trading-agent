@@ -144,5 +144,7 @@ etr:
   score_delta_alert: 10
   error_alert_cooldown_minutes: 360
   telegram_alerts: true
+  # Forward paper-shadow: resolve open zone events after this many hours
+  shadow_horizon_hours: 24
   login: "${ETRACADEMY_LOGIN}"
   password: "${ETRACADEMY_PASSWORD}"

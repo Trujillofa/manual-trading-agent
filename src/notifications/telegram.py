@@ -381,20 +381,6 @@ class TelegramNotifier:
         )
         _ = await self.send(message)
 
-    async def send_etr_change(self, message: str) -> bool:
-        """Send an ETR Market Terminal structural-change alert."""
-        return await self.send(message)
-
-    async def send_etr_report(self, message: str) -> bool:
-        """Send a full (or chunked) ETR report. Caller may split >4096 chars."""
-        from src.etr.alerts import chunk_telegram
-
-        ok_any = False
-        for chunk in chunk_telegram(message):
-            if await self.send(chunk):
-                ok_any = True
-        return ok_any
-
     async def send_scan_error(self, pair: str, error: str) -> None:
         """Send scan error alert."""
         message = f"⚠️ *Scan Error*\n\nPair: `{pair}`\nError: `{error}`"

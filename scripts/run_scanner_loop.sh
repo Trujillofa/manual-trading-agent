@@ -50,6 +50,8 @@ rotate_managed_logs() {
   rotate_file "$LOG_DIR/signal_audit.jsonl"
   rotate_file "$LOG_DIR/etr.log"
   rotate_file "$LOG_DIR/etr_audit.jsonl"
+  rotate_file "$LOG_DIR/etr_shadow_polls.jsonl"
+  rotate_file "$LOG_DIR/etr_shadow_events.jsonl"
 }
 
 mkdir -p "$LOG_DIR"

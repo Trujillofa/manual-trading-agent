@@ -7,12 +7,14 @@ import json
 import logging
 import os
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from src.etr.models import ASSET_PATHS, VALID_ASSETS
+from src.etr.models import ASSET_PATHS, VALID_ASSETS, EtrReport
+from src.etr.parser import parse_analysis_html
 from src.scanner.state import _logs_dir
 
 logger = logging.getLogger(__name__)
@@ -92,10 +94,10 @@ class EtrClient:
         with contextlib.suppress(OSError):
             os.chmod(self.session_path, 0o600)
 
-    def _password_login(self) -> dict[str, Any]:
+    async def _password_login(self) -> dict[str, Any]:
         url = f"{self.supabase_url}/auth/v1/token?grant_type=password"
-        with httpx.Client(timeout=self.timeout) as client:
-            response = client.post(
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(
                 url,
                 headers=self._headers_auth(),
                 json={"email": self.email, "password": self.password},
@@ -107,17 +109,16 @@ class EtrClient:
         data = response.json()
         if not data.get("access_token"):
             raise EtrAuthError("ETR login response missing access_token")
-        # expires_at may be absent — derive from expires_in
         if "expires_at" not in data and data.get("expires_in"):
             data["expires_at"] = int(time.time()) + int(data["expires_in"])
         self._save_session_file(data)
         logger.info("ETR session established for %s", self.email)
         return data
 
-    def _refresh(self, refresh_token: str) -> dict[str, Any]:
+    async def _refresh(self, refresh_token: str) -> dict[str, Any]:
         url = f"{self.supabase_url}/auth/v1/token?grant_type=refresh_token"
-        with httpx.Client(timeout=self.timeout) as client:
-            response = client.post(
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(
                 url,
                 headers=self._headers_auth(),
                 json={"refresh_token": refresh_token},
@@ -129,16 +130,15 @@ class EtrClient:
             raise EtrAuthError("ETR refresh response missing access_token")
         if "expires_at" not in data and data.get("expires_in"):
             data["expires_at"] = int(time.time()) + int(data["expires_in"])
-        # Keep refresh token if rotation omitted it
         if not data.get("refresh_token"):
             data["refresh_token"] = refresh_token
         self._save_session_file(data)
         logger.info("ETR session refreshed")
         return data
 
-    def ensure_session(self, *, force_login: bool = False) -> dict[str, Any]:
+    async def ensure_session(self, *, force_login: bool = False) -> dict[str, Any]:
         if force_login:
-            self._session = self._password_login()
+            self._session = await self._password_login()
             return self._session
 
         session = self._session or self._load_session_file()
@@ -156,12 +156,12 @@ class EtrClient:
             refresh = session.get("refresh_token")
             if refresh:
                 try:
-                    self._session = self._refresh(str(refresh))
+                    self._session = await self._refresh(str(refresh))
                     return self._session
                 except EtrAuthError as exc:
                     logger.warning("ETR refresh failed, re-login: %s", exc)
 
-        self._session = self._password_login()
+        self._session = await self._password_login()
         return self._session
 
     def _cookie_header(self, session: dict[str, Any]) -> str:
@@ -175,14 +175,14 @@ class EtrClient:
         }
         return f"{COOKIE_NAME}={json.dumps(payload, separators=(',', ':'))}"
 
-    def fetch_analysis_html(self, asset: str) -> str:
+    async def fetch_analysis_html(self, asset: str) -> str:
         asset = asset.lower().strip()
         if asset not in VALID_ASSETS:
             raise ValueError(f"Unknown ETR asset '{asset}'. Valid: {', '.join(VALID_ASSETS)}")
         path = ASSET_PATHS[asset]
         url = f"{SITE_ORIGIN}{path}"
 
-        session = self.ensure_session()
+        session = await self.ensure_session()
         headers = {
             "Cookie": self._cookie_header(session),
             "User-Agent": (
@@ -191,36 +191,29 @@ class EtrClient:
             "Accept": "text/html,application/xhtml+xml",
         }
 
-        with httpx.Client(timeout=self.timeout, follow_redirects=True) as client:
-            response = client.get(url, headers=headers)
-            # Retry once on login redirect / unauthorized-looking page
+        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+            response = await client.get(url, headers=headers)
             if response.status_code in {401, 403} or "/login" in str(response.url):
-                session = self.ensure_session(force_login=True)
+                session = await self.ensure_session(force_login=True)
                 headers["Cookie"] = self._cookie_header(session)
-                response = client.get(url, headers=headers)
+                response = await client.get(url, headers=headers)
 
-        if response.status_code != 200:
-            raise RuntimeError(f"ETR fetch {asset} HTTP {response.status_code}")
-        if "/login" in str(response.url):
-            raise EtrAuthError(f"ETR fetch {asset} redirected to login")
-        text = response.text
-        if "Iniciar sesión" in text and "Market Terminal" not in text:
-            # Force re-login and one more attempt
-            session = self.ensure_session(force_login=True)
-            headers["Cookie"] = self._cookie_header(session)
-            with httpx.Client(timeout=self.timeout, follow_redirects=True) as client:
-                response = client.get(url, headers=headers)
+            if response.status_code != 200:
+                raise RuntimeError(f"ETR fetch {asset} HTTP {response.status_code}")
+            if "/login" in str(response.url):
+                raise EtrAuthError(f"ETR fetch {asset} redirected to login")
             text = response.text
-            if "Market Terminal" not in text and "Context score" not in text:
-                raise EtrAuthError(f"ETR fetch {asset} still unauthenticated")
+            if "Iniciar sesión" in text and "Market Terminal" not in text:
+                session = await self.ensure_session(force_login=True)
+                headers["Cookie"] = self._cookie_header(session)
+                response = await client.get(url, headers=headers)
+                text = response.text
+                if "Market Terminal" not in text and "Context score" not in text:
+                    raise EtrAuthError(f"ETR fetch {asset} still unauthenticated")
         return text
 
-    def fetch_report(self, asset: str):
-        from datetime import UTC, datetime
-
-        from src.etr.parser import parse_analysis_html
-
-        html = self.fetch_analysis_html(asset)
+    async def fetch_report(self, asset: str) -> EtrReport:
+        html = await self.fetch_analysis_html(asset)
         report = parse_analysis_html(html, asset)
         report.fetched_at = datetime.now(UTC).isoformat()
         return report

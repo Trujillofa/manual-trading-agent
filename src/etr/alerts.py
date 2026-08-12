@@ -37,7 +37,8 @@ def format_change_alert(report: EtrReport, changes: list[EtrChange]) -> str:
     for change in changes:
         label = field_labels.get(change.field, change.field)
         marker = "⚡" if change.severity == "action" else "•"
-        lines.append(f"{marker} {label}: `{_esc(change.old)}` → `{_esc(change.new)}`")
+        # Values live inside `code` spans — do not Markdown-escape (shows as \_)
+        lines.append(f"{marker} {label}: `{change.old}` → `{change.new}`")
 
     primary = report.primary
     if primary:

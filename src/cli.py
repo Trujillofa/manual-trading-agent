@@ -353,6 +353,11 @@ def create_parser() -> argparse.ArgumentParser:
         help="Comma-separated asset list (default: settings.etr.assets)",
     )
 
+    subparsers.add_parser(
+        "etr-shadow",
+        help="Forward paper-shadow summary (TP1 vs invalidation, open events)",
+    )
+
     return parser
 
 
@@ -1973,6 +1978,12 @@ async def run_etr_scan(
             print(f"  {result.asset}: no structural change")
 
 
+async def run_etr_shadow() -> None:
+    """Print prospective ETR zone-entry shadow stats."""
+    from src.etr.shadow import format_shadow_summary
+
+    print(format_shadow_summary())
+
 
 async def run_logs_status(notify: bool) -> None:
     await _logs_status_run(notify=notify)
@@ -2020,6 +2031,7 @@ def main() -> int:
             no_notify=args.no_notify,
             assets=_parse_etr_assets(getattr(args, "assets", None)),
         ),
+        "etr-shadow": run_etr_shadow,
     }
 
     handler = handlers.get(args.command)

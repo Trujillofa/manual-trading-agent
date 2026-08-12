@@ -13,7 +13,8 @@ from src.etr.alerts import format_change_alert, format_compact_summary, format_f
 from src.etr.client import EtrAuthError, EtrClient
 from src.etr.diff import diff_reports
 from src.etr.models import VALID_ASSETS, AssetState, EtrChange, EtrPollResult, EtrReport
-from src.etr.state import append_etr_audit, load_etr_state, save_state_with_meta
+from src.etr.shadow import process_shadow_for_report
+from src.etr.state import append_etr_audit, load_etr_state, load_global_meta, save_state_with_meta
 
 if TYPE_CHECKING:
     from src.config.settings import EtrConfig, Settings
@@ -87,10 +88,6 @@ async def poll_and_notify(
         return PollSummary(results=[], notified_count=0, error_count=0, skipped=True, message=msg)
 
     state = load_etr_state()
-    meta: dict[str, Any] = {}
-    # reload meta from file via state helper
-    from src.etr.state import load_global_meta
-
     meta = load_global_meta()
 
     if not force and _should_skip_for_interval(meta, config.min_poll_interval_seconds):
@@ -116,7 +113,7 @@ async def poll_and_notify(
     for asset in target_assets:
         result = EtrPollResult(asset=asset, report=None)
         try:
-            report = client.fetch_report(asset)
+            report = await client.fetch_report(asset)
             result.report = report
             fp = report.fingerprint(config.score_alert_low, config.score_alert_high)
             prev_state = state.get(asset)
@@ -134,6 +131,13 @@ async def poll_and_notify(
                 )
                 result.seeded = True
                 logger.info("ETR baseline seeded for %s fp=%s", asset, fp)
+                process_shadow_for_report(
+                    report,
+                    changes=[],
+                    now_iso=now_iso,
+                    horizon_hours=config.shadow_horizon_hours,
+                    seed=True,
+                )
                 append_etr_audit(
                     {
                         "ts": now_iso,
@@ -141,6 +145,7 @@ async def poll_and_notify(
                         "event": "seed",
                         "fingerprint": fp,
                         "notified": False,
+                        "price_in_primary_zone": report.price_in_primary_zone(),
                     }
                 )
             else:
@@ -153,8 +158,10 @@ async def poll_and_notify(
                     prev_in_zone=prev_state.in_primary_zone,
                 )
                 result.changes = changes
-                # Also alert if fingerprint changed even when diff empty? Prefer diff only.
-                should_alert = bool(changes) and fp != (prev_state.last_alerted_fingerprint or "")
+                # Alert solely from diff_reports. Fingerprint must NOT gate alerts:
+                # price_in_primary_zone and within-bucket score deltas are in the
+                # diff but intentionally absent from the structural fingerprint.
+                should_alert = bool(changes)
 
                 state[asset] = AssetState(
                     fingerprint=fp,
@@ -182,6 +189,14 @@ async def poll_and_notify(
                     state[asset].last_alerted_fingerprint = fp
                     state[asset].last_alerted_at = now_iso
 
+                # Forward paper-shadow: log polls, open/resolve zone events
+                process_shadow_for_report(
+                    report,
+                    changes=changes,
+                    now_iso=now_iso,
+                    horizon_hours=config.shadow_horizon_hours,
+                )
+
                 append_etr_audit(
                     {
                         "ts": now_iso,
@@ -190,6 +205,7 @@ async def poll_and_notify(
                         "fingerprint": fp,
                         "changes": [c.to_dict() for c in changes],
                         "notified": result.notified,
+                        "price_in_primary_zone": report.price_in_primary_zone(),
                     }
                 )
         except Exception as exc:
@@ -248,7 +264,7 @@ async def _maybe_error_alert(
 async def fetch_one_report(settings: Settings, asset: str) -> EtrReport:
     config = settings.etr
     client = build_client(config)
-    return client.fetch_report(asset)
+    return await client.fetch_report(asset)
 
 
 def cached_reports(assets: list[str] | None = None) -> list[EtrReport]:

@@ -85,6 +85,13 @@ if [ ! -d .git ]; then
 fi
 git fetch origin --prune || true
 if git cat-file -e '${COMMIT_SHA}^{commit}' 2>/dev/null; then
+  # Archive/rsync already wrote the release tree; discard checkout dirt so HEAD can match.
+  git reset --hard
+  git clean -fd \
+    -e .env -e .env.local \
+    -e logs -e data -e results \
+    -e .deploy-sha -e .staging -e .ops-backups -e .venv \
+    -e __pycache__ -e .pytest_cache -e .ruff_cache -e .mypy_cache
   git checkout -B main '${COMMIT_SHA}'
   git clean -fd \
     -e .env -e .env.local \

@@ -2,24 +2,30 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
 from src.news.news_checker import NewsChecker, NewsEvent
 
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture
+def checker(tmp_path, monkeypatch):
+    """Create NewsChecker with 60m before, 30m after lockout."""
+    monkeypatch.setattr(NewsChecker, "CACHE_PATH", tmp_path / "news_cache.json")
+    return NewsChecker(
+        lockout_minutes_before=60,
+        lockout_minutes_after=30,
+        importance_threshold=3,
+    )
+
 
 class TestNewsChecker:
     """NewsChecker tests."""
-
-    @pytest.fixture
-    def checker(self):
-        """Create NewsChecker with 60m before, 30m after lockout."""
-        return NewsChecker(
-            lockout_minutes_before=60,
-            lockout_minutes_after=30,
-            importance_threshold=3,
-        )
 
     @pytest.fixture
     def future_event(self):
@@ -183,3 +189,166 @@ class TestNewsChecker:
     def test_safe_text_none(self, checker):
         """Should return empty string for None."""
         assert checker._safe_text(None) == ""
+
+    def test_parse_timestamp_mm_dd_yyyy_12h(self, checker):
+        result = checker._parse_timestamp("06-06-2026", "12:30pm")
+        assert result is not None
+        assert result == datetime(2026, 6, 6, 12, 30, tzinfo=UTC)
+
+    def test_parse_timestamp_mm_dd_yyyy_24h(self, checker):
+        result = checker._parse_timestamp("08-13-2026", "14:30")
+        assert result is not None
+        assert result == datetime(2026, 8, 13, 14, 30, tzinfo=UTC)
+
+
+class TestXmlParser:
+    def test_published_country_schema(self, checker):
+        xml = (FIXTURES / "ff_thisweek_sample.xml").read_text(encoding="utf-8")
+        now = datetime(2026, 6, 6, 12, 40, tzinfo=UTC)
+        events = checker._select_events_from_xml(xml, now, hours_ahead=24 * 8)
+        by_name = {event.name: event for event in events}
+        nfp = by_name["Non-Farm Payrolls"]
+        assert nfp.currency == "USD"
+        assert nfp.country == "USD"
+        assert nfp.timestamp == datetime(2026, 6, 6, 12, 30, tzinfo=UTC)
+        assert nfp.forecast == "180K"
+        assert nfp.previous == "177K"
+        assert nfp.actual == ""
+        assert nfp.source == "forex_factory"
+        assert nfp.actual_observed_at is None
+        cpi = by_name["CPI m/m"]
+        assert cpi.forecast == "0.3%"
+        assert cpi.previous == "0.2%"
+        assert cpi.actual == ""
+
+    def test_legacy_currency_schema(self, checker):
+        xml = (FIXTURES / "ff_legacy_currency.xml").read_text(encoding="utf-8")
+        now = datetime(2026, 8, 13, 14, 40, tzinfo=UTC)
+        events = checker._select_events_from_xml(xml, now, hours_ahead=24)
+        assert len(events) == 2
+        nfp = events[0]
+        assert nfp.currency == "USD"
+        assert nfp.country == "US"
+        assert nfp.forecast == "180K"
+        assert nfp.actual == "185K"
+        assert nfp.previous == "177K"
+        assert nfp.actual_observed_at == now
+        cpi = events[1]
+        assert cpi.timestamp.hour == 14
+        assert cpi.actual == "0.2%"
+
+    def test_post_release_lockout_survives_fresh_parse(self, checker):
+        now = datetime(2026, 8, 13, 14, 40, tzinfo=UTC)
+        released = now - timedelta(minutes=10)
+        xml = f"""
+        <weeklyevents>
+          <event>
+            <title>CPI</title>
+            <country>USD</country>
+            <date>{released.strftime("%Y-%m-%d")}</date>
+            <time>{released.strftime("%H:%M")}</time>
+            <impact>High</impact>
+            <forecast>0.3%</forecast>
+            <previous>0.2%</previous>
+          </event>
+        </weeklyevents>
+        """
+        events = checker._select_events_from_xml(xml, now, hours_ahead=24)
+        assert len(events) == 1
+        checker._events = events
+        assert checker.is_blocked("EUR/USD", timestamp=now) is True
+
+    def test_event_beyond_post_release_lockout_is_dropped(self, checker):
+        now = datetime(2026, 8, 13, 14, 40, tzinfo=UTC)
+        released = now - timedelta(minutes=40)
+        xml = f"""
+        <weeklyevents>
+          <event>
+            <title>CPI</title>
+            <country>USD</country>
+            <date>{released.strftime("%Y-%m-%d")}</date>
+            <time>{released.strftime("%H:%M")}</time>
+            <impact>High</impact>
+            <forecast>0.3%</forecast>
+          </event>
+        </weeklyevents>
+        """
+        events = checker._select_events_from_xml(xml, now, hours_ahead=24)
+        assert events == []
+
+
+class TestNewsCache:
+    def test_old_cache_payload_still_loads(self, tmp_path, monkeypatch):
+        cache_path = tmp_path / "news_cache.json"
+        monkeypatch.setattr(NewsChecker, "CACHE_PATH", cache_path)
+        stamp = datetime(2026, 8, 14, 12, 30, tzinfo=UTC)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "last_fetch": stamp.isoformat(),
+                    "next_allowed_fetch": (stamp + timedelta(minutes=15)).isoformat(),
+                    "events": [
+                        {
+                            "timestamp": stamp.isoformat(),
+                            "currency": "USD",
+                            "name": "Non-Farm Employment Change",
+                            "importance": 3,
+                            "country": "US",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        checker = NewsChecker()
+        assert len(checker._events) == 1
+        event = checker._events[0]
+        assert event.currency == "USD"
+        assert event.forecast == ""
+        assert event.actual == ""
+        assert event.previous == ""
+        assert event.source == "forex_factory"
+        assert event.actual_observed_at is None
+
+    def test_new_cache_payload_round_trips(self, tmp_path, monkeypatch):
+        cache_path = tmp_path / "news_cache.json"
+        monkeypatch.setattr(NewsChecker, "CACHE_PATH", cache_path)
+        checker = NewsChecker()
+        observed = datetime(2026, 8, 13, 14, 35, tzinfo=UTC)
+        event = NewsEvent(
+            timestamp=datetime(2026, 8, 13, 14, 30, tzinfo=UTC),
+            currency="USD",
+            name="CPI m/m",
+            importance=3,
+            country="US",
+            forecast="0.3%",
+            actual="0.4%",
+            previous="0.2%",
+            source="forex_factory",
+            actual_observed_at=observed,
+        )
+        grok_event = NewsEvent(
+            timestamp=datetime(2026, 8, 13, 16, 0, tzinfo=UTC),
+            currency="EUR",
+            name="ECB Rate Decision",
+            importance=3,
+            country="EU",
+            source="grok",
+        )
+        checker._events = [event, grok_event]
+        checker._last_fetch = observed
+        checker._next_allowed_fetch = observed + timedelta(minutes=15)
+        checker._save_cache()
+
+        reloaded = NewsChecker()
+        assert len(reloaded._events) == 2
+        loaded = reloaded._events[0]
+        assert loaded.forecast == "0.3%"
+        assert loaded.actual == "0.4%"
+        assert loaded.previous == "0.2%"
+        assert loaded.source == "forex_factory"
+        assert loaded.actual_observed_at == observed
+        assert reloaded._events[1].source == "grok"
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        assert payload["events"][0]["forecast"] == "0.3%"
+        assert payload["events"][1]["source"] == "grok"

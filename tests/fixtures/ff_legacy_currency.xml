@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Offline legacy schema: <currency> + YYYY-MM-DD + actual. -->
+<weeklyevents>
+<event>
+<title>Non-Farm Employment Change</title>
+<country>US</country>
+<currency>USD</currency>
+<date>2026-08-13</date>
+<time>14:30</time>
+<impact>High</impact>
+<forecast>180K</forecast>
+<previous>177K</previous>
+<actual>185K</actual>
+</event>
+<event>
+<title>CPI y/y</title>
+<country>US</country>
+<currency>USD</currency>
+<date>2026-08-13</date>
+<time>02:30PM</time>
+<impact>High</impact>
+<forecast>0.3%</forecast>
+<previous>0.2%</previous>
+<actual>0.2%</actual>
+</event>
+</weeklyevents>

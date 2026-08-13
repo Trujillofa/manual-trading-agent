@@ -38,6 +38,51 @@ class AlignmentStateRecord(TypedDict, total=False):
     bars: int
 
 
+def _canonical_pair_key(raw: str) -> str | None:
+    """Normalize persisted pair keys to registry/FX slash form.
+
+    Handles legacy slashless keys such as ``XAUUSD`` → ``XAU/USD`` and keeps
+    registry ids like ``NASDAQ`` / ``OIL`` unchanged.
+    """
+    text = raw.strip()
+    if not text:
+        return None
+
+    from src.config.instruments import get_instrument_optional
+
+    inst = get_instrument_optional(text)
+    if inst is not None:
+        return inst.id
+
+    compact = text.upper().replace("/", "").replace("-", "").replace(" ", "")
+    if len(compact) == 6 and compact.isalpha():
+        return f"{compact[:3]}/{compact[3:]}"
+
+    if "/" in text:
+        return text.upper()
+
+    return text.upper()
+
+
+def _normalize_pair_keyed_state(raw: dict[str, Any]) -> dict[str, Any]:
+    """Rewrite slashless/legacy keys; on collision keep the richer record."""
+    out: dict[str, Any] = {}
+    for key, value in raw.items():
+        canon = _canonical_pair_key(str(key))
+        if canon is None or not isinstance(value, dict):
+            continue
+        existing = out.get(canon)
+        if existing is None:
+            out[canon] = value
+            continue
+        # Prefer the record with more confirmation bars when both exist.
+        prev_bars = int(existing.get("bars", 0) or 0) if isinstance(existing, dict) else 0
+        new_bars = int(value.get("bars", 0) or 0)
+        if new_bars >= prev_bars:
+            out[canon] = value
+    return out
+
+
 def _logs_dir() -> Path:
     configured = os.getenv("MANUAL_TRADING_AGENT_LOG_DIR")
     if configured:
@@ -81,13 +126,22 @@ def _alignment_state_path() -> Path:
 
 def _load_alignment_state() -> dict[str, AlignmentStateRecord]:
     path = _alignment_state_path()
-    return cast(dict[str, AlignmentStateRecord], _load_json_mapping(path))
+    raw = _load_json_mapping(path)
+    normalized = _normalize_pair_keyed_state(raw)
+    # Persist rewrite when legacy keys were present so ops state stays clean.
+    if normalized != raw:
+        _save_alignment_state(cast(dict[str, AlignmentStateRecord], normalized))
+    return cast(dict[str, AlignmentStateRecord], normalized)
 
 
 def _save_alignment_state(state: dict[str, AlignmentStateRecord]) -> None:
     path = _alignment_state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    normalized = cast(
+        dict[str, AlignmentStateRecord],
+        _normalize_pair_keyed_state(cast(dict[str, Any], state)),
+    )
+    path.write_text(json.dumps(normalized, indent=2), encoding="utf-8")
 
 
 def _active_signal_state_path() -> Path:
@@ -96,13 +150,21 @@ def _active_signal_state_path() -> Path:
 
 def _load_active_signal_state() -> dict[str, ActiveSignalRecord]:
     path = _active_signal_state_path()
-    return cast(dict[str, ActiveSignalRecord], _load_json_mapping(path))
+    raw = _load_json_mapping(path)
+    normalized = _normalize_pair_keyed_state(raw)
+    if normalized != raw:
+        _save_active_signal_state(cast(dict[str, ActiveSignalRecord], normalized))
+    return cast(dict[str, ActiveSignalRecord], normalized)
 
 
 def _save_active_signal_state(state: dict[str, ActiveSignalRecord]) -> None:
     path = _active_signal_state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    normalized = cast(
+        dict[str, ActiveSignalRecord],
+        _normalize_pair_keyed_state(cast(dict[str, Any], state)),
+    )
+    path.write_text(json.dumps(normalized, indent=2), encoding="utf-8")
 
 
 def _audit_log_path() -> Path:

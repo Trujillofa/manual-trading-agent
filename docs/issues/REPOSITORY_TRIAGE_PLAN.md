@@ -156,9 +156,9 @@ bounded after one week.
 
 | Priority | Item | Type | Status |
 |----------|------|------|--------|
-| **P0** | Add CI workflow (`.github/workflows/ci.yml`) | New PR | Open |
-| **P1** | Fix 24 mypy errors | New PR (`fix/mypy-errors`) | Open |
-| **P1** | Redeploy prod for log rotation (PR #31) | Ops | Open |
+| ~~P0~~ | ~~Add CI workflow (`.github/workflows/ci.yml`)~~ | New PR | **Done** (on `main`) |
+| **P1** | Fix remaining mypy errors | New PR (`fix/mypy-errors`) | Open |
+| ~~P1~~ | ~~Redeploy prod for log rotation (PR #31)~~ | Ops | **Done** (loop rotation live 2026-08; audit ~93% of 50 MiB threshold) |
 | ~~P1~~ | ~~Merge PR #31 (log rotation)~~ | ~~Review + merge~~ | **Done** (2026-07-06) |
 | ~~P2~~ | ~~Merge PR #30 (HTF Fib archive)~~ | ~~Review + merge~~ | **Done** (2026-07-06) |
 | ~~P2~~ | ~~Merge PR #32 (term structure docs)~~ | ~~Review + merge~~ | **Done** (2026-07-06) |
@@ -168,12 +168,12 @@ bounded after one week.
 
 ## Verification Checklist
 
-- [ ] CI workflow created and passing
+- [x] CI workflow created (confirm latest `main` run via `gh run list` when authenticated)
 - [x] PR #31 merged (2026-07-06)
-- [ ] PR #31 redeployed to prod
+- [x] PR #31 redeployed to prod (rotation in `run_scanner_loop.sh`; includes ETR logs)
 - [ ] mypy errors resolved (0 errors on `mypy src/`)
 - [x] PR #30 merged (2026-07-06)
 - [x] PR #32 merged (2026-07-06)
 - [x] PR #34 merged (2026-07-06)
-- [ ] Log rotation verified in prod (scan.log < 50 MiB after 1 week)
+- [ ] Log rotation verified after next truncate (`signal_audit.jsonl` was ~47 MiB / 50 MiB on 2026-08-13)
 - [ ] PEAD `verify_pead_data` source audit started (post-#34 contract)

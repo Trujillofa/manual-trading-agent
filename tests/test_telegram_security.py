@@ -12,8 +12,10 @@ import pytest
 from src.notifications import telegram_commands
 from src.notifications.telegram_commands import TelegramCommandHandler
 from src.notifications.telegram_security import (
+    TelegramPollHTTPError,
     TelegramPollLock,
     format_telegram_poll_error,
+    parse_telegram_retry_after,
     redact_telegram_secrets,
 )
 
@@ -48,7 +50,7 @@ def test_format_telegram_poll_error_from_http_status_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_updates_raises_redacted_runtime_error_on_409(
+async def test_get_updates_raises_telegram_poll_http_error_on_409(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     offset_path = tmp_path / "telegram_offset.json"
@@ -67,10 +69,57 @@ async def test_get_updates_raises_redacted_runtime_error_on_409(
     mock_client.get = AsyncMock(return_value=mock_response)
     monkeypatch.setattr(handler, "_get_client", AsyncMock(return_value=mock_client))
 
-    with pytest.raises(RuntimeError, match="duplicate getUpdates consumer") as exc_info:
+    with pytest.raises(TelegramPollHTTPError, match="duplicate getUpdates consumer") as exc_info:
         await handler.get_updates()
 
+    assert exc_info.value.status_code == 409
     assert token not in str(exc_info.value)
+
+
+def test_parse_telegram_retry_after_prefers_body_parameters() -> None:
+    request = httpx.Request("GET", "https://api.telegram.org/botTOKEN/getUpdates")
+    response = httpx.Response(
+        429,
+        headers={"Retry-After": "10"},
+        json={"ok": False, "parameters": {"retry_after": 42}},
+        request=request,
+    )
+    assert parse_telegram_retry_after(response) == 42.0
+
+
+@pytest.mark.asyncio
+async def test_run_forever_honors_retry_after_on_429(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    heartbeat_path = tmp_path / "telegram_heartbeat.json"
+    offset_path = tmp_path / "telegram_offset.json"
+    monkeypatch.setattr(telegram_commands, "HEARTBEAT_PATH", heartbeat_path)
+    monkeypatch.setattr(telegram_commands, "OFFSET_PATH", offset_path)
+
+    handler = TelegramCommandHandler("token", "123")
+    slept: list[float] = []
+
+    async def fail_updates() -> list[dict[str, object]]:
+        raise TelegramPollHTTPError(
+            "Telegram getUpdates rate limited (429); retry_after=17s",
+            status_code=429,
+            retry_after=17.0,
+        )
+
+    async def capture_sleep(seconds: float) -> None:
+        slept.append(seconds)
+        raise SystemExit("stop after 429")
+
+    monkeypatch.setattr(handler, "get_updates", fail_updates)
+    monkeypatch.setattr(telegram_commands.asyncio, "sleep", capture_sleep)
+
+    with pytest.raises(SystemExit, match="stop after 429"):
+        await handler.run_forever()
+
+    assert slept == [17.0]
+    payload = json.loads(heartbeat_path.read_text(encoding="utf-8"))
+    assert payload["status"] == "error"
+    assert "rate limited" in payload.get("error", "")
 
 
 @pytest.mark.asyncio

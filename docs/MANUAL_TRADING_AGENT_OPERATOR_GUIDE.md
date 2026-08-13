@@ -188,11 +188,14 @@ These documents are the source of truth for why current promoted pair profiles w
 
 ### Local (`/home/yderf/`)
 - manual-trading-agent: `/home/yderf/Projects/trading/manual-trading-agent`
-- Deploy via `git archive` → rsync → `docker compose build` on Hetzner
+- Deploy via `scripts/deploy.sh` (`git archive` → rsync → align remote `git` HEAD to
+  `.deploy-sha` → `GIT_SHA=… docker compose build/up`). Image label
+  `org.opencontainers.image.revision` and env `DEPLOY_GIT_SHA` carry the commit.
 
-### Hetzner (SSH: `crypto-agent`)
+### Hetzner (SSH: `crypto-agent` / `root@46.225.119.221`)
 - manual-trading-agent: `/home/emilio/manual-trading-agent`
-- Container: `manual-trading-agent` (scans every 15min + Telegram polling)
+- Container: `manual-trading-agent` (15m scan + Telegram poll + optional ETR poll-with-scan)
+- Trust `.deploy-sha` / image revision if `git status` looks dirty after a partial deploy
 
 ### GitHub (Trujillofa)
 - https://github.com/Trujillofa/manual-trading-agent

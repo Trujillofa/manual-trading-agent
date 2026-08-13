@@ -14,8 +14,10 @@ import httpx
 
 from src.news.news_checker import NewsChecker
 from src.notifications.telegram_security import (
+    TelegramPollHTTPError,
     format_telegram_poll_error,
     log_telegram_poll_error,
+    parse_telegram_retry_after,
 )
 
 OFFSET_PATH = Path("/app/logs/telegram_update_offset.json")
@@ -75,7 +77,13 @@ class TelegramCommandHandler:
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise RuntimeError(format_telegram_poll_error(exc, self.bot_token)) from None
+            status = exc.response.status_code
+            retry_after = parse_telegram_retry_after(exc.response) if status == 429 else None
+            raise TelegramPollHTTPError(
+                format_telegram_poll_error(exc, self.bot_token),
+                status_code=status,
+                retry_after=retry_after,
+            ) from None
         payload = response.json()
         if not payload.get("ok"):
             return []
@@ -205,9 +213,7 @@ class TelegramCommandHandler:
             )
         except Exception:
             return (
-                "*Tracked instruments*\n\n"
-                "Majors: XAU/USD, BTC/USD, OIL, NASDAQ\n\n"
-                "Minors: (none)"
+                "*Tracked instruments*\n\nMajors: XAU/USD, BTC/USD, OIL, NASDAQ\n\nMinors: (none)"
             )
 
     async def _run_fresh_scan(self, pair: str | None = None) -> str:
@@ -323,9 +329,7 @@ class TelegramCommandHandler:
             await self.send_message(summary)
             return
         if asset not in VALID_ASSETS:
-            await self.send_message(
-                f"Unknown asset `{asset}`. Use: btc, gold, nasdaq, oil"
-            )
+            await self.send_message(f"Unknown asset `{asset}`. Use: btc, gold, nasdaq, oil")
             return
         await self.send_message(f"Fetching ETR {asset.upper()}...")
         try:
@@ -346,16 +350,23 @@ class TelegramCommandHandler:
 
     async def run_forever(self) -> None:
         self._write_heartbeat("starting")
-        backoff = 1
+        backoff = 1.0
         while True:
             try:
                 updates = await self.get_updates()
-                backoff = 1
+                backoff = 1.0
                 self._write_heartbeat("ok")
                 for update in updates:
                     await self.handle_update(update)
             except Exception as exc:
                 log_telegram_poll_error(exc, self.bot_token)
                 self._write_heartbeat("error", format_telegram_poll_error(exc, self.bot_token))
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, 30)
+                sleep_for = backoff
+                if isinstance(exc, TelegramPollHTTPError) and exc.status_code == 429:
+                    # Honor Telegram Retry-After; keep a higher ceiling for sustained 429s.
+                    retry_after = float(exc.retry_after) if exc.retry_after is not None else 30.0
+                    sleep_for = max(retry_after, backoff)
+                    backoff = min(max(backoff * 2.0, sleep_for), 300.0)
+                else:
+                    backoff = min(backoff * 2.0, 30.0)
+                await asyncio.sleep(sleep_for)

@@ -14,6 +14,53 @@ _TELEGRAM_BOT_URL = re.compile(r"https://api\.telegram\.org/bot[^/\s'\"]+")
 _DUPLICATE_CONSUMER_MESSAGE = (
     "duplicate getUpdates consumer (another telegram-poll process or webhook is active)"
 )
+_RATE_LIMITED_MESSAGE = "Telegram getUpdates rate limited (429)"
+
+
+class TelegramPollHTTPError(RuntimeError):
+    """Polling failure that may carry HTTP status / Retry-After metadata."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        retry_after: float | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.retry_after = retry_after
+
+
+def parse_telegram_retry_after(response: object) -> float | None:
+    """Extract Retry-After seconds from a Telegram HTTP response, if present."""
+    headers = getattr(response, "headers", None) or {}
+    header_val = None
+    try:
+        header_val = headers.get("Retry-After") or headers.get("retry-after")
+    except Exception:
+        header_val = None
+
+    body_val = None
+    try:
+        payload = response.json()  # type: ignore[attr-defined]
+        if isinstance(payload, dict):
+            params = payload.get("parameters")
+            if isinstance(params, dict) and params.get("retry_after") is not None:
+                body_val = params.get("retry_after")
+    except Exception:
+        body_val = None
+
+    for raw in (body_val, header_val):
+        if raw is None:
+            continue
+        try:
+            seconds = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if seconds > 0:
+            return seconds
+    return None
 
 
 def redact_telegram_secrets(text: str, bot_token: str | None = None) -> str:
@@ -26,11 +73,24 @@ def redact_telegram_secrets(text: str, bot_token: str | None = None) -> str:
 
 def format_telegram_poll_error(exc: BaseException, bot_token: str | None = None) -> str:
     """Return a heartbeat-safe Telegram polling error message."""
+    if isinstance(exc, TelegramPollHTTPError):
+        if exc.status_code == 409:
+            return _DUPLICATE_CONSUMER_MESSAGE
+        if exc.status_code == 429:
+            if exc.retry_after is not None:
+                return f"{_RATE_LIMITED_MESSAGE}; retry_after={exc.retry_after:g}s"
+            return _RATE_LIMITED_MESSAGE
+
     status_code = getattr(exc, "response", None)
     if status_code is not None:
         status_code = getattr(status_code, "status_code", None)
     if status_code == 409:
         return _DUPLICATE_CONSUMER_MESSAGE
+    if status_code == 429:
+        retry_after = parse_telegram_retry_after(getattr(exc, "response", None))
+        if retry_after is not None:
+            return f"{_RATE_LIMITED_MESSAGE}; retry_after={retry_after:g}s"
+        return _RATE_LIMITED_MESSAGE
     return redact_telegram_secrets(str(exc), bot_token)
 
 

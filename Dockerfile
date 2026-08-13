@@ -1,5 +1,7 @@
 FROM python:3.11-slim AS base
 
+ARG GIT_SHA=unknown
+
 WORKDIR /app
 
 # Install system dependencies
@@ -28,6 +30,10 @@ RUN mkdir -p /app/data
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV DEPLOY_GIT_SHA=${GIT_SHA}
+
+LABEL org.opencontainers.image.revision=${GIT_SHA} \
+      org.opencontainers.image.source="https://github.com/Trujillofa/manual-trading-agent"
 
 # Expose metrics port (for future Prometheus integration)
 EXPOSE 9090

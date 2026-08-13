@@ -33,8 +33,9 @@ research is **terminated** (locked + agent-guarded). The system's honest posture
 
 ## Current state
 
-- Code: `main` @ latest (all of the above, committed + pushed).
-- Prod (Hetzner, `acca11b`): deployed, healthy, running as the Branch B scanner/alerter.
+- Code: `main` @ latest ops hardenings (deploy SHA align, Telegram 429 Retry-After, pair-state key canonicalize).
+- Prod (Hetzner): Branch B multi-asset scanner + ETR alerts — **ops / decision-support only**, not a KEEP claim.
+  See [`docs/BRANCH_B_OPS_POSTURE_2026-08.md`](BRANCH_B_OPS_POSTURE_2026-08.md).
 - Promotion-table P&L numbers in older docs: **retired** (came from divergent engines).
 - 2026-06 research (isolated worktree `research-multiasset-momentum`): daily TSMOM on metals (2016+ Dukascopy), 5 indices (2018+ via yfinance fallback), core FX majors. Gross-first gate on long data (~10y effective, 10 instruments, 252-bar lookback, inv-vol sizing): gross PF 1.036, Sharpe 0.15. No accessible edge before costs/friction. Lane closed; negative result archived on the research branch (detailed report + harness). No production promotion or further TSMOM tuning.
 - HTF pivot/Fibonacci directional TA (4H pivots, 15m execution, eight FX pairs, 365d):

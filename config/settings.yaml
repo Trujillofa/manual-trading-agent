@@ -1,3 +1,9 @@
+# Branch B production config.
+#
+# POSTURE: ops / decision-support only — NOT a KEEP / profitability claim.
+# RSI MTF, EMA standalone, and ETR alerts are discretionary human aids.
+# Do not auto-size or auto-execute from these signals.
+#
 trading:
   mode: "paper"
   pairs:

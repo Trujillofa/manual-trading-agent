@@ -1,0 +1,116 @@
+{
+  "source_date": "2026-08-13",
+  "broker": "Vantage International MT5 / live login 27496181 / VantageMarkets-Live 5",
+  "retrieved": "Mt5ArchBridge symbols.json SYMBOL_SWAP_* via mt5-arch (2026-08-13T21:51:47Z)",
+  "units": "pips per day per standard lot when swap_mode=POINTS (positive = receive when long); otherwise raw MT5 swap_long/short",
+  "rollover_rule": "3x swap on weekday(s) = Wed (SYMBOL_SWAP_ROLLOVER3DAYS)",
+  "swap_modes_seen": [
+    "POINTS"
+  ],
+  "notes": "Raw rows in raw_by_pair. If all long/short are 0.0, account may be swap-free (same discard class as Hetzner cTrader). Non-POINTS modes need explicit conversion before GROSS_PASS_REAL_DATA.",
+  "nonzero_pairs": 5,
+  "rates": {
+    "AUD/USD": {
+      "long": 0.037,
+      "short": -0.186
+    },
+    "NZD/USD": {
+      "long": -0.321,
+      "short": 0.133
+    },
+    "AUD/JPY": {
+      "long": 0.244,
+      "short": -1.218
+    },
+    "NZD/JPY": {
+      "long": 0.057999999999999996,
+      "short": -0.561
+    },
+    "USD/ZAR": {
+      "long": -22.846,
+      "short": 2.532
+    }
+  },
+  "raw_by_pair": {
+    "AUD/USD": {
+      "symbol": "AUDUSD",
+      "requested": "AUDUSD",
+      "swap_mode": "POINTS",
+      "swap_rollover3days": 3,
+      "swap_long_raw": 0.37,
+      "swap_short_raw": -1.86,
+      "digits": 5,
+      "point": 1e-05,
+      "tick_value": 1.0,
+      "contract_size": 100000.0,
+      "pair": "AUD/USD",
+      "long_pips_per_day_per_lot": 0.037,
+      "short_pips_per_day_per_lot": -0.186,
+      "units_converted": "pips per day per standard lot (from POINTS)"
+    },
+    "NZD/USD": {
+      "symbol": "NZDUSD",
+      "requested": "NZDUSD",
+      "swap_mode": "POINTS",
+      "swap_rollover3days": 3,
+      "swap_long_raw": -3.21,
+      "swap_short_raw": 1.33,
+      "digits": 5,
+      "point": 1e-05,
+      "tick_value": 1.0,
+      "contract_size": 100000.0,
+      "pair": "NZD/USD",
+      "long_pips_per_day_per_lot": -0.321,
+      "short_pips_per_day_per_lot": 0.133,
+      "units_converted": "pips per day per standard lot (from POINTS)"
+    },
+    "AUD/JPY": {
+      "symbol": "AUDJPY",
+      "requested": "AUDJPY",
+      "swap_mode": "POINTS",
+      "swap_rollover3days": 3,
+      "swap_long_raw": 2.44,
+      "swap_short_raw": -12.18,
+      "digits": 3,
+      "point": 0.001,
+      "tick_value": 0.62661746,
+      "contract_size": 100000.0,
+      "pair": "AUD/JPY",
+      "long_pips_per_day_per_lot": 0.244,
+      "short_pips_per_day_per_lot": -1.218,
+      "units_converted": "pips per day per standard lot (from POINTS)"
+    },
+    "NZD/JPY": {
+      "symbol": "NZDJPY",
+      "requested": "NZDJPY",
+      "swap_mode": "POINTS",
+      "swap_rollover3days": 3,
+      "swap_long_raw": 0.58,
+      "swap_short_raw": -5.61,
+      "digits": 3,
+      "point": 0.001,
+      "tick_value": 0.62661746,
+      "contract_size": 100000.0,
+      "pair": "NZD/JPY",
+      "long_pips_per_day_per_lot": 0.057999999999999996,
+      "short_pips_per_day_per_lot": -0.561,
+      "units_converted": "pips per day per standard lot (from POINTS)"
+    },
+    "USD/ZAR": {
+      "symbol": "USDZAR",
+      "requested": "USDZAR",
+      "swap_mode": "POINTS",
+      "swap_rollover3days": 3,
+      "swap_long_raw": -228.46,
+      "swap_short_raw": 25.32,
+      "digits": 5,
+      "point": 1e-05,
+      "tick_value": 0.0617234,
+      "contract_size": 100000.0,
+      "pair": "USD/ZAR",
+      "long_pips_per_day_per_lot": -22.846,
+      "short_pips_per_day_per_lot": 2.532,
+      "units_converted": "pips per day per standard lot (from POINTS)"
+    }
+  }
+}

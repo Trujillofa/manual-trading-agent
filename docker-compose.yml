@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     container_name: manual-trading-agent
     restart: unless-stopped
     env_file:
@@ -20,6 +22,7 @@ services:
       - ROTATE_THRESHOLD_BYTES=${ROTATE_THRESHOLD_BYTES:-52428800}
       - RETAIN_BYTES=${RETAIN_BYTES:-26214400}
       - SCAN_INTERVAL_SECONDS=${SCAN_INTERVAL_SECONDS:-900}
+      - DEPLOY_GIT_SHA=${GIT_SHA:-unknown}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

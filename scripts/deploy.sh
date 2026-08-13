@@ -72,13 +72,38 @@ rsync -a --delete \
   '${STAGING_PATH}/' '${REMOTE_PATH}/'
 EOF
 
+# ── 3b. Align remote git checkout with deployed SHA (when objects exist) ───────
+# deploy.sh is the file source of truth (git archive). If the remote path is also
+# a clone, reset it so `git rev-parse HEAD` matches `.deploy-sha` / the image.
+log "Aligning remote git checkout to ${COMMIT_SHA} (best-effort) …"
+ssh "${SSH_HOST}" bash <<EOF
+set -euo pipefail
+cd '${REMOTE_PATH}'
+if [ ! -d .git ]; then
+  echo "[deploy] no .git at remote path — skipping checkout align"
+  exit 0
+fi
+git fetch origin --prune || true
+if git cat-file -e '${COMMIT_SHA}^{commit}' 2>/dev/null; then
+  git checkout -B main '${COMMIT_SHA}'
+  git clean -fd \
+    -e .env -e .env.local \
+    -e logs -e data -e results \
+    -e .deploy-sha -e .staging -e .ops-backups -e .venv \
+    -e __pycache__ -e .pytest_cache -e .ruff_cache -e .mypy_cache
+  echo "[deploy] remote HEAD now \$(git rev-parse HEAD)"
+else
+  echo "[deploy] WARN: ${COMMIT_SHA} not in remote git objects; .deploy-sha is authoritative"
+fi
+EOF
+
 # ── 4. Build & restart Docker service ─────────────────────────────────────────
 log "Building Docker image for ${SERVICE_NAME} …"
 ssh "${SSH_HOST}" bash <<EOF
 set -euo pipefail
 cd '${REMOTE_PATH}'
-docker compose build ${SERVICE_NAME}
-docker compose up -d --no-deps ${SERVICE_NAME}
+GIT_SHA='${COMMIT_SHA}' docker compose build ${SERVICE_NAME}
+GIT_SHA='${COMMIT_SHA}' docker compose up -d --no-deps ${SERVICE_NAME}
 EOF
 
 # ── 5. Health check ───────────────────────────────────────────────────────────

@@ -67,16 +67,32 @@ Legs (pip-correct): LONG AUD/JPY + AUD/USD; SHORT NZD/JPY + NZD/USD + USD/ZAR.
 
 **Next allowed (not LIVE):** richer costs + price-P&L / carry-crash stress + chronological IS/OOS. Not Branch B promotion. Do not retune legs to rescue PF.
 
+## 2026-08-13 net falsifier (price P&L + IS/OOS) — CLOSED
+
+| Step | Artifact | Verdict |
+|------|----------|---------|
+| Net + IS/OOS | `docs/research/carry/CARRY_NET_RESULTS_VANTAGE_2026-08-13.md` | **DISCARD_REAL_DATA** |
+
+Frozen legs/economics from pip-correct gross. Costs: 3 pip spread + 1 pip slip on entry. IS ≤2021-12-31 / OOS after.
+
+| Split | Net PnL | Daily PF | Sharpe |
+|-------|---------|----------|--------|
+| IS | −$92 | 0.999 | — |
+| OOS | +$2,666 | **1.043** | 0.195 |
+
+Failed gate: **OOS PF 1.043 < 1.20** (OOS PnL>0, concentration, and stress DD passed). Price P&L dominates; thin financing edge does not survive the KEEP bar.
+
+**Lane status:** **DISCARD_REAL_DATA** for this Vantage static-carry prototype. Do not retune legs/costs. Hetzner zero-swap remains CLOSED_DISCARD. Redesign (new premise / data) required before another carry KEEP attempt.
+
 ## This branch may
 
-- Ingest nonzero long/short swaps from Vantage (done) or another swap-paying account
-- Re-run verifier/gross with `--rates` / `--economics auto|mt5` (done for Vantage 2026-08-13)
-- Add TRY symbols to Market Watch and re-export if needed
-- Proceed to richer costs + price-P&L / IS-OOS falsifiers **without** retuning legs to rescue thin PF
+- Document the Vantage DISCARD and leave the harness for audit
+- Start a **new** carry premise only with a written contract delta (not leg retunes on this prototype)
 
 ## This branch must not
 
 - Reopen the zero-swap Hetzner cTrader carry sub-lane
 - Promote sample/template JSON as real broker data
 - Treat GROSS_PASS_REAL_DATA as KEEP / live authorization
+- Retune legs, costs, or IS/OOS split to rescue the Vantage DISCARD
 - Mix XAU/BTC INTEREST/odd POINTS conversions into the FX carry harness without a separate unit contract

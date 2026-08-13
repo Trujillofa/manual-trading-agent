@@ -35,7 +35,8 @@ Example converted rates (pips/day/lot from POINTS ÷ 10 on 5/3-digit FX):
 | Step | Artifact | Verdict |
 |------|----------|---------|
 | Verify | `docs/research/carry/CARRY_DATA_MANIFEST_VANTAGE_2026-08-13.md` | **DATA_PASS** (5/5 OHLC via yfinance; 5/5 nonzero swaps) |
-| Gross | `docs/research/carry/CARRY_GROSS_RESULTS_VANTAGE_2026-08-13.md` | **GROSS_PASS_REAL_DATA** (carry PF 8.665; net after drag ~$11.3k on $100k / 10% vol / 2016–2026) |
+| Gross (uniform $10/pip) | `docs/research/carry/CARRY_GROSS_RESULTS_VANTAGE_2026-08-13.md` | **GROSS_PASS_REAL_DATA** audit-only (PF 8.665; ~$11.3k) — **superseded for gates** |
+| Gross (MT5 tick_value) | `docs/research/carry/CARRY_GROSS_RESULTS_VANTAGE_PIPCORRECT_2026-08-13.md` | **GROSS_PASS_REAL_DATA** (PF **1.155**; net ~$395 on $100k / 10% vol / 2016–2026) |
 
 Commands:
 
@@ -47,27 +48,31 @@ Commands:
 
 .venv/bin/python -m research.new_edge.carry.gross_carry_test \
   --rates research/new_edge/carry/data/verified_swap_rates_VANTAGE_2026-08-13.json \
-  --start 2016-01-01 --end 2026-08-01 \
-  --output docs/research/carry/CARRY_GROSS_RESULTS_VANTAGE_2026-08-13.md
+  --economics auto --start 2016-01-01 --end 2026-08-01 \
+  --output docs/research/carry/CARRY_GROSS_RESULTS_VANTAGE_PIPCORRECT_2026-08-13.md
 ```
 
-Legs (static top/bottom by long rate): LONG AUD/JPY + NZD/JPY; SHORT AUD/USD + NZD/USD + USD/ZAR.
+**Authoritative economics:** `--economics auto|mt5` → account-currency $/lot/day = `swap_*_raw × tick_value`; rank by long $; pair pip_$ = `tick_value × points_per_pip`.
 
-**Caveats (block KEEP, not this gross gate):**
-- **USD/ZAR short dominates** (~85% of accumulated carry $ under uniform `$10` pip_value).
-- Harness uses a **single pip_value=$10** for all pairs — wrong for ZAR (and imperfect for JPY crosses). Re-run with contract-correct $ / pip before any net/IS-OOS KEEP claim.
+Legs (pip-correct): LONG AUD/JPY + AUD/USD; SHORT NZD/JPY + NZD/USD + USD/ZAR.
+
+**Interpretation:** Premise still clears the gross gate after unit fix, but the edge is **thin** (PF 1.16). NZD/JPY short pays large funding (~−$2.5k) and nearly cancels the winners. Uniform-$10 run remains on disk as a cautionary overstatement (ZAR pip_$ was ~$0.62, not $10).
+
+**Caveats (block KEEP):**
 - Snapshot rates held constant over 10y (no historical swap path).
 - Price P&L ignored by design (gross-first).
-- TRY pairs still missing.
+- tick_value is a **single snapshot** (JPY/ZAR USD conversion drifts).
+- TRY pairs still missing; 5-pair universe only.
+- Thin PF → realistic costs / price risk can easily flip to DISCARD.
 
-**Next allowed (not LIVE):** pair-correct economics → richer costs → price-P&L risk → chronological IS/OOS + carry-crash stress. Not Branch B promotion.
+**Next allowed (not LIVE):** richer costs + price-P&L / carry-crash stress + chronological IS/OOS. Not Branch B promotion. Do not retune legs to rescue PF.
 
 ## This branch may
 
 - Ingest nonzero long/short swaps from Vantage (done) or another swap-paying account
-- Re-run verifier/gross with `--rates` (done for Vantage 2026-08-13)
+- Re-run verifier/gross with `--rates` / `--economics auto|mt5` (done for Vantage 2026-08-13)
 - Add TRY symbols to Market Watch and re-export if needed
-- Tighten pip-value / contract economics before net falsifiers
+- Proceed to richer costs + price-P&L / IS-OOS falsifiers **without** retuning legs to rescue thin PF
 
 ## This branch must not
 

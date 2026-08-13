@@ -2,18 +2,23 @@
 """
 Smallest gross-only carry falsifier per CARRY_CONTRACT_2026-06-11.md.
 
-- Static positive-carry portfolio: long top-N / short bottom-N by long swap rate.
+- Static positive-carry portfolio: long top-N / short bottom-N by long swap.
 - Constant vol-targeted sizing from full-history annualized price vol (minimal turnover).
 - Rollover: *3 on Wednesdays.
-- Gross carry ONLY: swap financing income (pips/day/lot * pip_value) minus entry drag.
+- Gross carry ONLY: swap financing income minus entry drag.
 - NO price P&L included.
 - Uses yfinance daily + a verified_swap_rates*.json (--rates).
+
+Economics modes (--economics):
+  auto  — use MT5 raw POINTS × tick_value when raw_by_pair present; else uniform --pip-value
+  mt5   — require raw_by_pair; account-currency $/lot/day = swap_*_raw × tick_value
+  uniform — legacy pips/day × single --pip-value (audit baseline only)
 
 Run:
   python -m research.new_edge.carry.gross_carry_test \\
     --rates research/new_edge/carry/data/verified_swap_rates_VANTAGE_2026-08-13.json \\
-    --start 2016-01-01 --end 2026-08-01 \\
-    --output docs/research/carry/CARRY_GROSS_RESULTS_VANTAGE_2026-08-13.md
+    --economics auto --start 2016-01-01 --end 2026-08-01 \\
+    --output docs/research/carry/CARRY_GROSS_RESULTS_VANTAGE_PIPCORRECT_2026-08-13.md
 """
 from __future__ import annotations
 
@@ -85,6 +90,53 @@ def _choose_legs(sorted_pairs: list[str]) -> tuple[list[str], list[str]]:
     return long_legs, short_legs
 
 
+def _points_per_pip(digits: int) -> int:
+    # Standard FX: 3/5-digit quotes → 10 points per pip; 2/4-digit → 1.
+    return 10 if digits in (3, 5) else 1
+
+
+def resolve_economics(
+    swap_data: dict[str, Any],
+    pairs: list[str],
+    mode: str,
+    fallback_pip_value: float,
+) -> tuple[str, dict[str, float], dict[str, float], dict[str, float]]:
+    """Return (mode_used, long_usd/day/lot, short_usd/day/lot, pip_value_usd)."""
+    raw = swap_data.get("raw_by_pair") or {}
+    rates = swap_data.get("rates") or {}
+    want_mt5 = mode in ("auto", "mt5")
+    have_mt5 = want_mt5 and all(
+        p in raw
+        and raw[p].get("tick_value") is not None
+        and raw[p].get("swap_long_raw") is not None
+        and raw[p].get("swap_short_raw") is not None
+        for p in pairs
+    )
+    if mode == "mt5" and not have_mt5:
+        missing = [p for p in pairs if p not in raw]
+        raise RuntimeError(
+            f"--economics mt5 requires raw_by_pair for all pairs; missing={missing or 'fields'}"
+        )
+    if have_mt5:
+        long_usd: dict[str, float] = {}
+        short_usd: dict[str, float] = {}
+        pip_usd: dict[str, float] = {}
+        for p in pairs:
+            row = raw[p]
+            tick = float(row["tick_value"])
+            digits = int(row.get("digits") or 5)
+            long_usd[p] = float(row["swap_long_raw"]) * tick
+            short_usd[p] = float(row["swap_short_raw"]) * tick
+            pip_usd[p] = tick * _points_per_pip(digits)
+        return "mt5", long_usd, short_usd, pip_usd
+
+    # Uniform / fallback: rates are pips/day/lot × single pip_value.
+    long_usd = {p: float(rates[p]["long"]) * fallback_pip_value for p in pairs}
+    short_usd = {p: float(rates[p]["short"]) * fallback_pip_value for p in pairs}
+    pip_usd = dict.fromkeys(pairs, fallback_pip_value)
+    return "uniform", long_usd, short_usd, pip_usd
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--start", default="2016-01-01")
@@ -95,10 +147,21 @@ def main() -> None:
         default="research/new_edge/carry/data/verified_swap_rates_2026-06.json",
         help="Path to verified_swap_rates*.json (template or live broker export)",
     )
+    parser.add_argument(
+        "--economics",
+        choices=("auto", "mt5", "uniform"),
+        default="auto",
+        help="Account-currency conversion: auto|mt5|uniform (default auto)",
+    )
     parser.add_argument("--capital", type=float, default=100_000.0)
     parser.add_argument("--target-vol", type=float, default=0.10)
     parser.add_argument("--cost-pips", type=float, default=3.0)
-    parser.add_argument("--pip-value", type=float, default=10.0)
+    parser.add_argument(
+        "--pip-value",
+        type=float,
+        default=10.0,
+        help="Fallback USD per pip per lot when --economics uniform / no raw_by_pair",
+    )
     parser.add_argument("--lot-notional", type=float, default=100_000.0)
     args = parser.parse_args()
 
@@ -122,19 +185,22 @@ def main() -> None:
 
     print(f"Fetching daily closes (yfinance) using rates={args.rates} ...")
     closes = get_aligned_daily_closes(pairs, start, end)
-    # Restrict to pairs with OHLC so legs stay consistent with simulation.
     pairs = list(closes.columns)
     rates = {p: rates[p] for p in pairs}
     ann_vol = compute_ann_vol(closes)
 
-    sorted_pairs = sorted(pairs, key=lambda p: rates[p]["long"], reverse=True)
+    econ_mode, long_usd, short_usd, pip_usd = resolve_economics(
+        swap_data, pairs, args.economics, args.pip_value
+    )
+
+    # Rank by long account-currency $/day/lot (correct units), not raw pips.
+    sorted_pairs = sorted(pairs, key=lambda p: long_usd[p], reverse=True)
     long_legs, short_legs = _choose_legs(sorted_pairs)
     n_long, n_short = len(long_legs), len(short_legs)
     n_legs = max(n_long + n_short, 1)
 
     capital = args.capital
     target_ann_vol = args.target_vol
-    pip_value = args.pip_value
     lot_notional = args.lot_notional
     cost_pips = args.cost_pips
 
@@ -150,8 +216,8 @@ def main() -> None:
     long_lots = {p: abs(lots[p]) for p in long_legs}
     short_lots = {p: abs(lots[p]) for p in short_legs}
 
-    initial_drag = sum(long_lots[p] * cost_pips * pip_value for p in long_legs)
-    initial_drag += sum(short_lots[p] * cost_pips * pip_value for p in short_legs)
+    initial_drag = sum(long_lots[p] * cost_pips * pip_usd[p] for p in long_legs)
+    initial_drag += sum(short_lots[p] * cost_pips * pip_usd[p] for p in short_legs)
 
     index = closes.index
     total_pos = 0.0
@@ -165,13 +231,13 @@ def main() -> None:
         rollover = 3 if dt.weekday() == 2 else 1
         day_carry = 0.0
         for p in long_legs:
-            leg_c = long_lots[p] * rates[p]["long"] * rollover * pip_value
+            leg_c = long_lots[p] * long_usd[p] * rollover
             day_carry += leg_c
             total_pos += leg_c if leg_c > 0 else 0.0
             total_neg += abs(leg_c) if leg_c < 0 else 0.0
             leg_carry_totals[p] += leg_c
         for p in short_legs:
-            leg_c = short_lots[p] * rates[p]["short"] * rollover * pip_value
+            leg_c = short_lots[p] * short_usd[p] * rollover
             day_carry += leg_c
             total_pos += leg_c if leg_c > 0 else 0.0
             total_neg += abs(leg_c) if leg_c < 0 else 0.0
@@ -205,6 +271,12 @@ def main() -> None:
             else "Sample data weak/negative; also still template/illustration."
         )
 
+    econ_note = (
+        "MT5 POINTS×tick_value account-currency $/lot/day; pip_$ = tick_value×points_per_pip"
+        if econ_mode == "mt5"
+        else f"uniform pips×${args.pip_value:.2f}/pip (legacy; not contract-correct for exotics)"
+    )
+
     manifest = f"""# Carry Gross Falsifier Results
 
 ## Verdict
@@ -214,6 +286,7 @@ def main() -> None:
 ```bash
 python -m research.new_edge.carry.gross_carry_test \\
   --rates {args.rates} \\
+  --economics {args.economics} \\
   --start {args.start} --end {args.end} \\
   --output {args.output}
 ```
@@ -228,14 +301,25 @@ cursor/research-lanes-2026-08
   - source_date=`{src_date}`
   - retrieved/source=`{src}`
   - is_real_data={is_real_data}
+- Economics mode: **{econ_mode}** (requested={args.economics}) — {econ_note}
+- Ranking key: long $/day/lot (account currency), not raw pip rates
 - Rollover: ×3 on Wednesdays, ×1 otherwise (no holiday calendar)
 - Sizing: static full-sample ann-vol risk split across {n_legs} legs; target portfolio ann vol {target_ann_vol*100:.0f}%
-- Legs: top {n_long} by long_rate LONG, bottom {n_short} SHORT (universe n={len(pairs)})
-- Costs: entry drag only = {cost_pips} pips × pip_value per lot at t=0
+- Legs: top {n_long} by long_$ LONG, bottom {n_short} SHORT (universe n={len(pairs)})
+- Costs: entry drag only = {cost_pips} pips × pair pip_$ at t=0
 - Price P&L: ignored (gross-first falsifier)
-- Capital ${capital:,.0f}; pip_value ${pip_value}; lot_notional ${lot_notional:,.0f}
+- Capital ${capital:,.0f}; lot_notional ${lot_notional:,.0f}
 - Simulated: {data_start} → {data_end} ({len(index)} trading days)
 
+## Per-pair economics ($/day/lot and pip_$)
+"""
+    for p in sorted_pairs:
+        manifest += (
+            f"- {p}: long_usd/day={long_usd[p]:+.4f}, short_usd/day={short_usd[p]:+.4f}, "
+            f"pip_usd={pip_usd[p]:.4f}\n"
+        )
+
+    manifest += f"""
 ## Legs and sizing
 Long: {long_legs}
 Short: {short_legs}
@@ -258,15 +342,20 @@ Short: {short_legs}
 """
     for p, contrib in sorted(leg_carry_totals.items(), key=lambda x: -x[1]):
         leg_type = "LONG" if p in long_legs else ("SHORT" if p in short_legs else "FLAT")
-        rate = rates[p]["long"] if leg_type == "LONG" else rates[p]["short"] if leg_type == "SHORT" else 0.0
-        manifest += f"- {p} ({leg_type}): ${contrib:,.2f} (rate={rate:+.4f})\n"
+        usd_rate = long_usd[p] if leg_type == "LONG" else short_usd[p] if leg_type == "SHORT" else 0.0
+        manifest += f"- {p} ({leg_type}): ${contrib:,.2f} (usd/day/lot={usd_rate:+.4f})\n"
 
+    next_if_pass = (
+        "Next: richer costs, price P&L risk, chronological IS/OOS, carry-crash stress — not LIVE promotion."
+        if econ_mode == "mt5"
+        else "Next: re-run with --economics mt5/auto when raw_by_pair is present before treating as contract-correct."
+    )
     manifest += f"""
 ## Failure reason / next step
 {failure}
 
 {"Real-broker metadata present (`is_real_data=True`)." if is_real_data else "Template/sample rates — not a real-data claim."}
-If GROSS_PASS_REAL_DATA: next is richer costs, price P&L risk, chronological IS/OOS, carry-crash stress — not LIVE promotion.
+Economics={econ_mode}. {next_if_pass}
 If DISCARD_REAL_DATA: close or redesign premise; do not retune to rescue.
 """
 
@@ -274,10 +363,12 @@ If DISCARD_REAL_DATA: close or redesign premise; do not retune to rescue.
     Path(args.output).write_text(manifest)
     print(f"Gross results written to {args.output}")
     print("\n=== Summary ===")
+    print(f"economics={econ_mode}")
     print(f"Gross PF (carry): {carry_pf:.3f}")
     print(f"Net carry after drag: ${net_carry:,.2f}")
     print(f"Verdict: {verdict}")
     print(f"is_real_data={is_real_data}")
+    print(f"Long={long_legs} Short={short_legs}")
 
 
 if __name__ == "__main__":

@@ -28,16 +28,50 @@ Example converted rates (pips/day/lot from POINTS ÷ 10 on 5/3-digit FX):
 | NZD/USD | −0.321 | +0.133 |
 | USD/ZAR | −22.846 | +2.532 |
 
-**Implication:** This account is **not** swap-free (unlike Hetzner cTrader). Lane 3 can proceed to `verify_carry_data` / `gross_carry_test` **using the Vantage JSON** (wire `--rates` path or replace the template load path). Treat USD/ZAR magnitude and missing TRY pairs as caveats before any KEEP claim.
+**Implication:** This account is **not** swap-free (unlike Hetzner cTrader).
+
+## 2026-08-13 verifier + gross (real Vantage rates)
+
+| Step | Artifact | Verdict |
+|------|----------|---------|
+| Verify | `docs/research/carry/CARRY_DATA_MANIFEST_VANTAGE_2026-08-13.md` | **DATA_PASS** (5/5 OHLC via yfinance; 5/5 nonzero swaps) |
+| Gross | `docs/research/carry/CARRY_GROSS_RESULTS_VANTAGE_2026-08-13.md` | **GROSS_PASS_REAL_DATA** (carry PF 8.665; net after drag ~$11.3k on $100k / 10% vol / 2016–2026) |
+
+Commands:
+
+```bash
+.venv/bin/python -m research.new_edge.carry.data.verify_carry_data \
+  --rates research/new_edge/carry/data/verified_swap_rates_VANTAGE_2026-08-13.json \
+  --quick --start 2016-01-01 --end 2026-08-01 \
+  --output docs/research/carry/CARRY_DATA_MANIFEST_VANTAGE_2026-08-13.md
+
+.venv/bin/python -m research.new_edge.carry.gross_carry_test \
+  --rates research/new_edge/carry/data/verified_swap_rates_VANTAGE_2026-08-13.json \
+  --start 2016-01-01 --end 2026-08-01 \
+  --output docs/research/carry/CARRY_GROSS_RESULTS_VANTAGE_2026-08-13.md
+```
+
+Legs (static top/bottom by long rate): LONG AUD/JPY + NZD/JPY; SHORT AUD/USD + NZD/USD + USD/ZAR.
+
+**Caveats (block KEEP, not this gross gate):**
+- **USD/ZAR short dominates** (~85% of accumulated carry $ under uniform `$10` pip_value).
+- Harness uses a **single pip_value=$10** for all pairs — wrong for ZAR (and imperfect for JPY crosses). Re-run with contract-correct $ / pip before any net/IS-OOS KEEP claim.
+- Snapshot rates held constant over 10y (no historical swap path).
+- Price P&L ignored by design (gross-first).
+- TRY pairs still missing.
+
+**Next allowed (not LIVE):** pair-correct economics → richer costs → price-P&L risk → chronological IS/OOS + carry-crash stress. Not Branch B promotion.
 
 ## This branch may
 
 - Ingest nonzero long/short swaps from Vantage (done) or another swap-paying account
-- Re-run `verify_carry_data` + `gross_carry_test` on the Vantage file
+- Re-run verifier/gross with `--rates` (done for Vantage 2026-08-13)
 - Add TRY symbols to Market Watch and re-export if needed
+- Tighten pip-value / contract economics before net falsifiers
 
 ## This branch must not
 
 - Reopen the zero-swap Hetzner cTrader carry sub-lane
 - Promote sample/template JSON as real broker data
+- Treat GROSS_PASS_REAL_DATA as KEEP / live authorization
 - Mix XAU/BTC INTEREST/odd POINTS conversions into the FX carry harness without a separate unit contract

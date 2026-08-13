@@ -14,7 +14,7 @@ Run three **new-premise** lanes under the existing honest harness discipline (gr
 |---|------|-------------------------|--------------------|---------------------|
 | 1 | **PEAD data-proof** | Point-in-time US earnings surprise → short-horizon equity drift | `python -m research.new_edge.pead.data.verify_pead_data` on a **licensed** snapshot only | No relationship/strategy code until ledger `DATA_PASS`. Synthetic fixture ≠ PASS. |
 | 2 | **Listed-futures costs / roll** | Authorized futures instrument-class research with **contract-correct costs** (not yfinance continuous toys for KEEP) | Re-open source gate only with owner-approved data that clears Tier-A requirements in term-structure contracts | Free CME PA2 remains BLOCKED (coverage/OI). No Tier-B until DATA_PASS. Not a TSMOM retune. |
-| 3 | **Broker-true carry** | Overnight financing as primary return — **different account/broker** with nonzero long/short swaps | Prove nonzero swaps via statement/API → replace template JSON → re-run `verify_carry_data` + `gross_carry_test` | Hetzner cTrader zero-swap account stays **CLOSED_DISCARD**. No reopen on that account. |
+| 3 | **Broker-true carry** | Overnight financing as primary return — **different account/broker** with nonzero long/short swaps | Prove nonzero swaps via statement/API → replace template JSON → re-run `verify_carry_data` + `gross_carry_test` | **Status 2026-08-13:** Vantage MT5 `DATA_PASS` + `GROSS_PASS_REAL_DATA` (see `docs/research/lanes/LANE3_BROKER_CARRY_2026-08.md`). Next = contract-correct pip $ + net/IS-OOS — **not** LIVE. Hetzner cTrader zero-swap stays **CLOSED_DISCARD**. |
 
 ### Hygiene track (not an alpha KEEP path)
 

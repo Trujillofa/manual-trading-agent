@@ -172,16 +172,41 @@ class NewsChecker:
         self._save_cache()
         return list(self._events)
 
+    @staticmethod
+    def _event_identity(event: NewsEvent) -> tuple[datetime, str, str]:
+        return (event.timestamp, event.currency, event.name)
+
+    def _stamp_actual_observation(
+        self,
+        event: NewsEvent,
+        now: datetime,
+        prior_by_id: dict[tuple[datetime, str, str], NewsEvent],
+    ) -> NewsEvent:
+        """Keep the first observation time for an unchanged actual value."""
+        if not event.actual:
+            return event
+        previous = prior_by_id.get(self._event_identity(event))
+        if (
+            previous is not None
+            and previous.actual == event.actual
+            and previous.actual_observed_at is not None
+        ):
+            return replace(event, actual_observed_at=previous.actual_observed_at)
+        return replace(event, actual_observed_at=now)
+
     def _select_events_from_xml(
         self,
         xml_text: str,
         now: datetime,
         hours_ahead: int = 24,
+        prior_events: list[NewsEvent] | None = None,
     ) -> list[NewsEvent]:
         """Parse feed XML and keep events in [now - lockout_after, now + hours]."""
         root = ET.fromstring(xml_text)
         window_start = now - timedelta(minutes=self.lockout_after)
         window_end = now + timedelta(hours=hours_ahead)
+        source = self._events if prior_events is None else prior_events
+        prior_by_id = {self._event_identity(event): event for event in source}
         parsed_events: list[NewsEvent] = []
         for event_node in root.findall(".//event"):
             event = self._parse_event_node(event_node)
@@ -191,8 +216,7 @@ class NewsChecker:
                 continue
             if not window_start <= event.timestamp <= window_end:
                 continue
-            if event.actual:
-                event = replace(event, actual_observed_at=now)
+            event = self._stamp_actual_observation(event, now, prior_by_id)
             parsed_events.append(event)
         parsed_events.sort(key=lambda event: event.timestamp)
         return parsed_events
@@ -363,7 +387,11 @@ class NewsChecker:
 
     def has_timestamped_actuals(self) -> bool:
         return any(
-            event.source == SOURCE_FOREX_FACTORY and event.actual.strip() for event in self._events
+            event.source == SOURCE_FOREX_FACTORY
+            and event.actual.strip()
+            and event.actual_observed_at is not None
+            and event.actual_observed_at >= event.timestamp
+            for event in self._events
         )
 
     def get_surprise_readiness(self) -> str:

@@ -276,6 +276,73 @@ class TestXmlParser:
         events = checker._select_events_from_xml(xml, now, hours_ahead=24)
         assert events == []
 
+    def test_preserves_first_actual_observation_across_fetches(self, checker):
+        first_now = datetime(2026, 8, 13, 14, 40, tzinfo=UTC)
+        second_now = datetime(2026, 8, 13, 14, 50, tzinfo=UTC)
+        xml = """
+        <weeklyevents>
+          <event>
+            <title>CPI</title>
+            <country>USD</country>
+            <date>2026-08-13</date>
+            <time>14:30</time>
+            <impact>High</impact>
+            <forecast>0.3%</forecast>
+            <actual>0.4%</actual>
+          </event>
+        </weeklyevents>
+        """
+        first = checker._select_events_from_xml(xml, first_now, hours_ahead=24)
+        assert first[0].actual_observed_at == first_now
+        checker._events = first
+        second = checker._select_events_from_xml(xml, second_now, hours_ahead=24)
+        assert second[0].actual == "0.4%"
+        assert second[0].actual_observed_at == first_now
+
+    def test_restamps_observation_when_actual_changes(self, checker):
+        first_now = datetime(2026, 8, 13, 14, 40, tzinfo=UTC)
+        revised_now = datetime(2026, 8, 13, 14, 50, tzinfo=UTC)
+        xml_first = """
+        <weeklyevents>
+          <event>
+            <title>CPI</title>
+            <country>USD</country>
+            <date>2026-08-13</date>
+            <time>14:30</time>
+            <impact>High</impact>
+            <forecast>0.3%</forecast>
+            <actual>0.4%</actual>
+          </event>
+        </weeklyevents>
+        """
+        xml_revised = xml_first.replace("0.4%", "0.5%")
+        checker._events = checker._select_events_from_xml(xml_first, first_now)
+        revised = checker._select_events_from_xml(xml_revised, revised_now)
+        assert revised[0].actual == "0.5%"
+        assert revised[0].actual_observed_at == revised_now
+
+    def test_clears_observation_when_actual_disappears(self, checker):
+        first_now = datetime(2026, 8, 13, 14, 40, tzinfo=UTC)
+        later = datetime(2026, 8, 13, 14, 50, tzinfo=UTC)
+        xml_with_actual = """
+        <weeklyevents>
+          <event>
+            <title>CPI</title>
+            <country>USD</country>
+            <date>2026-08-13</date>
+            <time>14:30</time>
+            <impact>High</impact>
+            <forecast>0.3%</forecast>
+            <actual>0.4%</actual>
+          </event>
+        </weeklyevents>
+        """
+        xml_without_actual = xml_with_actual.replace("<actual>0.4%</actual>", "")
+        checker._events = checker._select_events_from_xml(xml_with_actual, first_now)
+        later_events = checker._select_events_from_xml(xml_without_actual, later)
+        assert later_events[0].actual == ""
+        assert later_events[0].actual_observed_at is None
+
 
 class TestNewsCache:
     def test_old_cache_payload_still_loads(self, tmp_path, monkeypatch):
@@ -352,3 +419,22 @@ class TestNewsCache:
         payload = json.loads(cache_path.read_text(encoding="utf-8"))
         assert payload["events"][0]["forecast"] == "0.3%"
         assert payload["events"][1]["source"] == "grok"
+
+    def test_readiness_requires_observation_timestamp(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(NewsChecker, "CACHE_PATH", tmp_path / "news_cache.json")
+        checker = NewsChecker()
+        checker._events = [
+            NewsEvent(
+                timestamp=datetime(2026, 8, 13, 14, 30, tzinfo=UTC),
+                currency="USD",
+                name="CPI m/m",
+                importance=3,
+                country="US",
+                forecast="0.3%",
+                actual="0.4%",
+                source="forex_factory",
+                actual_observed_at=None,
+            )
+        ]
+        assert checker.has_timestamped_actuals() is False
+        assert "BLOCKED" in checker.get_surprise_readiness()

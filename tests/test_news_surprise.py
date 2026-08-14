@@ -15,6 +15,7 @@ from src.news.news_checker import (
     score_event,
 )
 from src.news.surprise import (
+    format_surprise_annotation,
     parse_numeric_value,
     score_surprise,
     surprise_readiness_label,
@@ -127,6 +128,13 @@ class TestScoreSurprise:
         result = _score(observed_at=RELEASED - timedelta(minutes=5))
         assert result.status == "pre_release"
 
+    def test_missing_observed_at_does_not_score(self) -> None:
+        result = _score(observed_at=None)
+        assert result.status == "missing_observed_at"
+        assert result.parsed_actual is None
+        assert result.relative_delta_pct is None
+        assert result.direction is None
+
 
 class TestPresentation:
     def _event(self, **kwargs: object) -> NewsEvent:
@@ -199,3 +207,56 @@ class TestPresentation:
         result = score_event(event, NOW)
         assert result.status == "scored"
         assert result.direction == "above"
+
+    def test_annotation_missing_forecast_does_not_claim_actual_unavailable(self) -> None:
+        result = _score(forecast_raw="N/A")
+        text = format_surprise_annotation(
+            forecast_raw="N/A",
+            actual_raw="185K",
+            result=result,
+        )
+        assert "forecast unavailable" in text
+        assert "actual 185K" in text
+        assert "actual unavailable" not in text
+
+    def test_annotation_unparseable_does_not_claim_actual_unavailable(self) -> None:
+        result = _score(actual_raw="revised print")
+        text = format_surprise_annotation(
+            forecast_raw="180K",
+            actual_raw="revised print",
+            result=result,
+        )
+        assert "unscored" in text
+        assert "actual revised print" in text
+        assert "forecast 180K" in text
+        assert "actual unavailable" not in text
+
+    def test_annotation_zero_forecast_does_not_claim_actual_unavailable(self) -> None:
+        result = _score(actual_raw="1.0", forecast_raw="0")
+        text = format_surprise_annotation(
+            forecast_raw="0",
+            actual_raw="1.0",
+            result=result,
+        )
+        assert "unscored zero forecast" in text
+        assert "actual 1.0" in text
+        assert "actual unavailable" not in text
+
+    def test_annotation_missing_observed_at_does_not_score(self) -> None:
+        result = _score(observed_at=None)
+        text = format_surprise_annotation(
+            forecast_raw="180K",
+            actual_raw="185K",
+            result=result,
+        )
+        assert "observation time unavailable" in text
+        assert "actual 185K" in text
+        assert "actual unavailable" not in text
+        assert "scored" not in text
+
+    def test_cli_actual_without_observation_is_unscored(self) -> None:
+        event = self._event(actual_observed_at=None)
+        line = format_cli_event_line(event, NOW)
+        assert "observation time unavailable" in line
+        assert "scored" not in line
+        assert "actual unavailable" not in line

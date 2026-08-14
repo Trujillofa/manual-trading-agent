@@ -15,6 +15,7 @@ SurpriseStatus = Literal[
     "pre_release",
     "missing_actual",
     "missing_forecast",
+    "missing_observed_at",
     "unparseable",
     "zero_forecast",
     "non_deterministic_source",
@@ -127,6 +128,8 @@ def score_surprise(
     forecast_missing = is_missing_value(forecast_raw)
     if actual_missing:
         return _empty_result("missing_actual", observed_at)
+    if observed_at is None:
+        return _empty_result("missing_observed_at", observed_at)
     if forecast_missing:
         return _empty_result("missing_forecast", observed_at)
 
@@ -178,19 +181,24 @@ def format_surprise_annotation(
         direction = result.direction or "inline"
         pct_txt = f"{pct:+.1f}% " if pct is not None else ""
         return f"scored | actual {actual} vs forecast {forecast} | {pct_txt}{direction}".rstrip()
-    if result.status == "non_deterministic_source":
-        return "released | actual unavailable | unscored LLM fallback"
-    if result.status == "zero_forecast":
-        bits = ["released | actual unavailable | unscored zero forecast"]
-        if actual:
-            bits.append(f"actual {actual}")
-        return " | ".join(bits)
-    bits = ["released | actual unavailable"]
-    if forecast:
-        bits.append(f"forecast {forecast}")
-    if actual and result.status == "unparseable":
-        bits.append(f"actual {actual}")
+
+    bits = ["released"]
+    if result.status == "missing_actual" or (not actual and result.status != "missing_forecast"):
+        bits.append("actual unavailable")
+    if result.status == "missing_forecast":
+        bits.append("forecast unavailable")
+    elif result.status == "missing_observed_at":
+        bits.append("observation time unavailable")
+    elif result.status == "unparseable":
         bits.append("unscored")
+    elif result.status == "zero_forecast":
+        bits.append("unscored zero forecast")
+    elif result.status == "non_deterministic_source":
+        bits.append("unscored LLM fallback")
+    if actual and result.status != "missing_actual":
+        bits.append(f"actual {actual}")
+    if forecast and result.status not in {"missing_forecast", "scored"}:
+        bits.append(f"forecast {forecast}")
     return " | ".join(bits)
 
 

@@ -198,14 +198,23 @@ These documents are the source of truth for why current promoted pair profiles w
 
 ### Local (`/home/yderf/`)
 - manual-trading-agent: `/home/yderf/Projects/trading/manual-trading-agent`
-- Deploy via `scripts/deploy.sh` (`git archive` → rsync → align remote `git` HEAD to
-  `.deploy-sha` → `GIT_SHA=… docker compose build/up`). Image label
-  `org.opencontainers.image.revision` and env `DEPLOY_GIT_SHA` carry the commit.
+- Deploy via `scripts/deploy.sh` (target SHA, default `HEAD`):
+  1. Abort if the remote clone has unexpected **tracked** drift (operator edits).
+  2. `git fetch` and `git checkout` the target SHA **before** rsync. Do not
+     `git reset --hard`. Runtime paths stay in place: `.env`, `logs/`, `data/`,
+     `results/`, `.ops-backups/`, `.deploy-sha`.
+  3. `git archive` → staging → rsync (same preserve list, plus `.git` / `.venv`).
+  4. Verify remote `HEAD` and `.deploy-sha` both equal the target SHA.
+  5. Only then `GIT_SHA=… docker compose build/up`. Staging is removed on
+     success or failure.
+  Image label `org.opencontainers.image.revision` and env `DEPLOY_GIT_SHA`
+  carry the commit. Do not redeploy solely because `deploy.sh` changed.
 
 ### Hetzner (SSH: `crypto-agent` / `root@46.225.119.221`)
 - manual-trading-agent: `/home/emilio/manual-trading-agent`
 - Container: `manual-trading-agent` (15m scan + Telegram poll + optional ETR poll-with-scan)
-- Trust `.deploy-sha` / image revision if `git status` looks dirty after a partial deploy
+- After deploy, `git rev-parse HEAD`, `.deploy-sha`, and the image revision
+  must match. Tracked dirt on the remote is a stop, not something to reset away.
 
 ### GitHub (Trujillofa)
 - https://github.com/Trujillofa/manual-trading-agent

@@ -57,7 +57,7 @@ from src.indicators.rsi import (
     detect_bullish_divergence,
 )
 from src.indicators.sma import calculate_sma
-from src.news.news_checker import NewsChecker
+from src.news.news_checker import NewsChecker, format_cli_news_report
 from src.notifications.digest import (
     EmaCandidate,
     EmaSignalEntry,
@@ -1761,17 +1761,18 @@ async def run_analyze(pair: str, timeframe: str) -> None:
 async def run_news(hours: int) -> None:
     checker = NewsChecker()
 
-    print("\n[NEWS] Fetching upcoming 3-star events...")
-
     try:
-        events = await checker.fetch_events(hours_ahead=hours)
-
-        if not events:
-            print(f"  No 3-star events in the next {hours} hours")
-            return
-
-        for event in events:
-            print(f"  {event.timestamp.strftime('%Y-%m-%d %H:%M')} {event.currency}: {event.name}")
+        await checker.fetch_events(hours_ahead=hours)
+        now = datetime.now(UTC)
+        events = checker.get_display_events(hours, now)
+        print(
+            format_cli_news_report(
+                events,
+                hours,
+                now,
+                checker.get_surprise_readiness(),
+            )
+        )
     except Exception as exc:
         print(f"  Error: {exc}")
 

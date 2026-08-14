@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from src.news.news_checker import NewsChecker
+from src.news.news_checker import NewsChecker, format_telegram_news_report
 from src.notifications.telegram_security import (
     TelegramPollHTTPError,
     format_telegram_poll_error,
@@ -182,21 +182,14 @@ class TelegramCommandHandler:
         checker = NewsChecker()
         now = datetime.now(UTC)
         blocked = sorted(checker.get_blocked_currencies(now))
-        events = checker.get_upcoming_events(24, now)
-        parts = ["*News Status*", ""]
-        source = checker.get_source_status()
-        parts.append(f"Source: `{source}`")
-        parts.append(f"Blocked currencies: `{', '.join(blocked) if blocked else 'none'}`")
-        if not events:
-            parts.append("No high-impact cached events in next 24h.")
-            return "\n".join(parts)
-        parts.append("")
-        parts.append("Upcoming high-impact events:")
-        for event in events[:5]:
-            parts.append(
-                f"• {event.timestamp.strftime('%Y-%m-%d %H:%M')} UTC | {event.currency} | {event.name}"
-            )
-        return "\n".join(parts)
+        events = checker.get_display_events(24, now)
+        return format_telegram_news_report(
+            source_status=checker.get_source_status(),
+            blocked=blocked,
+            events=events,
+            now=now,
+            readiness=checker.get_surprise_readiness(),
+        )
 
     def _extract_pairs(self) -> str:
         try:

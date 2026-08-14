@@ -285,17 +285,17 @@ def process_shadow_for_report(
     should_open = bool(entered and key and not already_open)
 
     if should_open:
-        event = _open_event(report, now_iso)
-        if event is not None:
-            still_open[event["key"]] = event
+        opened = _open_event(report, now_iso)
+        if opened is not None:
+            still_open[opened["key"]] = opened
             summary["opened"] += 1
             logger.info(
                 "ETR shadow opened %s id=%s dir=%s zone=%s entry=%s",
                 report.asset,
-                event["id"],
-                event["direction"],
-                event["zone"],
-                event["entry_price"],
+                opened["id"],
+                opened["direction"],
+                opened["zone"],
+                opened["entry_price"],
             )
 
     _save_open_events(still_open)

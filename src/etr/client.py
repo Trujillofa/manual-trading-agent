@@ -9,7 +9,7 @@ import os
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -106,7 +106,10 @@ class EtrClient:
             raise EtrAuthError(
                 f"ETR login failed HTTP {response.status_code}: {response.text[:200]}"
             )
-        data = response.json()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise EtrAuthError("ETR login response is not a JSON object")
+        data = cast(dict[str, Any], payload)
         if not data.get("access_token"):
             raise EtrAuthError("ETR login response missing access_token")
         if "expires_at" not in data and data.get("expires_in"):
@@ -125,7 +128,10 @@ class EtrClient:
             )
         if response.status_code != 200:
             raise EtrAuthError(f"ETR refresh failed HTTP {response.status_code}")
-        data = response.json()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise EtrAuthError("ETR refresh response is not a JSON object")
+        data = cast(dict[str, Any], payload)
         if not data.get("access_token"):
             raise EtrAuthError("ETR refresh response missing access_token")
         if "expires_at" not in data and data.get("expires_in"):

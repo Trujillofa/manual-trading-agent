@@ -65,7 +65,6 @@ strategy:
     standalone_signal_types:
       - crossover
     standalone_timeframes:
-      - "15m"
       - "30m"
     standalone_session_filter_enabled: true
     fast_period: 20
@@ -133,7 +132,7 @@ telegram:
   signal_notifications: true
   near_setup_notifications: false
   aligned_pending_notifications: false
-  setup_digest_notifications: true
+  setup_digest_notifications: false
   setup_digest_interval_minutes: 60
   bot_token: "${TELEGRAM_BOT_TOKEN}"
   chat_id: "${TELEGRAM_CHAT_ID}"
@@ -150,6 +149,11 @@ etr:
   score_delta_alert: 10
   error_alert_cooldown_minutes: 360
   telegram_alerts: true
+  # Telegram only for thesis changes. Score/estado/zone ticks stay in etr_audit.
+  telegram_alert_fields:
+    - bias
+    - primary_direction
+    - price_in_primary_zone
   # Forward paper-shadow: resolve open zone events after this many hours
   shadow_horizon_hours: 24
   login: "${ETRACADEMY_LOGIN}"

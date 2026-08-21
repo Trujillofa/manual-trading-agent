@@ -62,3 +62,13 @@ def test_settings_load_includes_etr(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert settings.etr.enabled is True
     assert settings.etr.assets == ["btc", "gold"]
     assert settings.etr.login == "user@example.com"
+    assert settings.etr.telegram_alert_fields == [
+        "bias",
+        "primary_direction",
+        "price_in_primary_zone",
+    ]
+
+
+def test_etr_config_rejects_unknown_telegram_alert_field() -> None:
+    with pytest.raises(ValueError, match="telegram_alert_fields"):
+        EtrConfig(telegram_alert_fields=["bias", "not_a_field"])

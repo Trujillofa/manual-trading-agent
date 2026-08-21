@@ -77,6 +77,17 @@ Refer to `config/settings.yaml` for exact current profiles (now minimal) and CLA
 
 ---
 
+## Telegram pushes (live)
+
+Expected unsolicited messages are few:
+
+- **EMA crossover** on **30m only** (15m standalone is off — too much whip)
+- **ETR CAMBIO** only when bias, primary direction, or price **enters** the zone
+- **BUY/SELL** and TP/SL when the rare RSI entry actually fires
+
+Hourly scan digest, near-setup, aligned-pending, EMA price-touch, and ETR
+estado/score ticks are **off**. Use `/etr`, `/news`, `/watchlist` to pull detail.
+
 ## Telegram commands
 ### /watchlist
 Shows the latest ranked MTF candidates.

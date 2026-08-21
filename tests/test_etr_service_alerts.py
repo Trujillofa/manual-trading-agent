@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from src.etr.alerts import telegram_alert_changes
 from src.etr.diff import diff_reports
 from src.etr.models import EtrReport, EtrScenario, PriceZone
 
@@ -40,8 +41,8 @@ def _report(**overrides: object) -> EtrReport:
 
 
 def _should_alert(changes: list) -> bool:
-    """Mirrors service.py: alert solely from diff_reports output."""
-    return bool(changes)
+    """Mirrors service.py: Telegram fires only on thesis fields."""
+    return bool(telegram_alert_changes(changes))
 
 
 def test_zone_entry_alerts_even_when_fingerprint_unchanged() -> None:
@@ -53,7 +54,7 @@ def test_zone_entry_alerts_even_when_fingerprint_unchanged() -> None:
     assert _should_alert(changes) is True
 
 
-def test_score_delta_within_bucket_alerts() -> None:
+def test_score_delta_within_bucket_audited_but_not_telegraphed() -> None:
     prev = _report(context_score=72.0)
     curr = _report(context_score=62.0)
     # Both mid under default 50/80 buckets
@@ -61,6 +62,23 @@ def test_score_delta_within_bucket_alerts() -> None:
     assert prev.fingerprint() == curr.fingerprint()
     changes = diff_reports(prev, curr, score_delta=10.0)
     assert any(c.field == "context_score" for c in changes)
+    assert _should_alert(changes) is False
+
+
+def test_estado_only_change_not_telegraphed() -> None:
+    prev = _report(estado="Zona de reacción")
+    curr = _report(estado="Zona de oferta")
+    changes = diff_reports(prev, curr)
+    assert any(c.field == "estado" for c in changes)
+    assert _should_alert(changes) is False
+
+
+def test_bias_change_is_telegraphed() -> None:
+    prev = _report(bias="bajista")
+    curr = _report(bias="alcista")
+    changes = diff_reports(prev, curr)
+    notify = telegram_alert_changes(changes)
+    assert [c.field for c in notify] == ["bias"]
     assert _should_alert(changes) is True
 
 

@@ -359,6 +359,9 @@ class EtrConfig:
     score_delta_alert: float = 10.0
     error_alert_cooldown_minutes: int = 360
     telegram_alerts: bool = True
+    telegram_alert_fields: list[str] = field(
+        default_factory=lambda: ["bias", "primary_direction", "price_in_primary_zone"]
+    )
     shadow_horizon_hours: float = 24.0
     login: str | None = None
     password: str | None = None
@@ -401,6 +404,22 @@ class EtrConfig:
             raise ValueError("etr.score_delta_alert must be >= 0")
         if self.shadow_horizon_hours <= 0:
             raise ValueError("etr.shadow_horizon_hours must be > 0")
+
+        from src.etr.alerts import KNOWN_ETR_CHANGE_FIELDS
+
+        self.telegram_alert_fields = [
+            str(field_name).strip()
+            for field_name in self.telegram_alert_fields
+            if str(field_name).strip()
+        ]
+        unknown = [
+            name for name in self.telegram_alert_fields if name not in KNOWN_ETR_CHANGE_FIELDS
+        ]
+        if unknown:
+            raise ValueError(
+                f"etr.telegram_alert_fields invalid: {unknown}; "
+                f"allowed={sorted(KNOWN_ETR_CHANGE_FIELDS)}"
+            )
 
         # Soft-disable when credentials missing so the FX scanner still runs.
         if self.enabled and not self.has_credentials:
@@ -570,6 +589,10 @@ class Settings:
             "score_delta_alert": etr_data.get("score_delta_alert", 10.0),
             "error_alert_cooldown_minutes": etr_data.get("error_alert_cooldown_minutes", 360),
             "telegram_alerts": etr_data.get("telegram_alerts", True),
+            "telegram_alert_fields": etr_data.get(
+                "telegram_alert_fields",
+                ["bias", "primary_direction", "price_in_primary_zone"],
+            ),
             "shadow_horizon_hours": etr_data.get("shadow_horizon_hours", 24.0),
             "login": etr_data.get("login"),
             "password": etr_data.get("password"),

@@ -7,8 +7,8 @@
 A **paper-mode decision-support agent**:
 
 - Multi-asset scanner (XAU/USD, BTC/USD, OIL, NASDAQ)
-- RSI multi-timeframe setup classification + EMA 20/50 crossover context
-- ETR Market Terminal change-only Telegram alerts + forward shadow logs
+- RSI multi-timeframe setup classification + EMA 20/50 crossover context (30m Telegram only)
+- ETR thesis-change Telegram (bias / direction / zone entry) + forward shadow logs
 - Audit / OHLCV persistence for later research
 
 ## What Branch B is not

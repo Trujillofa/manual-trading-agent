@@ -4,15 +4,36 @@ from __future__ import annotations
 
 from src.etr.models import EtrChange, EtrReport
 
+# Thesis-only Telegram fields. Score/estado/zone-tick still land in etr_audit.
+TELEGRAM_THESIS_FIELDS: frozenset[str] = frozenset(
+    {"bias", "primary_direction", "price_in_primary_zone"}
+)
+KNOWN_ETR_CHANGE_FIELDS: frozenset[str] = frozenset(
+    {
+        "bias",
+        "estado",
+        "primary_direction",
+        "primary_invalidation",
+        "primary_zone",
+        "primary_status",
+        "context_score",
+        "price_in_primary_zone",
+    }
+)
+
+
+def telegram_alert_changes(
+    changes: list[EtrChange],
+    allowed_fields: list[str] | tuple[str, ...] | frozenset[str] | None = None,
+) -> list[EtrChange]:
+    """Keep only configured thesis fields for Telegram. Audit still sees the full diff."""
+    allowed = TELEGRAM_THESIS_FIELDS if allowed_fields is None else set(allowed_fields)
+    return [change for change in changes if change.field in allowed]
+
 
 def _esc(text: str) -> str:
     """Light Markdown escaping for Telegram legacy Markdown."""
-    return (
-        text.replace("_", "\\_")
-        .replace("*", "\\*")
-        .replace("`", "\\`")
-        .replace("[", "\\[")
-    )
+    return text.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
 
 
 def _price(report: EtrReport) -> str:
@@ -43,9 +64,7 @@ def format_change_alert(report: EtrReport, changes: list[EtrChange]) -> str:
     primary = report.primary
     if primary:
         lines.append("")
-        lines.append(
-            f"Principal: *{_esc(primary.direction)}* · {_esc(primary.status or '—')}"
-        )
+        lines.append(f"Principal: *{_esc(primary.direction)}* · {_esc(primary.status or '—')}")
         if primary.activation_zone:
             lines.append(f"Zona: `{primary.activation_zone.format()}`")
         if primary.invalidation is not None:
@@ -62,9 +81,7 @@ def format_change_alert(report: EtrReport, changes: list[EtrChange]) -> str:
     zone_txt = "SÍ" if in_zone is True else ("NO" if in_zone is False else "—")
     score = f"{report.context_score:g}" if report.context_score is not None else "—"
     lines.append("")
-    lines.append(
-        f"Precio: `{_price(report)}` · Score: `{score}` · En zona: *{zone_txt}*"
-    )
+    lines.append(f"Precio: `{_price(report)}` · Score: `{score}` · En zona: *{zone_txt}*")
     lines.append(f"/etr {report.asset} para detalle")
     return "\n".join(lines)
 
@@ -117,9 +134,7 @@ def format_full_report(report: EtrReport) -> str:
             lines.append(f"Score escenario: `{scenario.score:g}/100`")
 
     lines.append("")
-    lines.append(
-        "_Informativo · no es recomendación de inversión. Espera confirmaciones._"
-    )
+    lines.append("_Informativo · no es recomendación de inversión. Espera confirmaciones._")
     return "\n".join(lines)
 
 

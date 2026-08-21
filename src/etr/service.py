@@ -9,7 +9,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
-from src.etr.alerts import format_change_alert, format_compact_summary, format_full_report
+from src.etr.alerts import (
+    format_change_alert,
+    format_compact_summary,
+    format_full_report,
+    telegram_alert_changes,
+)
 from src.etr.client import EtrAuthError, EtrClient
 from src.etr.diff import diff_reports
 from src.etr.models import VALID_ASSETS, AssetState, EtrChange, EtrPollResult, EtrReport
@@ -91,10 +96,7 @@ async def poll_and_notify(
     meta = load_global_meta()
 
     if not force and _should_skip_for_interval(meta, config.min_poll_interval_seconds):
-        msg = (
-            f"ETR poll skipped (min interval {config.min_poll_interval_seconds}s "
-            f"not elapsed)"
-        )
+        msg = f"ETR poll skipped (min interval {config.min_poll_interval_seconds}s not elapsed)"
         logger.info(msg)
         return PollSummary(results=[], notified_count=0, error_count=0, skipped=True, message=msg)
 
@@ -158,10 +160,10 @@ async def poll_and_notify(
                     prev_in_zone=prev_state.in_primary_zone,
                 )
                 result.changes = changes
-                # Alert solely from diff_reports. Fingerprint must NOT gate alerts:
-                # price_in_primary_zone and within-bucket score deltas are in the
-                # diff but intentionally absent from the structural fingerprint.
-                should_alert = bool(changes)
+                # Full diff stays on the result/audit. Telegram only fires on
+                # configured thesis fields (bias / direction / zone entry).
+                notify_changes = telegram_alert_changes(changes, config.telegram_alert_fields)
+                should_alert = bool(notify_changes)
 
                 state[asset] = AssetState(
                     fingerprint=fp,
@@ -173,7 +175,7 @@ async def poll_and_notify(
                 )
 
                 if should_alert and do_notify and notifier is not None and notifier.enabled:
-                    message = format_change_alert(report, changes)
+                    message = format_change_alert(report, notify_changes)
                     ok = await notifier.send(message)
                     result.notified = bool(ok)
                     if ok:

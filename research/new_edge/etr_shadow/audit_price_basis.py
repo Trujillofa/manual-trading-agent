@@ -18,12 +18,13 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Approximate yfinance continuous references for scale checks (not fills).
-# Updated manually when running audits; None means "no reference configured".
+# Updated 2026-08-22 from yfinance last close (BTC-USD / GC=F / NQ=F / CL=F).
+# None means "no reference configured".
 ASSET_REFERENCE: dict[str, dict[str, Any]] = {
-    "btc": {"label": "BTC-USD spot-ish", "yf": "BTC-USD", "typical_price": 60_000.0},
-    "gold": {"label": "GC=F continuous", "yf": "GC=F", "typical_price": 2_400.0},
-    "nasdaq": {"label": "NQ=F continuous", "yf": "NQ=F", "typical_price": 20_000.0},
-    "oil": {"label": "CL=F continuous", "yf": "CL=F", "typical_price": 70.0},
+    "btc": {"label": "BTC-USD spot-ish", "yf": "BTC-USD", "typical_price": 77_000.0},
+    "gold": {"label": "GC=F continuous", "yf": "GC=F", "typical_price": 4_600.0},
+    "nasdaq": {"label": "NQ=F continuous", "yf": "NQ=F", "typical_price": 29_400.0},
+    "oil": {"label": "CL=F continuous", "yf": "CL=F", "typical_price": 87.0},
 }
 
 
@@ -82,7 +83,9 @@ def _prices_from_polls(polls: list[dict[str, Any]]) -> dict[str, list[float]]:
     return out
 
 
-def _guess_basis(asset: str, median_price: float | None, typical: float | None) -> tuple[str, tuple[str, ...]]:
+def _guess_basis(
+    asset: str, median_price: float | None, typical: float | None
+) -> tuple[str, tuple[str, ...]]:
     notes: list[str] = []
     if median_price is None:
         return "unknown", ("no ETR prices found in inputs",)
@@ -103,7 +106,9 @@ def _guess_basis(asset: str, median_price: float | None, typical: float | None) 
                 "NASDAQ ETR ~hundreds vs NQ=F ~tens of thousands is expected if Terminal uses an index/CFD scale"
             )
         return "etr_terminal_native", tuple(notes)
-    notes.append(f"median/typical ratio {ratio:.3f} outside tight band; treat as terminal-native until mapped")
+    notes.append(
+        f"median/typical ratio {ratio:.3f} outside tight band; treat as terminal-native until mapped"
+    )
     return "etr_terminal_uncertain", tuple(notes)
 
 
@@ -146,20 +151,60 @@ def summarize(
     return summaries
 
 
-def render_markdown(summaries: list[AssetBasisSummary], *, events_path: Path, polls_path: Path) -> str:
+def _collect_timestamps(
+    events: list[dict[str, Any]], polls: list[dict[str, Any]]
+) -> tuple[str | None, str | None]:
+    stamps: list[str] = []
+    for row in events:
+        for key in ("opened_at", "closed_at", "last_seen_at"):
+            val = row.get(key)
+            if isinstance(val, str) and val:
+                stamps.append(val)
+    for row in polls:
+        val = row.get("ts")
+        if isinstance(val, str) and val:
+            stamps.append(val)
+    if not stamps:
+        return None, None
+    return min(stamps), max(stamps)
+
+
+def render_markdown(
+    summaries: list[AssetBasisSummary],
+    *,
+    events_path: Path,
+    polls_path: Path,
+    n_events: int,
+    n_polls: int,
+    window_start: str | None,
+    window_end: str | None,
+    source: str | None,
+) -> str:
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [
         "# ETR Shadow Price-Basis Audit — 2026-08",
         "",
         f"**Generated:** {now}",
-        f"**Events:** `{events_path}`",
-        f"**Polls:** `{polls_path}`",
-        "",
-        "Hygiene track only — not a KEEP / expectancy claim.",
-        "",
-        "| Asset | Events | Prices | Median ETR | Ref typical | Scale ratio | Basis guess |",
-        "|---|---:|---:|---:|---:|---:|---|",
+        f"**Events:** `{events_path}` ({n_events} closed/open rows)",
+        f"**Polls:** `{polls_path}` ({n_polls} rows)",
     ]
+    if source:
+        lines.append(f"**Source:** {source}")
+    if window_start and window_end:
+        lines.append(f"**Window:** {window_start} → {window_end}")
+    lines.extend(
+        [
+            "",
+            "Hygiene track only — not a KEEP / expectancy claim.",
+            "",
+        ]
+    )
+    lines.extend(
+        [
+            "| Asset | Events | Prices | Median ETR | Ref typical | Scale ratio | Basis guess |",
+            "|---|---:|---:|---:|---:|---:|---|",
+        ]
+    )
     for s in summaries:
         lines.append(
             "| {asset} | {n_events} | {n_prices} | {median} | {typical} | {ratio} | {basis} |".format(
@@ -205,6 +250,11 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=Path("docs/research/etr_shadow/ETR_SHADOW_PRICE_BASIS_AUDIT_2026-08.md"),
     )
+    parser.add_argument(
+        "--source",
+        default=None,
+        help="Human-readable provenance (host path, snapshot id).",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -220,7 +270,17 @@ def main(argv: list[str] | None = None) -> int:
             logger.warning("Could not parse open events file: %s", args.open)
 
     summaries = summarize(events, polls)
-    markdown = render_markdown(summaries, events_path=args.events, polls_path=args.polls)
+    window_start, window_end = _collect_timestamps(events, polls)
+    markdown = render_markdown(
+        summaries,
+        events_path=args.events,
+        polls_path=args.polls,
+        n_events=len(events),
+        n_polls=len(polls),
+        window_start=window_start,
+        window_end=window_end,
+        source=args.source,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(markdown, encoding="utf-8")
     logger.info("Wrote %s (%d assets)", args.output, len(summaries))

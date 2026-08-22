@@ -20,11 +20,11 @@ Run three **new-premise** lanes under the existing honest harness discipline (gr
 
 | Track | Goal | First step |
 |-------|------|------------|
-| **ETR shadow price-basis** | Make forward-shadow MFE/MAE interpretable | `python -m research.new_edge.etr_shadow.audit_price_basis` against prod logs / fixtures |
+| **ETR shadow price-basis** | Make forward-shadow MFE/MAE interpretable | **COMPLETE 2026-08-22.** Prod Hetzner logs (3710 polls / 20 events, 2026-08-12→22): nasdaq `etr_terminal_native`; btc/gold/oil `compatible_with_yf_continuous`. No conversion table. Not KEEP. |
 
 ## Execution order (serial, fail-fast)
 
-1. ETR price-basis audit (unblocks honest reading of live shadow logs).
+1. ETR price-basis audit — **done 2026-08-22** (unblocks honest reading of live shadow logs).
 2. PEAD: only if a real snapshot path is available; otherwise leave `BLOCKED` with provenance update.
 3. Futures source gate: owner data decision required before spend/code beyond audit docs.
 4. Carry: only after a **new** broker account proves nonzero swaps.
@@ -52,7 +52,7 @@ Do **not** run all four strategy implementations in parallel. Parallel doc/audit
 |------|---------|
 | `docs/research/RESEARCH_LANES_PROGRAM_2026-08.md` | This program |
 | `research/new_edge/etr_shadow/` | Price-basis audit CLI + README |
-| `docs/research/etr_shadow/ETR_SHADOW_PRICE_BASIS_AUDIT_2026-08.md` | Written audit findings template |
+| `docs/research/etr_shadow/ETR_SHADOW_PRICE_BASIS_AUDIT_2026-08.md` | Written audit findings (prod 2026-08-22) |
 | Lane pointers | Existing PEAD / term_structure / carry trees — no closed-lane retunes |
 
 ## Ledger

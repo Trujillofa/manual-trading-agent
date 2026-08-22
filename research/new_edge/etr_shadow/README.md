@@ -1,7 +1,8 @@
 # ETR shadow price-basis audit
 
-**Status:** research hygiene (not a KEEP lane)  
-**Program:** `docs/research/RESEARCH_LANES_PROGRAM_2026-08.md`
+**Status:** hygiene complete 2026-08-22 (not a KEEP lane)  
+**Program:** `docs/research/RESEARCH_LANES_PROGRAM_2026-08.md`  
+**Findings:** `docs/research/etr_shadow/ETR_SHADOW_PRICE_BASIS_AUDIT_2026-08.md`
 
 ## Why
 
@@ -20,6 +21,8 @@ Live ETR shadow events use ETR-reported prices/zones. For NASDAQ, observed level
 
 ## Pass criteria for this hygiene track
 
-1. Every asset has an explicit **price basis** label (`etr_terminal`, `yf_continuous`, `unknown`).
+1. Every asset has an explicit **price basis** label (`compatible_with_yf_continuous`, `etr_terminal_native`, `etr_terminal_uncertain`, `unknown`).
 2. Scale ratio vs reference (if available) is reported; ratios ≫1 or ≪1 are flagged.
 3. Written recommendation: keep shadow as **terminal-native evidence only**, or define a conversion — never silently mix bases in P&L claims.
+
+2026-08-22 prod rerun: nasdaq is `etr_terminal_native` (~726 vs `NQ=F` ~29.4k). btc / gold / oil are `compatible_with_yf_continuous`. No conversion table.

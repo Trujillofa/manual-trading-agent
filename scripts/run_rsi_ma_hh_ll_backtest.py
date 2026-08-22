@@ -13,7 +13,17 @@ Grid sweep:
   - Confirm window: 2, 5 bars (V2/V2_MA only)
   - ADX filter: on/off
 
-Cost model: 2 pip spread + 2 pip slippage + $3 commission each side.
+Cost model: frozen CostBook — 2 pip spread + 2 pip slippage + $3/side commission.
+
+Causality: closed-bar signals, next-bar-open fills, stop-first same-bar exits.
+Grid ranking uses the chronological develop window only (first 65%); holdout
+is unused for selection. Short yfinance windows still split so ranking cannot
+peek the tail.
+
+Clock: yfinance indexes are UTC. Optional session filter uses the bar's UTC
+hour (``session_start <= hour < session_end``). Not broker-server time.
+
+Offline only: not a live-go or promote path. No broker orders are sent.
 """
 
 from __future__ import annotations
@@ -28,6 +38,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pandas as pd
 import yfinance as yf
+
+from src.backtest.cost_book import CostBook, pip_size_for_pair
+
+IS_FRACTION = 0.65
 
 # ---------------------------------------------------------------------------
 # Pairs & yfinance symbols
@@ -98,6 +112,7 @@ class BacktestResult:
     sl_exits: int = 0
     time_exits: int = 0
     trades_list: list[Trade] = field(default_factory=list)
+    develop_cutoff: object | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -280,15 +295,19 @@ def run_backtest(
         f"_adx{'T' if use_adx_filter else 'F'}"
     )
 
-    pip = 0.01 if "JPY" in pair else 0.0001
+    pip = pip_size_for_pair(pair)
     buf = buffer_pips * pip
-    spread = spread_pips * pip
-    slip = slippage_pips * pip
+    costs = CostBook(
+        spread_pips=spread_pips,
+        slippage_pips=slippage_pips,
+        commission_usd_per_lot_side=commission_per_order,
+    )
 
     # Pre-compute 15m indicators
     h15 = data_15m["high"].tolist()
     l15 = data_15m["low"].tolist()
     c15 = data_15m["close"].tolist()
+    o15 = data_15m["open"].tolist() if "open" in data_15m.columns else c15
     idx15 = list(data_15m.index)
 
     rsi15 = _rsi_series(c15)
@@ -328,12 +347,23 @@ def run_backtest(
 
     last_ob_bar: int | None = None
     last_os_bar: int | None = None
+    pending_sig: Literal["buy", "sell"] | None = None
+    pending_rsi = (0.0, 0.0, 0.0)
+    result.develop_cutoff = idx15[int(len(idx15) * IS_FRACTION)] if idx15 else None
 
     for i in range(warmup, len(c15)):
         ts = idx15[i]
         close = c15[i]
         high_val = h15[i]
         low_val = l15[i]
+        open_price = o15[i]
+
+        if pending_sig is not None and position is None:
+            position = pending_sig
+            entry_price = costs.entry_fill(open_price, position, pip)
+            entry_idx = i
+            entry_rsi = pending_rsi
+            pending_sig = None
 
         rsi_15 = rsi15[i]
         if rsi_15 is None:
@@ -445,14 +475,13 @@ def run_backtest(
                 exit_reason = "time"
 
             if exit_price_val is not None:
-                eff_exit = exit_price_val - slip if position == "buy" else exit_price_val + slip
+                eff_exit = costs.exit_fill(exit_price_val, position, pip)
                 sl_dist_actual = abs((entry_price - sl_dist) - entry_price) if position == "buy" else sl_dist
                 risk_pct = 0.01
                 pos_size = (balance * risk_pct / sl_dist_actual) if sl_dist_actual > 0 else 1
                 raw_pnl = (eff_exit - entry_price) if position == "buy" else (entry_price - eff_exit)
                 gross_pnl = pos_size * raw_pnl
-                commission_impact = (2 * commission_per_order) / balance if balance > 0 else 0
-                pnl = gross_pnl - commission_impact * balance
+                pnl = gross_pnl - costs.round_trip_commission_usd()
                 balance += pnl
                 trade_pnls.append(pnl)
                 bars_held_list.append(i - entry_idx)
@@ -475,20 +504,16 @@ def run_backtest(
                     result.time_exits += 1
                 position = None
 
-        # Open new position (allow counter-signal to flip)
-        if position is None:
+        # Arm next-bar fill (never fill on the signal bar close)
+        if position is None and pending_sig is None:
             sig: Literal["buy", "sell", None] = None
             if long_trigger:
                 sig = "buy"
             elif short_trigger:
                 sig = "sell"
-            if sig is not None:
-                tp_dist = atr * tp_atr_mult
-                sl_dist = atr * sl_atr_mult
-                position = sig
-                entry_price = close + spread if sig == "buy" else close - spread
-                entry_idx = i
-                entry_rsi = (rsi_15, rsi_30m, rsi_1h)
+            if sig is not None and i + 1 < len(c15):
+                pending_sig = sig
+                pending_rsi = (rsi_15, rsi_30m, rsi_1h)
 
     # Finalize
     wins = sum(1 for p in trade_pnls if p > 0)
@@ -511,6 +536,15 @@ def run_backtest(
 # ---------------------------------------------------------------------------
 # Report writer
 # ---------------------------------------------------------------------------
+
+def _develop_trades(result: BacktestResult) -> list[Trade]:
+    """Return trades whose entry is in the develop window."""
+
+    if result.develop_cutoff is None:
+        return result.trades_list
+    cutoff = pd.Timestamp(result.develop_cutoff)
+    return [trade for trade in result.trades_list if pd.Timestamp(trade.entry_time) <= cutoff]
+
 
 def write_report(
     all_results: list[BacktestResult],
@@ -544,7 +578,10 @@ def write_report(
         f"**Data:** yfinance, {days} days, 15m primary (1h/30m for RSI alignment/ADX)  ",
         f"**Date range:** {date_range}  ",
         f"**Pairs:** {', '.join(pairs_tested)}  ",
-        "**Cost model:** 2 pip spread + 2 pip slippage + $3 commission each side (realistic worst-case)",
+        "**Cost model:** frozen CostBook — 2 pip spread + 2 pip slippage + $3/side (round-trip $6)  ",
+        "**Execution:** signal on close, fill next bar open, stop-first exits  ",
+        "**Split:** first 65% develop / last 35% holdout. Ranking uses develop only.  ",
+        "**Not a live-go path.**",
         "",
         "---",
         "",
@@ -623,7 +660,7 @@ def write_report(
         "",
         "---",
         "",
-        "## Section 3 — Best Configs per Variant (≥5 trades, ranked by PF)",
+        "## Section 3 — Best Configs per Variant (develop window, ≥5 trades, ranked by PF)",
         "",
     ]
 
@@ -638,14 +675,15 @@ def write_report(
 
         rows = []
         for label, crs in cfg_groups.items():
-            total_trades = sum(r.trades for r in crs)
+            develop = [trade for result in crs for trade in _develop_trades(result)]
+            total_trades = len(develop)
             if total_trades < 5:
                 continue
-            avg_pnl = sum(r.total_pnl_pct for r in crs) / len(crs)
-            pool_wins = sum(sum(t.pnl_pct for t in r.trades_list if t.pnl_pct > 0) for r in crs)
-            pool_loss = sum(sum(-t.pnl_pct for t in r.trades_list if t.pnl_pct <= 0) for r in crs)
+            avg_pnl = sum(trade.pnl_pct for trade in develop)
+            pool_wins = sum(trade.pnl_pct for trade in develop if trade.pnl_pct > 0)
+            pool_loss = sum(-trade.pnl_pct for trade in develop if trade.pnl_pct <= 0)
             pf = pool_wins / pool_loss if pool_loss > 0 else (999.0 if pool_wins > 0 else 0.0)
-            total_wins = sum(r.wins for r in crs)
+            total_wins = sum(1 for trade in develop if trade.pnl_pct > 0)
             wr = total_wins / total_trades if total_trades else 0.0
             avg_dd = max(r.max_dd_pct for r in crs)
             rows.append((label, total_trades, avg_pnl, pf, wr, avg_dd))
@@ -745,8 +783,9 @@ def write_report(
         "  treat results as directional signal only, not promotion-gate evidence.",
         "- Cost model: 4 total pip cost (2 spread + 2 slippage) + $6 commission round-trip. ",
         "  This is conservative and matches the live production harness.",
-        "- No walk-forward split: all results are in-sample on the ~58d window. ",
-        "  For an honest OOS verdict, Dukascopy 180d+ validation is required.",
+        "- Chronological 65/35 develop/holdout split. Config ranking uses develop only; ",
+        "  holdout is unused for selection. Short yfinance windows remain exploratory.",
+        "  For an honest OOS verdict, Dukascopy 180d+ validation is still required.",
         "- Trade counts are very low at the intersection of all gates (RSI alignment × RSI-MA × HH/LL × ADX). ",
         "  PF estimates with N < 30 are statistically unreliable.",
         "",

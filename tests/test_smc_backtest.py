@@ -10,6 +10,7 @@ from scripts.run_htf_fib_backtest import BacktestResult, Trade
 from scripts.run_smc_backtest import (
     EvalRow,
     PendingObRetest,
+    selection_score,
     PreparedSmcData,
     StrategyConfig,
     StructureBreak,
@@ -194,6 +195,13 @@ def test_comparison_report_uses_archival_language(tmp_path) -> None:
     assert "Least-negative searched candidate" in report
     assert "Most optimal" not in report
     assert "order-block retests" in report
+
+
+def test_selection_score_ignores_holdout_argument() -> None:
+    develop = WindowStats(40, 0.5, 1.2, 1.1, 3.0, 1.0, 4, 8)
+    holdout_a = WindowStats(80, 0.9, 5.0, 5.0, 99.0, 0.1, 8, 8)
+    holdout_b = WindowStats(1, 0.0, 0.0, 0.0, -99.0, 90.0, 0, 8)
+    assert selection_score(develop, holdout_a) == selection_score(develop, holdout_b)
 
 
 def test_filter_results_keeps_holdout_out_of_search_windows() -> None:

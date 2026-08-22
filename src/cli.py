@@ -1793,13 +1793,18 @@ async def run_enhanced_backtest(
     ema_confidence_boost: float = 1.10,
     ema_confidence_dampen: float = 0.85,
 ) -> None:
-    """Run enhanced backtest with realistic TP/SL simulation."""
+    """Run enhanced backtest with realistic TP/SL simulation.
+
+    Replay-only. This command does not send broker orders and is not a
+    live-go or promote path. Holdout metrics are printed and unused.
+    """
     require_backtest_supported(pair)
     from src.backtest.enhanced_engine import EnhancedBacktestEngine
 
     fetcher = DataFetcher()
 
     print(f"\n[ENHANCED BACKTEST] {pair}")
+    print("  Mode: offline replay — not a live-go / promote path")
     print(f"  Patterns: {'enabled' if use_patterns else 'disabled'}")
     print(f"  Divergence: {'enabled' if use_divergence else 'disabled'}")
     print(
@@ -1845,9 +1850,24 @@ async def run_enhanced_backtest(
             )
 
         result = engine.run(pair, data, verbose=False)
+        costs = engine.cost_book
+        print(
+            f"  Costs: spread {costs.spread_pips:g} pips, slip {costs.slippage_pips:g} pips, "
+            f"${costs.commission_usd_per_lot_side:g}/lot/side, size {costs.lot_size:g} lot"
+        )
+        cutoff_idx = int(len(data) * 0.65)
+        cutoff = engine._index_to_datetime(data.index[cutoff_idx]) if len(data) else None
+        develop_n = sum(
+            1 for trade in result.trades if cutoff is not None and trade.entry_time <= cutoff
+        )
+        holdout_n = sum(
+            1 for trade in result.trades if cutoff is not None and trade.entry_time > cutoff
+        )
 
         print(f"\n  Period: {result.start_date.date()} to {result.end_date.date()}")
         print(f"  Total trades: {result.total_trades}")
+        print(f"  Develop (first 65%): {develop_n} trades")
+        print(f"  Holdout (last 35%, unused for selection): {holdout_n} trades")
         print(f"  Win rate: {result.win_rate:.1%}")
         print(f"  Total PnL: ${result.total_pnl:.2f} ({result.total_pnl_pct:.2f}%)")
         print(f"  Max drawdown: {result.max_drawdown_pct:.2f}%")

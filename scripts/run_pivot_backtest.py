@@ -10,6 +10,18 @@ SMA(50) gate, and ADX(<25) gate:
 
 Bounce definition: bar wick touches the level zone; close recovers back out.
 
+Causality: closed-bar signals, next-bar-open fills, stop-first same-bar exits.
+Sweep ranking uses the chronological develop window only (first 65%); holdout
+is unused for selection.
+
+Clock: bar timestamps are UTC. SESSION entries use ``SESSION_WINDOWS_UTC``
+(London 07–17, NY 13–22) on the bar's UTC hour, not broker-server time.
+Session open is the 15m open at exactly 07:00 / 13:00 UTC.
+
+Cost book: 2 pip spread + 2 pip slippage + $3/side commission (frozen).
+
+Offline only: not a live-go or promote path. No broker orders are sent.
+
 All RSI/ADX/SMA/pivots pre-computed once per pair (O(log n) asof lookups
 in the inner loop) to keep runtime under 3 minutes per pair.
 """
@@ -30,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pandas as pd
 
+from src.backtest.cost_book import CostBook, pip_size_for_pair
 from src.data.dukascopy_fetcher import get_multi_timeframe_data_dukascopy
 from src.indicators.adx import calculate_adx
 from src.indicators.pivot_points import (
@@ -64,6 +77,7 @@ CAMARILLA_LEVEL_SETS: dict[str, tuple[list[str], list[str]]] = {
 }
 
 SESSION_SETS = ["london", "ny", "both"]
+IS_FRACTION = 0.65
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +94,7 @@ class TradeRecord:
     exit_reason: str
     bars_held: int
     pivot_level: str
+    entry_time: object = None
 
 
 @dataclass
@@ -111,6 +126,7 @@ class PairCache:
     highs: list[float]
     lows: list[float]
     closes: list[float]
+    opens: list[float]
     index_15m: list[object]
     rsi_15m: list[float | None]
     rsi_1h_series: pd.Series
@@ -190,6 +206,7 @@ def build_pair_cache(
     highs  = data_15m["high"].tolist()
     lows   = data_15m["low"].tolist()
     closes = data_15m["close"].tolist()
+    opens = data_15m["open"].tolist() if "open" in data_15m.columns else closes
 
     rsi_15m = [calculate_rsi(closes[max(0, i - 50): i + 1], 14) for i in range(len(closes))]
 
@@ -202,7 +219,7 @@ def build_pair_cache(
         sma_15m_list = [None if pd.isna(v) else float(v) for v in raw]
 
     return PairCache(
-        highs=highs, lows=lows, closes=closes,
+        highs=highs, lows=lows, closes=closes, opens=opens,
         index_15m=list(data_15m.index),
         rsi_15m=rsi_15m,
         rsi_1h_series=_precompute_rsi(data_1h),
@@ -217,7 +234,7 @@ def build_pair_cache(
         weekly_pivot_map=build_weekly_pivot_map(data_1h),
         camarilla_map=build_camarilla_map(data_1h),
         session_open_map=build_session_open_map(data_15m),
-        pip_size=0.01 if "JPY" in pair else 0.0001,
+        pip_size=pip_size_for_pair(pair),
         atr=_precompute_atr(highs, lows, closes),
     )
 
@@ -241,6 +258,9 @@ def run_config(
     sma_period: int = 50,
     max_hold_bars: int = 16,
     warmup: int = 80,
+    spread_pips: float = 2.0,
+    slippage_pips: float = 2.0,
+    commission_per_order: float = 3.0,
 ) -> ConfigResult:
     label = f"{entry_type}_{level_set}_prox{proximity_pips:g}_c{confirm_bars}_tp{tp_mult:g}_sl{sl_mult:g}"
     result = ConfigResult(
@@ -250,9 +270,16 @@ def run_config(
     )
 
     prox = proximity_pips * cache.pip_size
+    costs = CostBook(
+        spread_pips=spread_pips,
+        slippage_pips=slippage_pips,
+        commission_usd_per_lot_side=commission_per_order,
+    )
+    pip = cache.pip_size
     highs  = cache.highs
     lows   = cache.lows
     closes = cache.closes
+    opens = cache.opens
 
     balance = 10_000.0
     peak = balance
@@ -268,12 +295,29 @@ def run_config(
 
     alignment_start: int | None     = None
     alignment_direction: str | None = None
+    pending_signal: Literal["buy", "sell"] | None = None
+    pending_atr = 0.0
+    pending_level = ""
 
     for i in range(warmup, len(closes)):
         ts       = cast(pd.Timestamp, cache.index_15m[i])
         close    = closes[i]
         high_val = highs[i]
         low_val  = lows[i]
+        open_price = opens[i]
+
+        if pending_signal is not None and position is None:
+            position = pending_signal
+            entry_price = costs.entry_fill(open_price, position, pip)
+            entry_idx = i
+            entry_level_name = pending_level
+            if position == "buy":
+                tp = entry_price + pending_atr * tp_mult
+                sl = entry_price - pending_atr * sl_mult
+            else:
+                tp = entry_price - pending_atr * tp_mult
+                sl = entry_price + pending_atr * sl_mult
+            pending_signal = None
 
         rsi_15 = cache.rsi_15m[i]
         if rsi_15 is None:
@@ -328,10 +372,13 @@ def run_config(
                 timeout_count += 1
 
             if exit_price is not None:
-                pnl_pct = (
-                    (exit_price - entry_price) / entry_price if position == "buy"
-                    else (entry_price - exit_price) / entry_price
+                filled_exit = costs.exit_fill(exit_price, position, pip)
+                raw_move = (
+                    (filled_exit - entry_price) / entry_price if position == "buy"
+                    else (entry_price - filled_exit) / entry_price
                 )
+                commission_pct = costs.round_trip_commission_usd() / balance if balance > 0 else 0.0
+                pnl_pct = raw_move - commission_pct
                 balance += balance * pnl_pct
                 trade_pnls.append(pnl_pct)
                 bars_held_list.append(i - entry_idx)
@@ -340,9 +387,10 @@ def run_config(
                 max_dd_pct = max(max_dd_pct, dd)
                 result.trades_list.append(TradeRecord(
                     pair=pair, direction=position,
-                    entry_price=entry_price, exit_price=exit_price,
+                    entry_price=entry_price, exit_price=filled_exit,
                     pnl_pct=pnl_pct * 100, exit_reason=exit_reason,
                     bars_held=i - entry_idx, pivot_level=entry_level_name,
+                    entry_time=cache.index_15m[entry_idx],
                 ))
                 position = None
 
@@ -446,16 +494,10 @@ def run_config(
         if current_signal is None:
             continue
 
-        position          = current_signal
-        entry_price       = close
-        entry_idx         = i
-        entry_level_name  = matched_level
-        if position == "buy":
-            tp = entry_price + atr * tp_mult
-            sl = entry_price - atr * sl_mult
-        else:
-            tp = entry_price - atr * tp_mult
-            sl = entry_price + atr * sl_mult
+        if pending_signal is None and i + 1 < len(closes):
+            pending_signal = current_signal
+            pending_atr = atr
+            pending_level = matched_level
 
     wins       = sum(1 for p in trade_pnls if p > 0)
     losses     = len(trade_pnls) - wins
@@ -525,7 +567,44 @@ def fetch_pair(pair: str, days: int, source: str) -> dict[str, pd.DataFrame] | N
 # Output
 # ---------------------------------------------------------------------------
 
-def write_outputs(results: list[ConfigResult], output_dir: Path) -> tuple[Path, Path]:
+def _trade_in_holdout(entry_time: object, cutoff: pd.Timestamp) -> bool:
+    if entry_time is None:
+        return False
+    return pd.Timestamp(entry_time) > cutoff
+
+
+def develop_metrics(
+    results: list[ConfigResult],
+    cutoffs: dict[str, pd.Timestamp],
+    *,
+    holdout: bool,
+) -> tuple[int, float, float]:
+    """Return develop/holdout trade count, compounded pnl%, and PF."""
+
+    window: list[TradeRecord] = []
+    for result in results:
+        cutoff = cutoffs[result.pair]
+        window.extend(
+            trade
+            for trade in result.trades_list
+            if _trade_in_holdout(trade.entry_time, cutoff) == holdout
+        )
+    trades = len(window)
+    pnls = [trade.pnl_pct / 100.0 for trade in window]
+    gross_win = sum(p for p in pnls if p > 0)
+    gross_loss = sum(abs(p) for p in pnls if p <= 0)
+    pf = gross_win / gross_loss if gross_loss > 0 else (999.0 if gross_win > 0 else 0.0)
+    equity = 1.0
+    for pnl in pnls:
+        equity *= 1.0 + pnl
+    return trades, (equity - 1.0) * 100.0, pf
+
+
+def write_outputs(
+    results: list[ConfigResult],
+    output_dir: Path,
+    cutoffs: dict[str, pd.Timestamp] | None = None,
+) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp    = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     csv_path = output_dir / f"pivot_v2_backtest_{stamp}.csv"
@@ -566,10 +645,16 @@ def write_outputs(results: list[ConfigResult], output_dir: Path) -> tuple[Path, 
         max_dd           = max(r.max_drawdown_pct for r in crs)
         wr               = total_wins / total_trades if total_trades else 0.0
         pairs_profitable = sum(1 for r in crs if r.total_pnl_pct > 0)
+        if cutoffs:
+            dev_trades, dev_pnl, dev_pf = develop_metrics(crs, cutoffs, holdout=False)
+            rank_trades, rank_pnl, rank_pf = dev_trades, dev_pnl, dev_pf
+            rank_wr = wr
+        else:
+            rank_trades, rank_pnl, rank_pf, rank_wr = total_trades, avg_pnl_pct, pf, wr
         agg_rows.append({
             "config": label, "entry_type": crs[0].entry_type, "level_set": crs[0].level_set,
-            "total_trades": total_trades, "win_rate": wr, "avg_pnl_pct": avg_pnl_pct,
-            "profit_factor": pf, "max_dd": max_dd, "timeouts": total_timeouts,
+            "total_trades": rank_trades, "win_rate": rank_wr, "avg_pnl_pct": rank_pnl,
+            "profit_factor": rank_pf, "max_dd": max_dd, "timeouts": total_timeouts,
             "pairs_profitable": pairs_profitable, "pairs_tested": len(crs),
         })
 
@@ -581,6 +666,11 @@ def write_outputs(results: list[ConfigResult], output_dir: Path) -> tuple[Path, 
         "",
         "Entry types: WEEKLY (weekly standard pivots) | SESSION (London/NY open S/R) | CAMARILLA (H3/H4, L3/L4)",
         "Filters: MTF RSI 30/70 on 1h+30m+15m + SMA(50) gate + ADX(<25) gate",
+        "Execution: closed-bar signal, next-bar-open fill, stop-first exits.",
+        "Costs: 2 pip spread, 2 pip slippage/fill, $3/side commission.",
+        "Ranking: develop window only (first 65%). Holdout is unused for selection.",
+        "Clock: UTC bar timestamps; session windows are UTC hours.",
+        "Not a live-go path.",
         "",
         "## Top 30 Configurations (by avg PnL % across all pairs)",
         "",
@@ -746,7 +836,12 @@ def main() -> int:
     total_time = time.time() - t0
     print(f"\nCompleted {run_count} backtests in {total_time:.0f}s ({total_time / 60:.1f}m)")
 
-    csv_path, md_path = write_outputs(results, Path(args.output_dir))
+    cutoffs = {
+        pair: pd.Timestamp(mtf["15m"].index[int(len(mtf["15m"].index) * IS_FRACTION)])
+        for pair, mtf in pair_data.items()
+        if len(mtf["15m"].index) > 0
+    }
+    csv_path, md_path = write_outputs(results, Path(args.output_dir), cutoffs)
     print(f"Saved CSV: {csv_path}")
     print(f"Saved MD:  {md_path}")
 
@@ -757,17 +852,13 @@ def main() -> int:
 
     ranked = []
     for label, crs in config_agg.items():
-        total_trades = sum(r.trades for r in crs)
-        if total_trades < 10:
+        dev_trades, dev_pnl, dev_pf = develop_metrics(crs, cutoffs, holdout=False)
+        if dev_trades < 10:
             continue
-        avg_pnl    = sum(r.total_pnl_pct for r in crs) / len(crs)
-        gross_win  = sum(r.avg_win * r.wins for r in crs)
-        gross_loss = sum(r.avg_loss * r.losses for r in crs)
-        pf         = gross_win / gross_loss if gross_loss > 0 else 0.0
-        ranked.append((label, total_trades, avg_pnl, pf))
+        ranked.append((label, dev_trades, dev_pnl, dev_pf))
     ranked.sort(key=lambda x: x[2], reverse=True)
 
-    print("\n=== TOP 10 CONFIGS (≥10 trades across all pairs) ===")
+    print("\n=== TOP 10 CONFIGS (develop window, ≥10 trades) ===")
     for i, (label, trades, pnl, pf) in enumerate(ranked[:10], 1):
         print(f"  {i:2d}. {label}")
         print(f"      {trades} trades | avg PnL {pnl:.2f}% | PF {pf:.2f}")

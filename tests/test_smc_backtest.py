@@ -10,7 +10,6 @@ from scripts.run_htf_fib_backtest import BacktestResult, Trade
 from scripts.run_smc_backtest import (
     EvalRow,
     PendingObRetest,
-    selection_score,
     PreparedSmcData,
     StrategyConfig,
     StructureBreak,
@@ -24,6 +23,7 @@ from scripts.run_smc_backtest import (
     ob_mitigated,
     ob_retest_triggered,
     run_prepared_backtest,
+    selection_score,
     write_comparison_report,
 )
 

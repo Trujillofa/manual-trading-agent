@@ -37,8 +37,6 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.backtest.cost_book import CostBook
-
 from scripts.run_donchian_backtest import fetch_pair
 from scripts.run_htf_fib_backtest import (
     DEFAULT_PAIRS,
@@ -54,6 +52,7 @@ from scripts.run_htf_fib_backtest import (
     load_usd_conversion_closes,
     verdict,
 )
+from src.backtest.cost_book import CostBook
 
 BULLISH_LEG = 1
 BEARISH_LEG = 0

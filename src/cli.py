@@ -1180,9 +1180,7 @@ async def run_scan(pairs: list[str] | None, timeframe: str) -> None:
                         confirmed_pairs.add(pair)
                         entry_fp = f"entry|{signal_direction}"
                         prev = near_state.get(pair)
-                        should_send_entry = (
-                            not prev or str(prev.get("fingerprint", "")) != entry_fp
-                        )
+                        should_send_entry = not prev or str(prev.get("fingerprint", "")) != entry_fp
                         if should_send_entry:
                             await notifier.send_signal(
                                 pair=symbol,

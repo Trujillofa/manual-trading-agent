@@ -24,7 +24,9 @@ def test_cost_book_refuses_silent_mutation() -> None:
 
 
 def test_cost_book_units_and_fills() -> None:
-    book = CostBook(spread_pips=2.0, slippage_pips=2.0, commission_usd_per_lot_side=3.0, lot_size=1.0)
+    book = CostBook(
+        spread_pips=2.0, slippage_pips=2.0, commission_usd_per_lot_side=3.0, lot_size=1.0
+    )
     pip = 0.0001
     assert book.entry_fill(1.1000, "buy", pip) == pytest.approx(1.1004)
     assert book.entry_fill(1.1000, "sell", pip) == pytest.approx(1.0996)
@@ -77,8 +79,12 @@ def test_entry_fills_next_bar_open_not_signal_close() -> None:
         loc = data.index.get_loc(pd.Timestamp(trade.entry_time))
         open_px = float(data["open"].iloc[loc])
         close_px = float(data["close"].iloc[loc])
-        assert trade.entry_price == pytest.approx(engine.cost_book.entry_fill(open_px, trade.side, pip))
-        assert trade.entry_price != pytest.approx(engine.cost_book.entry_fill(close_px, trade.side, pip))
+        assert trade.entry_price == pytest.approx(
+            engine.cost_book.entry_fill(open_px, trade.side, pip)
+        )
+        assert trade.entry_price != pytest.approx(
+            engine.cost_book.entry_fill(close_px, trade.side, pip)
+        )
 
 
 def test_mutating_future_bars_does_not_change_earlier_fills() -> None:

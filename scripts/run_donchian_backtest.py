@@ -1395,7 +1395,17 @@ def main() -> int:
     parser.add_argument(
         "--sweep",
         default="baseline",
-        choices=["baseline", "pine", "atr-exits", "rsi", "structure", "filters", "exits", "costs", "full"],
+        choices=[
+            "baseline",
+            "pine",
+            "atr-exits",
+            "rsi",
+            "structure",
+            "filters",
+            "exits",
+            "costs",
+            "full",
+        ],
         help="Sweep type",
     )
     parser.add_argument("--output-dir", default="results")

@@ -78,6 +78,7 @@ YF_MAP: dict[str, str] = {
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Trade:
     pair: str
@@ -119,6 +120,7 @@ class BacktestResult:
 # Indicators
 # ---------------------------------------------------------------------------
 
+
 def _rsi_series(closes: list[float], period: int = 14) -> list[float | None]:
     """Wilder RSI series."""
     result: list[float | None] = [None] * len(closes)
@@ -146,13 +148,15 @@ def _rsi_ma_series(rsi_vals: list[float | None], ma_period: int = 5) -> list[flo
     """SMA of RSI series."""
     result: list[float | None] = [None] * len(rsi_vals)
     for i in range(len(rsi_vals)):
-        window = [v for v in rsi_vals[max(0, i - ma_period + 1): i + 1] if v is not None]
+        window = [v for v in rsi_vals[max(0, i - ma_period + 1) : i + 1] if v is not None]
         if len(window) >= ma_period:
             result[i] = sum(window) / len(window)
     return result
 
 
-def _atr_series(highs: list[float], lows: list[float], closes: list[float], period: int = 14) -> list[float | None]:
+def _atr_series(
+    highs: list[float], lows: list[float], closes: list[float], period: int = 14
+) -> list[float | None]:
     result: list[float | None] = [None] * len(closes)
     if len(closes) < 2:
         return result
@@ -170,7 +174,9 @@ def _atr_series(highs: list[float], lows: list[float], closes: list[float], peri
     return result
 
 
-def _adx_series(highs: list[float], lows: list[float], closes: list[float], period: int = 14) -> list[float | None]:
+def _adx_series(
+    highs: list[float], lows: list[float], closes: list[float], period: int = 14
+) -> list[float | None]:
     n = len(highs)
     result: list[float | None] = [None] * n
     if n < 2 * period + 1:
@@ -180,7 +186,9 @@ def _adx_series(highs: list[float], lows: list[float], closes: list[float], peri
         hd, ld = highs[i] - highs[i - 1], lows[i - 1] - lows[i]
         plus_dms.append(max(hd, 0.0) if hd > ld else 0.0)
         minus_dms.append(max(ld, 0.0) if ld > hd else 0.0)
-        trs.append(max(highs[i] - lows[i], abs(highs[i] - closes[i - 1]), abs(lows[i] - closes[i - 1])))
+        trs.append(
+            max(highs[i] - lows[i], abs(highs[i] - closes[i - 1]), abs(lows[i] - closes[i - 1]))
+        )
     if len(trs) < 2 * period:
         return result
     str_ = sum(trs[:period])
@@ -209,20 +217,21 @@ def _adx_series(highs: list[float], lows: list[float], closes: list[float], peri
 def _prev_hh(highs: list[float], lookback: int, idx: int) -> float | None:
     if idx < lookback:
         return None
-    window = highs[idx - lookback: idx]
+    window = highs[idx - lookback : idx]
     return max(window) if window else None
 
 
 def _prev_ll(lows: list[float], lookback: int, idx: int) -> float | None:
     if idx < lookback:
         return None
-    window = lows[idx - lookback: idx]
+    window = lows[idx - lookback : idx]
     return min(window) if window else None
 
 
 # ---------------------------------------------------------------------------
 # Data fetching
 # ---------------------------------------------------------------------------
+
 
 def fetch_pair_yf(pair: str, days: int = 58) -> dict[str, pd.DataFrame] | None:
     symbol = YF_MAP.get(pair)
@@ -252,7 +261,9 @@ def fetch_pair_yf(pair: str, days: int = 58) -> dict[str, pd.DataFrame] | None:
             print(f"  {pair}/{tf}: ERROR {e}")
             return None
     bars_15m = len(result["15m"])
-    print(f"  {pair}: 1h={len(result['1h'])} 30m={len(result['30m'])} 15m={bars_15m} ({bars_15m*15/60/24:.0f}d)")
+    print(
+        f"  {pair}: 1h={len(result['1h'])} 30m={len(result['30m'])} 15m={bars_15m} ({bars_15m * 15 / 60 / 24:.0f}d)"
+    )
     return result
 
 
@@ -260,9 +271,10 @@ def fetch_pair_yf(pair: str, days: int = 58) -> dict[str, pd.DataFrame] | None:
 # Core backtest
 # ---------------------------------------------------------------------------
 
+
 def run_backtest(
     pair: str,
-    variant: str,               # "V0" | "V0_MA" | "V2" | "V2_MA"
+    variant: str,  # "V0" | "V0_MA" | "V2" | "V2_MA"
     data_1h: pd.DataFrame,
     data_30m: pd.DataFrame,
     data_15m: pd.DataFrame,
@@ -324,11 +336,15 @@ def run_backtest(
 
     # RSI on 1h and 30m (precompute series, align to 15m bars via asof)
     c1h_s = pd.Series(_rsi_series(c1), index=data_1h.index, dtype=float)
-    rsima1h_s = pd.Series(_rsi_ma_series(_rsi_series(c1), rsi_ma_period), index=data_1h.index, dtype=float)
+    rsima1h_s = pd.Series(
+        _rsi_ma_series(_rsi_series(c1), rsi_ma_period), index=data_1h.index, dtype=float
+    )
 
     c30m = data_30m["close"].tolist()
     rsi30_s = pd.Series(_rsi_series(c30m), index=data_30m.index, dtype=float)
-    rsima30_s = pd.Series(_rsi_ma_series(_rsi_series(c30m), rsi_ma_period), index=data_30m.index, dtype=float)
+    rsima30_s = pd.Series(
+        _rsi_ma_series(_rsi_series(c30m), rsi_ma_period), index=data_30m.index, dtype=float
+    )
 
     result = BacktestResult(pair=pair, variant=variant, config_label=cfg_label)
 
@@ -421,8 +437,12 @@ def run_backtest(
         rsi_ma_buy_ok = True
         rsi_ma_sell_ok = True
         if use_rsi_ma and all(v is not None for v in (rma_15, rma_1h, rma_30m)):
-            rsi_ma_buy_ok = rma_15 <= rsi_oversold and rma_1h <= rsi_oversold and rma_30m <= rsi_oversold
-            rsi_ma_sell_ok = rma_15 >= rsi_overbought and rma_1h >= rsi_overbought and rma_30m >= rsi_overbought
+            rsi_ma_buy_ok = (
+                rma_15 <= rsi_oversold and rma_1h <= rsi_oversold and rma_30m <= rsi_oversold
+            )
+            rsi_ma_sell_ok = (
+                rma_15 >= rsi_overbought and rma_1h >= rsi_overbought and rma_30m >= rsi_overbought
+            )
 
         # HH/LL gate (V2: wick through + close reclaim)
         hh = _prev_hh(h15, lookback, i)
@@ -437,16 +457,26 @@ def run_backtest(
         # V0: enter on alignment bar (RSI cross-back not used here; just require alignment)
         # Trigger conditions per variant
         if use_hh_ll:
-            long_trigger = (htf_os and within_os and ll_ok_buy and adx_ok and sess_ok
-                            and (not use_rsi_ma or rsi_ma_buy_ok))
-            short_trigger = (htf_ob and within_ob and hh_ok_sell and adx_ok and sess_ok
-                             and (not use_rsi_ma or rsi_ma_sell_ok))
+            long_trigger = (
+                htf_os
+                and within_os
+                and ll_ok_buy
+                and adx_ok
+                and sess_ok
+                and (not use_rsi_ma or rsi_ma_buy_ok)
+            )
+            short_trigger = (
+                htf_ob
+                and within_ob
+                and hh_ok_sell
+                and adx_ok
+                and sess_ok
+                and (not use_rsi_ma or rsi_ma_sell_ok)
+            )
         else:
             # V0 / V0_MA: fire on MTF alignment (all 3 TFs) current bar
-            long_trigger = (full_os and adx_ok and sess_ok
-                            and (not use_rsi_ma or rsi_ma_buy_ok))
-            short_trigger = (full_ob and adx_ok and sess_ok
-                             and (not use_rsi_ma or rsi_ma_sell_ok))
+            long_trigger = full_os and adx_ok and sess_ok and (not use_rsi_ma or rsi_ma_buy_ok)
+            short_trigger = full_ob and adx_ok and sess_ok and (not use_rsi_ma or rsi_ma_sell_ok)
 
         # Manage open position
         if position is not None:
@@ -476,10 +506,14 @@ def run_backtest(
 
             if exit_price_val is not None:
                 eff_exit = costs.exit_fill(exit_price_val, position, pip)
-                sl_dist_actual = abs((entry_price - sl_dist) - entry_price) if position == "buy" else sl_dist
+                sl_dist_actual = (
+                    abs((entry_price - sl_dist) - entry_price) if position == "buy" else sl_dist
+                )
                 risk_pct = 0.01
                 pos_size = (balance * risk_pct / sl_dist_actual) if sl_dist_actual > 0 else 1
-                raw_pnl = (eff_exit - entry_price) if position == "buy" else (entry_price - eff_exit)
+                raw_pnl = (
+                    (eff_exit - entry_price) if position == "buy" else (entry_price - eff_exit)
+                )
                 gross_pnl = pos_size * raw_pnl
                 pnl = gross_pnl - costs.round_trip_commission_usd()
                 balance += pnl
@@ -488,14 +522,23 @@ def run_backtest(
                 peak = max(peak, balance)
                 dd = (peak - balance) / peak * 100 if peak > 0 else 0
                 max_dd = max(max_dd, dd)
-                trades_list.append(Trade(
-                    pair=pair, variant=variant, direction=position,
-                    entry_time=idx15[entry_idx], exit_time=ts,
-                    entry_price=entry_price, exit_price=exit_price_val,
-                    pnl_pct=pnl / balance * 100,
-                    exit_reason=exit_reason, bars_held=i - entry_idx,
-                    rsi_15m=entry_rsi[0], rsi_30m=entry_rsi[1], rsi_1h=entry_rsi[2],
-                ))
+                trades_list.append(
+                    Trade(
+                        pair=pair,
+                        variant=variant,
+                        direction=position,
+                        entry_time=idx15[entry_idx],
+                        exit_time=ts,
+                        entry_price=entry_price,
+                        exit_price=exit_price_val,
+                        pnl_pct=pnl / balance * 100,
+                        exit_reason=exit_reason,
+                        bars_held=i - entry_idx,
+                        rsi_15m=entry_rsi[0],
+                        rsi_30m=entry_rsi[1],
+                        rsi_1h=entry_rsi[2],
+                    )
+                )
                 if exit_reason == "tp":
                     result.tp_exits += 1
                 elif exit_reason == "sl":
@@ -526,7 +569,9 @@ def run_backtest(
     result.losses = losses
     result.win_rate = wins / len(trade_pnls) if trade_pnls else 0.0
     result.total_pnl_pct = (balance - 100_000.0) / 100_000.0 * 100
-    result.profit_factor = gross_win / gross_loss if gross_loss > 0 else (999.0 if gross_win > 0 else 0.0)
+    result.profit_factor = (
+        gross_win / gross_loss if gross_loss > 0 else (999.0 if gross_win > 0 else 0.0)
+    )
     result.max_dd_pct = max_dd
     result.avg_bars_held = sum(bars_held_list) / len(bars_held_list) if bars_held_list else 0.0
     result.trades_list = trades_list
@@ -536,6 +581,7 @@ def run_backtest(
 # ---------------------------------------------------------------------------
 # Report writer
 # ---------------------------------------------------------------------------
+
 
 def _develop_trades(result: BacktestResult) -> list[Trade]:
     """Return trades whose entry is in the develop window."""
@@ -804,8 +850,10 @@ def write_report(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     import argparse
+
     parser = argparse.ArgumentParser(description="RSI + RSI-MA + HH/LL Backtest")
     parser.add_argument("--pairs", default=",".join(PAIRS))
     parser.add_argument("--days", type=int, default=58)
@@ -856,21 +904,24 @@ def main() -> int:
             for tp, sl in tp_sl_combos:
                 for cb in confirm_bars_options:
                     for adx_on in adx_options:
-                        configs.append({
-                            "variant": variant,
-                            "rsi_overbought": ob,
-                            "rsi_oversold": os_,
-                            "tp_atr_mult": tp,
-                            "sl_atr_mult": sl,
-                            "confirm_bars": cb,
-                            "use_adx_filter": adx_on,
-                        })
+                        configs.append(
+                            {
+                                "variant": variant,
+                                "rsi_overbought": ob,
+                                "rsi_oversold": os_,
+                                "tp_atr_mult": tp,
+                                "sl_atr_mult": sl,
+                                "confirm_bars": cb,
+                                "use_adx_filter": adx_on,
+                            }
+                        )
 
     total_runs = len(configs) * len(pair_data)
     print(f"\n[RUNNING {total_runs} BACKTESTS]")
     print(f"  {len(configs)} configs × {len(pair_data)} pairs")
 
     import time
+
     all_results: list[BacktestResult] = []
     t0 = time.time()
     run_count = 0

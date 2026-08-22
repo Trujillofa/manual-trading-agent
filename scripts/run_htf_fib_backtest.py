@@ -33,9 +33,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.backtest.cost_book import CostBook, pip_size_for_pair
-
 from scripts.run_donchian_backtest import fetch_pair
+from src.backtest.cost_book import CostBook, pip_size_for_pair
 
 DEFAULT_PAIRS = (
     "EUR/USD",

@@ -380,13 +380,13 @@ class EnhancedBacktestEngine:
         data["rsi_ma"] = rsi_ma_series
         # EMA trend reference for the confidence modifier (aligned to bars)
         if self.use_ema_confidence:
-            data["ema_ref"] = calculate_ema(
-                data["close"].tolist(), self.ema_confidence_ref_period
-            )
+            data["ema_ref"] = calculate_ema(data["close"].tolist(), self.ema_confidence_ref_period)
         data["hh"] = rolling_highest_highs(data["high"].tolist(), lookback)
         data["ll"] = rolling_lowest_lows(data["low"].tolist(), lookback)
         # SMA: rolling mean with min_periods=sma_period so early bars are NaN
-        data["sma"] = data["close"].rolling(window=self.sma_period, min_periods=self.sma_period).mean()
+        data["sma"] = (
+            data["close"].rolling(window=self.sma_period, min_periods=self.sma_period).mean()
+        )
 
         # Prepare data lists
         opens = data["open"].tolist() if "open" in data.columns else data["close"].tolist()
@@ -624,7 +624,9 @@ class EnhancedBacktestEngine:
                         if self.rsi_ma_variant == "slope":
                             # Slope inflection: RSI-MA free-fall ending
                             ma_tail = [
-                                data["rsi_ma"].iloc[j] if not pd.isna(data["rsi_ma"].iloc[j]) else None
+                                data["rsi_ma"].iloc[j]
+                                if not pd.isna(data["rsi_ma"].iloc[j])
+                                else None
                                 for j in range(max(0, i - 10), i + 1)
                             ]
                             if not detect_rsi_slope_change(ma_tail, direction, lookback=3):
@@ -633,14 +635,22 @@ class EnhancedBacktestEngine:
                         elif self.rsi_ma_variant == "distance":
                             # Distance threshold: RSI must be at right distance from MA
                             if not rsi_ma_distance(
-                                rsi_val_now, rsi_ma_now, direction,
-                                min_distance=3.0, max_distance=self.rsi_ma_distance_max,
+                                rsi_val_now,
+                                rsi_ma_now,
+                                direction,
+                                min_distance=3.0,
+                                max_distance=self.rsi_ma_distance_max,
                             ):
                                 signal = SignalType.HOLD
 
                         elif self.rsi_ma_variant == "fresh":
                             # Fresh momentum: RSI moving AWAY from MA (still extreme)
-                            if signal == SignalType.BUY and rsi_val_now > rsi_ma_now or signal == SignalType.SELL and rsi_val_now < rsi_ma_now:
+                            if (
+                                signal == SignalType.BUY
+                                and rsi_val_now > rsi_ma_now
+                                or signal == SignalType.SELL
+                                and rsi_val_now < rsi_ma_now
+                            ):
                                 signal = SignalType.HOLD
 
                         elif self.rsi_ma_variant == "confidence":
@@ -652,7 +662,9 @@ class EnhancedBacktestEngine:
                                 for j in range(max(0, i - 10), i + 1)
                             ]
                             ma_tail = [
-                                data["rsi_ma"].iloc[j] if not pd.isna(data["rsi_ma"].iloc[j]) else None
+                                data["rsi_ma"].iloc[j]
+                                if not pd.isna(data["rsi_ma"].iloc[j])
+                                else None
                                 for j in range(max(0, i - 10), i + 1)
                             ]
                             if detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
@@ -670,7 +682,9 @@ class EnhancedBacktestEngine:
                                     for j in range(max(0, i - 10), i + 1)
                                 ]
                                 ma_tail = [
-                                    data["rsi_ma"].iloc[j] if not pd.isna(data["rsi_ma"].iloc[j]) else None
+                                    data["rsi_ma"].iloc[j]
+                                    if not pd.isna(data["rsi_ma"].iloc[j])
+                                    else None
                                     for j in range(max(0, i - 10), i + 1)
                                 ]
                                 if not detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
@@ -678,7 +692,12 @@ class EnhancedBacktestEngine:
 
                         elif self.rsi_ma_variant == "gate":
                             # Gate: SMA(RSI) must be outside 30/70 — mirrors live rsi_ma_gate_enabled
-                            if signal == SignalType.BUY and rsi_ma_now > self.rsi_oversold or signal == SignalType.SELL and rsi_ma_now < self.rsi_overbought:
+                            if (
+                                signal == SignalType.BUY
+                                and rsi_ma_now > self.rsi_oversold
+                                or signal == SignalType.SELL
+                                and rsi_ma_now < self.rsi_overbought
+                            ):
                                 signal = SignalType.HOLD
 
                         else:
@@ -690,7 +709,9 @@ class EnhancedBacktestEngine:
                                 for j in range(max(0, i - 10), i + 1)
                             ]
                             ma_tail = [
-                                data["rsi_ma"].iloc[j] if not pd.isna(data["rsi_ma"].iloc[j]) else None
+                                data["rsi_ma"].iloc[j]
+                                if not pd.isna(data["rsi_ma"].iloc[j])
+                                else None
                                 for j in range(max(0, i - 10), i + 1)
                             ]
                             if not detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
@@ -703,9 +724,9 @@ class EnhancedBacktestEngine:
                 if signal != SignalType.HOLD and self.use_ema_confidence:
                     ema_ref_now = data["ema_ref"].iloc[i]
                     if not pd.isna(ema_ref_now):
-                        aligned = (
-                            signal == SignalType.BUY and close > ema_ref_now
-                        ) or (signal == SignalType.SELL and close < ema_ref_now)
+                        aligned = (signal == SignalType.BUY and close > ema_ref_now) or (
+                            signal == SignalType.SELL and close < ema_ref_now
+                        )
                         if aligned:
                             confidence = min(1.0, confidence * self.ema_confidence_boost)
                         else:

@@ -12,7 +12,7 @@ Run three **new-premise** lanes under the existing honest harness discipline (gr
 
 | # | Lane | Premise (must stay new) | First allowed step | Stop / reopen rules |
 |---|------|-------------------------|--------------------|---------------------|
-| 1 | **PEAD data-proof** | Point-in-time US earnings surprise → short-horizon equity drift | `python -m research.new_edge.pead.data.verify_pead_data` on a **licensed** snapshot only | No relationship/strategy code until ledger `DATA_PASS`. Synthetic fixture ≠ PASS. |
+| 1 | **PEAD data-proof** | Point-in-time US earnings surprise → short-horizon equity drift | **BLOCKED 2026-08-22.** No licensed snapshot. Free sources still lack `estimate_observed_ts`. Zacks UNVERIFIED — owner sample required. | No relationship/strategy code until ledger `DATA_PASS`. Synthetic fixture ≠ PASS. Do not buy data without a written owner decision. |
 | 2 | **Listed-futures costs / roll** | Authorized futures instrument-class research with **contract-correct costs** (not yfinance continuous toys for KEEP) | Re-open source gate only with owner-approved data that clears Tier-A requirements in term-structure contracts | Free CME PA2 remains BLOCKED (coverage/OI). No Tier-B until DATA_PASS. Not a TSMOM retune. |
 | 3 | **Broker-true carry** | Overnight financing as primary return — **different account/broker** with nonzero long/short swaps | Prove nonzero swaps via statement/API → replace template JSON → re-run `verify_carry_data` + `gross_carry_test` | **CLOSED 2026-08-13:** Vantage pip-correct gross thin PASS → net+IS/OOS **DISCARD_REAL_DATA** (OOS PF 1.043 < 1.20). No leg retune. Hetzner cTrader zero-swap stays **CLOSED_DISCARD**. |
 
@@ -25,7 +25,7 @@ Run three **new-premise** lanes under the existing honest harness discipline (gr
 ## Execution order (serial, fail-fast)
 
 1. ETR price-basis audit — **done 2026-08-22** (unblocks honest reading of live shadow logs).
-2. PEAD: only if a real snapshot path is available; otherwise leave `BLOCKED` with provenance update.
+2. PEAD — **BLOCKED 2026-08-22** (no licensed snapshot; provenance refreshed). Next PEAD step is an owner-approved Zacks (or equivalent) sample, then `verify_pead_data` only.
 3. Futures source gate: owner data decision required before spend/code beyond audit docs.
 4. Carry: only after a **new** broker account proves nonzero swaps.
 
@@ -53,6 +53,7 @@ Do **not** run all four strategy implementations in parallel. Parallel doc/audit
 | `docs/research/RESEARCH_LANES_PROGRAM_2026-08.md` | This program |
 | `research/new_edge/etr_shadow/` | Price-basis audit CLI + README |
 | `docs/research/etr_shadow/ETR_SHADOW_PRICE_BASIS_AUDIT_2026-08.md` | Written audit findings (prod 2026-08-22) |
+| `docs/research/pead/PEAD_SOURCE_AUDIT_RESULTS_2026-08.md` | PEAD source-audit refresh; still BLOCKED |
 | Lane pointers | Existing PEAD / term_structure / carry trees — no closed-lane retunes |
 
 ## Ledger

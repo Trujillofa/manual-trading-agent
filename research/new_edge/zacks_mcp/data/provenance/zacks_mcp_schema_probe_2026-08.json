@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "lane": "zacks_mcp",
+  "stage": "schema_probe",
+  "probed_at_utc": "2026-08-22T18:28:00Z",
+  "endpoint": "https://mcp.zacksdata.com",
+  "cursor_config": "~/.cursor/mcp.json server id zacks",
+  "attribution": "Source: Zacks Investment Research. This inventory stores tool/column names and period-end dates only. No statement values or holdings weights are pinned.",
+  "tools": [
+    "get_company_snapshot",
+    "get_income_statement",
+    "get_balance_sheet",
+    "get_cash_flow",
+    "get_etf_holdings"
+  ],
+  "snapshot_columns": [
+    "ticker",
+    "period_end",
+    "type",
+    "revenue",
+    "gross_profit",
+    "operating_income",
+    "net_income",
+    "diluted_eps",
+    "ebitda",
+    "total_assets",
+    "total_liabilities",
+    "total_equity",
+    "operating_cash_flow",
+    "cash"
+  ],
+  "income_columns": [
+    "ticker",
+    "period_end",
+    "type",
+    "revenue",
+    "cogs",
+    "gross_profit",
+    "rd_expense",
+    "sga",
+    "operating_income",
+    "interest_expense",
+    "pretax_income",
+    "income_tax",
+    "net_income",
+    "eps_basic",
+    "eps_diluted",
+    "ebit",
+    "ebitda"
+  ],
+  "etf_holdings_columns": [
+    "ticker",
+    "name",
+    "weight_pct",
+    "shares",
+    "pct_chg_52w",
+    "zacks_covered",
+    "as_of_epoch",
+    "note"
+  ],
+  "etf_tool_params": ["symbol", "top_n"],
+  "etf_has_as_of_history_param": false,
+  "pead_fields_present": [],
+  "pead_fields_absent": [
+    "estimate_observed_ts",
+    "announcement_ts",
+    "consensus_eps",
+    "actual_eps"
+  ],
+  "live_probe": {
+    "snapshot_annual": {
+      "tickers": ["AAPL"],
+      "periods_requested": 40,
+      "period_ends": [
+        "2025-09-30",
+        "2024-09-30",
+        "2023-09-30",
+        "2022-09-30",
+        "2021-09-30"
+      ]
+    },
+    "snapshot_quarterly": {
+      "tickers": ["AAPL"],
+      "periods_requested": 12,
+      "oldest_period_end": "2023-09-30",
+      "newest_period_end": "2026-06-30"
+    },
+    "income_annual": {
+      "tickers": ["NEM"],
+      "periods_requested": 8,
+      "period_ends": [
+        "2025-12-31",
+        "2024-12-31",
+        "2023-12-31",
+        "2022-12-31",
+        "2021-12-31"
+      ]
+    },
+    "etf_holdings": {
+      "symbols": ["SPY", "GDX"],
+      "as_of": "2026-08-22",
+      "top_n_requested": 5
+    }
+  }
+}

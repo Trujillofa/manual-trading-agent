@@ -96,6 +96,7 @@ Schema (one JSON object per line):
 - Vol-regime compression breakout: **DISCARD** (OOS net PF 0.782)
 - COT positioning reversal (23-market fixed universe): relationship test failed OOS; lane closed
 - Term-structure roll yield (commodity futures, Tier A): **DATA_BLOCKED** until source gate passes (individual contract-month records, ≥10/12 markets, ≥15 years)
+- Zacks MCP (`zacks` in `~/.cursor/mcp.json`): **SCHEMA_PASS / ALPHA_BLOCKED** (2026-08-22). Statements + current ETF holdings only; 5y annual history; no `estimate_observed_ts`. Does **not** unblock PEAD. See `docs/research/zacks_mcp/ZACKS_MCP_CONTRACT_2026-08-22.md`.
 - **Next action:** Run the term-structure **source gate only** (`docs/research/term_structure/ROLL_YIELD_DATA_MANIFEST_2026-06.md`). Evaluate free CME settlement stitching vs paid providers. Record `DATA_PASS` or `BLOCKED` in the ledger. Do **not** write strategy logic until the gate clears. Do **not** reopen HTF Fibonacci or any closed FX directional-TA lane.
 
 ## How to Start a New Lane

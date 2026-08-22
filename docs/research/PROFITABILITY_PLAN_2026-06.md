@@ -337,3 +337,4 @@ No KEEP candidate emerged. Next work must define a **genuinely new premise** per
 3. Defer microstructure / execution-quality research unless attached to a future gross-positive strategy.
 4. Any new research lane requires a new contract, data proof, and pre-written gates before code.
 5. Consult [`GROK_RESEARCH_LOOP_ENGINEERING.md`](GROK_RESEARCH_LOOP_ENGINEERING.md) and update the ledger on every run.
+6. Zacks MCP lane is open as schema-only (`docs/research/zacks_mcp/`). Do not write relationship code, and do not treat it as a PEAD sample, until a licensed historical extract records `DATA_PASS`.

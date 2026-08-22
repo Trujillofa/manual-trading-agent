@@ -355,40 +355,7 @@ def run_config(
                 sl = entry_price + pending_atr * sl_mult
             pending_signal = None
 
-        rsi_15 = cache.rsi_15m[i]
-        if rsi_15 is None:
-            continue
-        rsi_1h_raw = cache.rsi_1h_series.asof(ts)
-        rsi_30m_raw = cache.rsi_30m_series.asof(ts)
-        if pd.isna(rsi_1h_raw) or pd.isna(rsi_30m_raw):
-            continue
-        rsi_1h = float(rsi_1h_raw)
-        rsi_30 = float(rsi_30m_raw)
-
-        atr = cache.atr[i]
-        if atr is None or atr <= 0:
-            continue
-
-        all_oversold = rsi_1h < rsi_os and rsi_30 < rsi_os and rsi_15 < rsi_os
-        all_overbought = rsi_1h > rsi_ob and rsi_30 > rsi_ob and rsi_15 > rsi_ob
-        aligned = all_oversold or all_overbought
-        current_dir = "buy" if all_oversold else ("sell" if all_overbought else None)
-
-        if aligned and current_dir:
-            if alignment_direction == current_dir and alignment_start is not None:
-                bars_since = i - alignment_start
-            else:
-                alignment_start = i
-                alignment_direction = current_dir
-                bars_since = 0
-        else:
-            alignment_start = None
-            alignment_direction = None
-            bars_since = 0
-
-        within_window = confirm_bars == 0 or bars_since <= confirm_bars
-
-        # Manage open position
+        # Manage open position (never skipped by indicator continues)
         if position is not None:
             exit_price = None
             exit_reason = ""
@@ -436,6 +403,39 @@ def run_config(
                     )
                 )
                 position = None
+
+        rsi_15 = cache.rsi_15m[i]
+        if rsi_15 is None:
+            continue
+        rsi_1h_raw = cache.rsi_1h_series.asof(ts)
+        rsi_30m_raw = cache.rsi_30m_series.asof(ts)
+        if pd.isna(rsi_1h_raw) or pd.isna(rsi_30m_raw):
+            continue
+        rsi_1h = float(rsi_1h_raw)
+        rsi_30 = float(rsi_30m_raw)
+
+        atr = cache.atr[i]
+        if atr is None or atr <= 0:
+            continue
+
+        all_oversold = rsi_1h < rsi_os and rsi_30 < rsi_os and rsi_15 < rsi_os
+        all_overbought = rsi_1h > rsi_ob and rsi_30 > rsi_ob and rsi_15 > rsi_ob
+        aligned = all_oversold or all_overbought
+        current_dir = "buy" if all_oversold else ("sell" if all_overbought else None)
+
+        if aligned and current_dir:
+            if alignment_direction == current_dir and alignment_start is not None:
+                bars_since = i - alignment_start
+            else:
+                alignment_start = i
+                alignment_direction = current_dir
+                bars_since = 0
+        else:
+            alignment_start = None
+            alignment_direction = None
+            bars_since = 0
+
+        within_window = confirm_bars == 0 or bars_since <= confirm_bars
 
         if position is not None or not aligned or not within_window:
             continue
@@ -628,8 +628,8 @@ def develop_metrics(
     cutoffs: dict[str, pd.Timestamp],
     *,
     holdout: bool,
-) -> tuple[int, float, float]:
-    """Return develop/holdout trade count, compounded pnl%, and PF."""
+) -> tuple[int, float, float, float]:
+    """Return develop/holdout trade count, compounded pnl%, PF, and win rate."""
 
     window: list[TradeRecord] = []
     for result in results:
@@ -644,10 +644,11 @@ def develop_metrics(
     gross_win = sum(p for p in pnls if p > 0)
     gross_loss = sum(abs(p) for p in pnls if p <= 0)
     pf = gross_win / gross_loss if gross_loss > 0 else (999.0 if gross_win > 0 else 0.0)
+    wr = sum(1 for trade in window if trade.pnl_pct > 0) / trades if trades else 0.0
     equity = 1.0
     for pnl in pnls:
         equity *= 1.0 + pnl
-    return trades, (equity - 1.0) * 100.0, pf
+    return trades, (equity - 1.0) * 100.0, pf, wr
 
 
 def write_outputs(
@@ -727,9 +728,8 @@ def write_outputs(
         wr = total_wins / total_trades if total_trades else 0.0
         pairs_profitable = sum(1 for r in crs if r.total_pnl_pct > 0)
         if cutoffs:
-            dev_trades, dev_pnl, dev_pf = develop_metrics(crs, cutoffs, holdout=False)
+            dev_trades, dev_pnl, dev_pf, rank_wr = develop_metrics(crs, cutoffs, holdout=False)
             rank_trades, rank_pnl, rank_pf = dev_trades, dev_pnl, dev_pf
-            rank_wr = wr
         else:
             rank_trades, rank_pnl, rank_pf, rank_wr = total_trades, avg_pnl_pct, pf, wr
         agg_rows.append(
@@ -963,7 +963,7 @@ def main() -> int:
 
     ranked = []
     for label, crs in config_agg.items():
-        dev_trades, dev_pnl, dev_pf = develop_metrics(crs, cutoffs, holdout=False)
+        dev_trades, dev_pnl, dev_pf, _dev_wr = develop_metrics(crs, cutoffs, holdout=False)
         if dev_trades < 10:
             continue
         ranked.append((label, dev_trades, dev_pnl, dev_pf))

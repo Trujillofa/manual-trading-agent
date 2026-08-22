@@ -139,3 +139,169 @@ def test_swapping_holdout_metrics_does_not_change_smc_selection_rank() -> None:
     ranked_swapped = sorted(swapped, key=lambda row: selection_score(row[1], row[2]), reverse=True)
     assert [row[0] for row in ranked] == [row[0] for row in ranked_swapped] == ["a", "b"]
     assert selection_score(develop_a, juicy_holdout) == selection_score(develop_a, awful_holdout)
+
+
+def test_empty_frame_dates_are_epoch_not_wall_clock() -> None:
+    engine = EnhancedBacktestEngine()
+    data = pd.DataFrame(columns=["open", "high", "low", "close"])
+    result = engine.run("EUR/USD", data)
+    assert result.start_date == result.end_date == pd.Timestamp("1970-01-01").to_pydatetime()
+    assert result.total_trades == 0
+
+
+def test_short_frame_dates_come_from_index() -> None:
+    engine = EnhancedBacktestEngine()
+    data = _make_ohlcv(n=20)
+    result = engine.run("EUR/USD", data, lookback=20, atr_period=14)
+    assert pd.Timestamp(result.start_date) == pd.Timestamp(data.index[0])
+    assert pd.Timestamp(result.end_date) == pd.Timestamp(data.index[-1])
+
+
+def test_closed_trade_pnl_matches_slipped_fills() -> None:
+    data = _make_ohlcv(n=240, seed=3)
+    data["open"] = data["close"] - 0.35
+    data["high"] = data[["open", "high", "close"]].max(axis=1) + 0.05
+    data["low"] = data[["open", "low", "close"]].min(axis=1) - 0.05
+    engine = EnhancedBacktestEngine(
+        use_patterns=False,
+        use_divergence=False,
+        use_sma_alignment=False,
+        use_rsi_ma=False,
+        adx_threshold=100.0,
+        max_hold_bars=12,
+    )
+    result = engine.run("EUR/USD", data)
+    assert result.trades
+    book = engine.cost_book
+    pip = 0.0001
+    balance = engine.initial_balance
+    for trade in result.trades:
+        if trade.exit_reason in {"tp", "sl"}:
+            raw_level = trade.tp_price if trade.exit_reason == "tp" else trade.sl_price
+            assert trade.exit_price == pytest.approx(book.exit_fill(raw_level, trade.side, pip))
+        expected, _pct = engine._fill_cash_pnl(
+            side=trade.side,
+            entry_price=trade.entry_price,
+            exit_price=trade.exit_price,
+            sl_price=trade.sl_price,
+            balance=balance,
+        )
+        assert trade.pnl == pytest.approx(expected)
+        balance += trade.pnl
+
+
+def test_donchian_develop_dd_ignores_full_sample_drawdown() -> None:
+    from scripts.run_donchian_backtest import ConfigResult, TradeRecord, develop_metrics
+
+    cutoff = pd.Timestamp("2024-06-01")
+    develop_trade = TradeRecord(
+        pair="EUR/USD",
+        direction="buy",
+        entry_time=pd.Timestamp("2024-01-15"),
+        exit_time=pd.Timestamp("2024-01-16"),
+        entry_price=1.1,
+        exit_price=1.11,
+        tp_price=1.12,
+        sl_price=1.09,
+        pnl=100.0,
+        pnl_pct=0.1,
+        exit_reason="tp",
+        bars_held=4,
+        rsi_15m=25.0,
+        rsi_30m=25.0,
+        rsi_1h=25.0,
+    )
+    holdout_loss = TradeRecord(
+        pair="EUR/USD",
+        direction="buy",
+        entry_time=pd.Timestamp("2024-07-15"),
+        exit_time=pd.Timestamp("2024-07-16"),
+        entry_price=1.1,
+        exit_price=1.0,
+        tp_price=1.12,
+        sl_price=1.0,
+        pnl=-50_000.0,
+        pnl_pct=-50.0,
+        exit_reason="sl",
+        bars_held=4,
+        rsi_15m=25.0,
+        rsi_30m=25.0,
+        rsi_1h=25.0,
+    )
+    result = ConfigResult(
+        pair="EUR/USD",
+        config_label="x",
+        upper_bound=70,
+        lower_bound=30,
+        use_fixed_pip=True,
+        tp_pips=20,
+        sl_pips=20,
+        tp_atr_mult=1,
+        sl_atr_mult=1,
+        lookback=20,
+        confirm_bars=5,
+        buffer_pips=2,
+        use_di_filter=False,
+        di_ratio=1.0,
+        use_adx_filter=False,
+        max_adx=25,
+        use_session=False,
+        use_mom_fade=False,
+        mom_fade_bars=3,
+        use_trailing=False,
+        trail_atr_mult=1.0,
+        use_breakeven=False,
+        be_trigger_pct=50,
+        use_time_exit=False,
+        max_bars_exit=16,
+        spread_pips=2,
+        commission_per_order=3,
+        slippage_pips=2,
+        max_drawdown_pct=80.0,
+        trades_list=[develop_trade, holdout_loss],
+    )
+    _n, _w, _pnl, _pf, max_dd = develop_metrics([result], {"EUR/USD": cutoff}, holdout=False)
+    assert max_dd < 1.0
+
+
+def test_pivot_develop_wr_ignores_holdout_trades() -> None:
+    from scripts.run_pivot_backtest import ConfigResult, TradeRecord, develop_metrics
+
+    cutoff = pd.Timestamp("2024-06-01")
+    develop_win = TradeRecord(
+        pair="EUR/USD",
+        direction="buy",
+        entry_price=1.1,
+        exit_price=1.11,
+        pnl_pct=1.0,
+        exit_reason="tp",
+        bars_held=2,
+        pivot_level="s1",
+        entry_time=pd.Timestamp("2024-01-15"),
+    )
+    holdout_loss = TradeRecord(
+        pair="EUR/USD",
+        direction="buy",
+        entry_price=1.1,
+        exit_price=1.0,
+        pnl_pct=-2.0,
+        exit_reason="sl",
+        bars_held=2,
+        pivot_level="s1",
+        entry_time=pd.Timestamp("2024-07-15"),
+    )
+    result = ConfigResult(
+        pair="EUR/USD",
+        config_label="WEEKLY_S1",
+        entry_type="WEEKLY",
+        level_set="S1",
+        proximity_pips=5,
+        confirm_bars=0,
+        tp_mult=1.0,
+        sl_mult=2.0,
+        win_rate=0.5,
+        trades_list=[develop_win, holdout_loss],
+    )
+    trades, _pnl, _pf, wr = develop_metrics([result], {"EUR/USD": cutoff}, holdout=False)
+    assert trades == 1
+    assert wr == pytest.approx(1.0)

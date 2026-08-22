@@ -365,6 +365,9 @@ def run_backtest(
     last_os_bar: int | None = None
     pending_sig: Literal["buy", "sell"] | None = None
     pending_rsi = (0.0, 0.0, 0.0)
+    pending_atr = 0.0
+    tp_price = 0.0
+    sl_price = 0.0
     result.develop_cutoff = idx15[int(len(idx15) * IS_FRACTION)] if idx15 else None
 
     for i in range(warmup, len(c15)):
@@ -379,7 +382,75 @@ def run_backtest(
             entry_price = costs.entry_fill(open_price, position, pip)
             entry_idx = i
             entry_rsi = pending_rsi
+            tp_dist = pending_atr * tp_atr_mult
+            sl_dist = pending_atr * sl_atr_mult
+            if position == "buy":
+                tp_price = entry_price + tp_dist
+                sl_price = entry_price - sl_dist
+            else:
+                tp_price = entry_price - tp_dist
+                sl_price = entry_price + sl_dist
             pending_sig = None
+
+        # Manage open position (never skipped by indicator continues)
+        if position is not None:
+            exit_price_val = None
+            exit_reason = ""
+            if position == "buy":
+                if low_val <= sl_price:
+                    exit_price_val, exit_reason = sl_price, "sl"
+                elif high_val >= tp_price:
+                    exit_price_val, exit_reason = tp_price, "tp"
+            else:
+                if high_val >= sl_price:
+                    exit_price_val, exit_reason = sl_price, "sl"
+                elif low_val <= tp_price:
+                    exit_price_val, exit_reason = tp_price, "tp"
+
+            if exit_price_val is None and (i - entry_idx) >= max_bars_exit:
+                exit_price_val = close
+                exit_reason = "time"
+
+            if exit_price_val is not None:
+                eff_exit = costs.exit_fill(exit_price_val, position, pip)
+                sl_dist_actual = abs(entry_price - sl_price)
+                risk_pct = 0.01
+                pos_size = (balance * risk_pct / sl_dist_actual) if sl_dist_actual > 0 else 1
+                raw_pnl = (
+                    (eff_exit - entry_price) if position == "buy" else (entry_price - eff_exit)
+                )
+                gross_pnl = pos_size * raw_pnl
+                pnl = gross_pnl - costs.round_trip_commission_usd()
+                balance += pnl
+                trade_pnls.append(pnl)
+                bars_held_list.append(i - entry_idx)
+                peak = max(peak, balance)
+                dd = (peak - balance) / peak * 100 if peak > 0 else 0
+                max_dd = max(max_dd, dd)
+                trades_list.append(
+                    Trade(
+                        pair=pair,
+                        variant=variant,
+                        direction=position,
+                        entry_time=idx15[entry_idx],
+                        exit_time=ts,
+                        entry_price=entry_price,
+                        exit_price=exit_price_val,
+                        pnl_pct=pnl / balance * 100,
+                        exit_reason=exit_reason,
+                        bars_held=i - entry_idx,
+                        rsi_15m=entry_rsi[0],
+                        rsi_30m=entry_rsi[1],
+                        rsi_1h=entry_rsi[2],
+                    )
+                )
+                if exit_reason == "tp":
+                    result.tp_exits += 1
+                elif exit_reason == "sl":
+                    result.sl_exits += 1
+                else:
+                    result.time_exits += 1
+                position = None
 
         rsi_15 = rsi15[i]
         if rsi_15 is None:
@@ -478,75 +549,6 @@ def run_backtest(
             long_trigger = full_os and adx_ok and sess_ok and (not use_rsi_ma or rsi_ma_buy_ok)
             short_trigger = full_ob and adx_ok and sess_ok and (not use_rsi_ma or rsi_ma_sell_ok)
 
-        # Manage open position
-        if position is not None:
-            tp_dist = atr * tp_atr_mult
-            sl_dist = atr * sl_atr_mult
-
-            exit_price_val = None
-            exit_reason = ""
-            if position == "buy":
-                tp_p = entry_price + tp_dist
-                sl_p = entry_price - sl_dist
-                if low_val <= sl_p:
-                    exit_price_val, exit_reason = sl_p, "sl"
-                elif high_val >= tp_p:
-                    exit_price_val, exit_reason = tp_p, "tp"
-            else:
-                tp_p = entry_price - tp_dist
-                sl_p = entry_price + sl_dist
-                if high_val >= sl_p:
-                    exit_price_val, exit_reason = sl_p, "sl"
-                elif low_val <= tp_p:
-                    exit_price_val, exit_reason = tp_p, "tp"
-
-            if exit_price_val is None and (i - entry_idx) >= max_bars_exit:
-                exit_price_val = close
-                exit_reason = "time"
-
-            if exit_price_val is not None:
-                eff_exit = costs.exit_fill(exit_price_val, position, pip)
-                sl_dist_actual = (
-                    abs((entry_price - sl_dist) - entry_price) if position == "buy" else sl_dist
-                )
-                risk_pct = 0.01
-                pos_size = (balance * risk_pct / sl_dist_actual) if sl_dist_actual > 0 else 1
-                raw_pnl = (
-                    (eff_exit - entry_price) if position == "buy" else (entry_price - eff_exit)
-                )
-                gross_pnl = pos_size * raw_pnl
-                pnl = gross_pnl - costs.round_trip_commission_usd()
-                balance += pnl
-                trade_pnls.append(pnl)
-                bars_held_list.append(i - entry_idx)
-                peak = max(peak, balance)
-                dd = (peak - balance) / peak * 100 if peak > 0 else 0
-                max_dd = max(max_dd, dd)
-                trades_list.append(
-                    Trade(
-                        pair=pair,
-                        variant=variant,
-                        direction=position,
-                        entry_time=idx15[entry_idx],
-                        exit_time=ts,
-                        entry_price=entry_price,
-                        exit_price=exit_price_val,
-                        pnl_pct=pnl / balance * 100,
-                        exit_reason=exit_reason,
-                        bars_held=i - entry_idx,
-                        rsi_15m=entry_rsi[0],
-                        rsi_30m=entry_rsi[1],
-                        rsi_1h=entry_rsi[2],
-                    )
-                )
-                if exit_reason == "tp":
-                    result.tp_exits += 1
-                elif exit_reason == "sl":
-                    result.sl_exits += 1
-                else:
-                    result.time_exits += 1
-                position = None
-
         # Arm next-bar fill (never fill on the signal bar close)
         if position is None and pending_sig is None:
             sig: Literal["buy", "sell", None] = None
@@ -557,6 +559,7 @@ def run_backtest(
             if sig is not None and i + 1 < len(c15):
                 pending_sig = sig
                 pending_rsi = (rsi_15, rsi_30m, rsi_1h)
+                pending_atr = atr
 
     # Finalize
     wins = sum(1 for p in trade_pnls if p > 0)

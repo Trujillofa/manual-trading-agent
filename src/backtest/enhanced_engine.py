@@ -202,7 +202,10 @@ class EnhancedBacktestEngine:
         timestamp = pd.Timestamp(value)
         if pd.isna(timestamp):
             raise TypeError(f"backtest index value is not a timestamp: {value!r}")
-        return timestamp.to_pydatetime()
+        converted = timestamp.to_pydatetime()
+        if not isinstance(converted, datetime):
+            raise TypeError(f"backtest index value is not a timestamp: {value!r}")
+        return converted
 
     def _check_tp_sl_hit(
         self,
@@ -230,6 +233,24 @@ class EnhancedBacktestEngine:
             if low <= tp_price:
                 return "tp"
         return None
+
+    def _fill_cash_pnl(
+        self,
+        *,
+        side: Literal["buy", "sell"],
+        entry_price: float,
+        exit_price: float,
+        sl_price: float,
+        balance: float,
+    ) -> tuple[float, float]:
+        """Return (cash_pnl, price_return) from slipped fills, risk-sized on SL."""
+
+        raw = (exit_price - entry_price) if side == "buy" else (entry_price - exit_price)
+        sl_dist = abs(entry_price - sl_price)
+        size = (balance * self.risk_per_trade / sl_dist) if sl_dist > 0 else 1.0
+        pnl = size * raw - self.cost_book.round_trip_commission_usd()
+        pnl_pct = raw / entry_price if entry_price else 0.0
+        return pnl, pnl_pct
 
     def _generate_signal(
         self,
@@ -342,11 +363,15 @@ class EnhancedBacktestEngine:
             EnhancedBacktestResult with detailed metrics
         """
         if data.empty or len(data) < lookback + atr_period:
-            now = datetime.now()
+            if len(data.index) > 0:
+                start = self._index_to_datetime(data.index[0])
+                end = self._index_to_datetime(data.index[-1])
+            else:
+                start = end = datetime(1970, 1, 1)
             return EnhancedBacktestResult(
                 symbol=symbol,
-                start_date=now,
-                end_date=now,
+                start_date=start,
+                end_date=end,
                 total_trades=0,
                 wins=0,
                 losses=0,
@@ -411,7 +436,6 @@ class EnhancedBacktestEngine:
         entry_divergence: str | None = None
         entry_rsi = 0.0
         pip_size = pip_size_for_pair(symbol)
-        commission = self.cost_book.round_trip_commission_usd()
 
         trades: list[Trade] = []
         equity_curve: list[float] = [self.initial_balance]
@@ -484,23 +508,19 @@ class EnhancedBacktestEngine:
                 result = self._check_tp_sl_hit(position, entry_price, tp_price, sl_price, high, low)
 
                 if result:
-                    # Position closed
-                    if result == "tp":
-                        if position == "buy":
-                            pnl_pct = (tp_price - entry_price) / entry_price
-                            pnl = balance * self.risk_per_trade * (self.reward_ratio / 2)
-                        else:
-                            pnl_pct = (entry_price - tp_price) / entry_price
-                            pnl = balance * self.risk_per_trade * (self.reward_ratio / 2)
-                        exit_reason: Literal["tp", "sl", "time", "signal"] = "tp"
-                    else:  # SL hit
-                        pnl_pct = -self.risk_per_trade
-                        pnl = -balance * self.risk_per_trade
-                        exit_reason = "sl"
-
+                    # Position closed — cash PnL from slipped fills, sized off SL distance.
                     raw_exit = tp_price if result == "tp" else sl_price
                     exit_price = self.cost_book.exit_fill(raw_exit, position, pip_size)
-                    pnl -= commission
+                    pnl, pnl_pct = self._fill_cash_pnl(
+                        side=position,
+                        entry_price=entry_price,
+                        exit_price=exit_price,
+                        sl_price=sl_price,
+                        balance=balance,
+                    )
+                    exit_reason: Literal["tp", "sl", "time", "signal"] = (
+                        "tp" if result == "tp" else "sl"
+                    )
                     balance += pnl
                     if balance > peak_balance:
                         peak_balance = balance
@@ -546,11 +566,13 @@ class EnhancedBacktestEngine:
                 # Check max hold time
                 if i - entry_idx >= self.max_hold_bars:
                     exit_price = self.cost_book.exit_fill(close, position, pip_size)
-                    if position == "buy":
-                        pnl_pct = (exit_price - entry_price) / entry_price
-                    else:
-                        pnl_pct = (entry_price - exit_price) / entry_price
-                    pnl = balance * pnl_pct - commission
+                    pnl, pnl_pct = self._fill_cash_pnl(
+                        side=position,
+                        entry_price=entry_price,
+                        exit_price=exit_price,
+                        sl_price=sl_price,
+                        balance=balance,
+                    )
                     balance += pnl
 
                     trade = Trade(
@@ -779,13 +801,13 @@ class EnhancedBacktestEngine:
         )
         sharpe = (avg_return * 252) / (std_return * (252**0.5)) if std_return > 0 else 0
 
-        start_date = data.index[max(lookback, atr_period + 1)]
-        end_date = data.index[-1]
+        start_date = self._index_to_datetime(data.index[max(lookback, atr_period + 1)])
+        end_date = self._index_to_datetime(data.index[-1])
 
         return EnhancedBacktestResult(
             symbol=symbol,
-            start_date=start_date if isinstance(start_date, datetime) else datetime.now(),
-            end_date=end_date if isinstance(end_date, datetime) else datetime.now(),
+            start_date=start_date,
+            end_date=end_date,
             total_trades=len(trades),
             wins=wins,
             losses=losses,

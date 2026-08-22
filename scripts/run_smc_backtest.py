@@ -12,7 +12,13 @@ This script evaluates preregistered interpretations plus an autosearch space:
 * ``choch_reversal`` — CHoCH only (character-change reversals).
 
 Execution mirrors ``scripts/run_htf_fib_backtest.py``: signal on close, fill next bar
-open, pessimistic stop-first intrabar exits, 2 pip spread/slippage, 1% equity risk.
+open, pessimistic stop-first intrabar exits, frozen CostBook (2 pip spread/slippage,
+$3/side), 1% equity risk.
+
+Preregistered ranking uses develop/IS only. Holdout/OOS is a judge, never a
+selection input. Offline only: not a live-go or promote path.
+
+Clock: Dukascopy/cached bars are UTC. This runner is not session-aware.
 """
 
 from __future__ import annotations
@@ -46,6 +52,7 @@ from scripts.run_htf_fib_backtest import (
     load_usd_conversion_closes,
     verdict,
 )
+from src.backtest.cost_book import CostBook
 
 BULLISH_LEG = 1
 BEARISH_LEG = 0
@@ -478,8 +485,11 @@ def run_prepared_backtest(
     entry_index = 0
     entry_time = prepared.timestamps[0]
     pip = _pip_size(pair)
-    spread = spread_pips * pip
-    slippage = slippage_pips * pip
+    costs = CostBook(
+        spread_pips=spread_pips,
+        slippage_pips=slippage_pips,
+        commission_usd_per_lot_side=commission_per_order,
+    )
 
     for i, timestamp in enumerate(prepared.timestamps):
         open_price = prepared.opens[i]
@@ -495,11 +505,11 @@ def run_prepared_backtest(
             entry_mid = open_price
             stop_distance = max(pending_atr * config.sl_atr, pip * 5)
             if position == "long":
-                entry_price = entry_mid + spread + slippage
+                entry_price = costs.entry_fill(entry_mid, position, pip)
                 stop_price = entry_price - stop_distance
                 target_price = entry_price + pending_atr * config.tp_atr
             else:
-                entry_price = entry_mid - spread - slippage
+                entry_price = costs.entry_fill(entry_mid, position, pip)
                 stop_price = entry_price + stop_distance
                 target_price = entry_price - pending_atr * config.tp_atr
             risk_distance = abs(entry_price - stop_price)
@@ -509,21 +519,21 @@ def run_prepared_backtest(
             exit_price: float | None = None
             exit_reason = ""
             if i - entry_index > config.max_hold_bars:
-                exit_price = open_price + (slippage if position == "short" else -slippage)
+                exit_price = costs.exit_fill(open_price, position, pip)
                 exit_reason = "time"
             elif position == "long":
                 if low <= stop_price:
-                    exit_price = stop_price - slippage
+                    exit_price = costs.exit_fill(stop_price, position, pip)
                     exit_reason = "stop"
                 elif high >= target_price:
-                    exit_price = target_price - slippage
+                    exit_price = costs.exit_fill(target_price, position, pip)
                     exit_reason = "target"
             else:
                 if high >= stop_price:
-                    exit_price = stop_price + slippage
+                    exit_price = costs.exit_fill(stop_price, position, pip)
                     exit_reason = "stop"
                 elif low <= target_price:
-                    exit_price = target_price + slippage
+                    exit_price = costs.exit_fill(target_price, position, pip)
                     exit_reason = "target"
             if exit_price is not None and risk_distance > 0:
                 net_move = (
@@ -544,7 +554,7 @@ def run_prepared_backtest(
                 risk_cash = initial_balance * risk_fraction
                 quantity = risk_cash / (risk_distance * usd_per_quote)
                 lots = quantity / 100_000.0
-                commission = 2.0 * commission_per_order
+                commission = costs.round_trip_commission_usd()
                 net_cash = quantity * net_move * usd_per_quote - commission
                 net_r = net_cash / risk_cash if risk_cash > 0 else 0.0
                 net_pnl_pct = net_cash / initial_balance * 100.0
@@ -684,11 +694,30 @@ class EvalRow:
 
 
 def score_window_stats(is_stats: WindowStats, oos_stats: WindowStats) -> float:
+    """Autosearch score on a *validation* window (second arg), not final holdout.
+
+    ``research.smc_autosearch`` passes IS + validation here. The untouched
+    holdout never enters this function. Preregistered ranking in this script
+    uses ``selection_score`` instead so holdout cannot change rank.
+    """
     if oos_stats.trades < 1:
         return float("-inf")
     overfit_gap = max(0.0, is_stats.total_net_pnl_pct - oos_stats.total_net_pnl_pct)
     lown = max(0, MIN_WINDOW_TRADES - oos_stats.trades)
     return float(oos_stats.total_net_pnl_pct - 0.5 * overfit_gap - 0.25 * lown)
+
+
+def selection_score(develop: WindowStats, holdout: WindowStats | None = None) -> float:
+    """Rank preregistered configs on develop/IS only.
+
+    ``holdout`` is accepted for call-site symmetry and ignored. Swapping
+    holdout metrics must not change rank.
+    """
+    del holdout
+    if develop.trades < 1:
+        return float("-inf")
+    lown = max(0, MIN_WINDOW_TRADES - develop.trades)
+    return float(develop.total_net_pnl_pct - 0.25 * lown)
 
 
 def evaluate_config_on_pairs(
@@ -701,7 +730,7 @@ def evaluate_config_on_pairs(
     ins = aggregate_window(results, cutoff_by_pair, oos=False)
     oos = aggregate_window(results, cutoff_by_pair, oos=True)
     decision, reasons = verdict(ins, oos)
-    score = score_window_stats(ins, oos)
+    score = selection_score(ins, oos)
     rationale = "; ".join(reasons) if reasons else "All minimum gates passed."
     return EvalRow(config.name, score, decision, ins, oos, rationale)
 
@@ -749,7 +778,9 @@ def write_comparison_report(
             "",
             "## Notes",
             "",
-            "- Autosearch ranking uses validation net PnL minus overfit and low-N penalties.",
+            "- Preregistered ranking uses develop/IS only; holdout is unused for selection.",
+            "- Autosearch ranking uses validation net PnL minus overfit and low-N penalties "
+            "(final holdout stays untouched).",
             "- A top score does not imply KEEP gates passed; check Verdict column.",
             "- Tested entries include structure markers, CHoCH, order-block retests, and HTF swing maps.",
             "",

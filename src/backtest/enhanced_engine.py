@@ -1,4 +1,23 @@
-"""Enhanced backtesting engine with realistic TP/SL simulation."""
+"""Enhanced backtesting engine with realistic TP/SL simulation.
+
+Replay-only: one walk of a supplied OHLC frame. This engine does not rank
+configs, does not promote to live, and does not send broker orders.
+
+Causality
+---------
+Signals are taken from a *closed* bar. Market entries fill at the *next*
+bar open (spread + slippage). Same-bar TP and SL use stop-first (pessimistic).
+
+Clock
+-----
+Not session-aware. Bar timestamps come from the frame index as-is. Missing or
+non-timestamp indexes raise; the engine never substitutes wall-clock ``now``.
+
+Costs
+-----
+Uses a frozen ``CostBook`` (pips + USD/lot/side). See
+``src.backtest.cost_book``.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +28,7 @@ from typing import Literal, cast
 
 import pandas as pd
 
+from src.backtest.cost_book import CostBook, pip_size_for_pair
 from src.indicators.adx import calculate_adx
 from src.indicators.atr import calculate_atr
 from src.indicators.candlestick import (
@@ -101,6 +121,9 @@ class EnhancedBacktestEngine:
         reward_ratio: float = 1.5,
         sl_atr_multiplier: float = 2.0,
         spread_pips: float = 2.0,
+        slippage_pips: float = 2.0,
+        commission_usd_per_lot_side: float = 3.0,
+        lot_size: float = 1.0,
         adx_threshold: float = 25.0,
         max_hold_bars: int = 96,  # Max 24 hours at 15m bars
         use_patterns: bool = True,
@@ -124,7 +147,12 @@ class EnhancedBacktestEngine:
         self.risk_per_trade = risk_per_trade
         self.reward_ratio = reward_ratio
         self.sl_atr_multiplier = sl_atr_multiplier
-        self.spread_pips = spread_pips
+        self.cost_book = CostBook(
+            spread_pips=spread_pips,
+            slippage_pips=slippage_pips,
+            commission_usd_per_lot_side=commission_usd_per_lot_side,
+            lot_size=lot_size,
+        )
         self.adx_threshold = adx_threshold
         self.max_hold_bars = max_hold_bars
         self.use_patterns = use_patterns
@@ -144,6 +172,12 @@ class EnhancedBacktestEngine:
         self.ema_confidence_boost = ema_confidence_boost
         self.ema_confidence_dampen = ema_confidence_dampen
 
+    @property
+    def spread_pips(self) -> float:
+        """Entry half-spread in pair pips (from the frozen cost book)."""
+
+        return self.cost_book.spread_pips
+
     def _calculate_rsi_column(self, data: pd.DataFrame, period: int = 14) -> pd.Series:
         """Calculate RSI column for dataframe."""
         window = period + 1
@@ -158,8 +192,20 @@ class EnhancedBacktestEngine:
         )
 
     def _index_to_datetime(self, value: object) -> datetime:
-        """Normalize a dataframe index value into a datetime."""
-        return value if isinstance(value, datetime) else datetime.now()
+        """Normalize a dataframe index value into a datetime.
+
+        Wall-clock ``datetime.now()`` is not used — that would leak the
+        machine clock into replay artifacts.
+        """
+        if isinstance(value, datetime):
+            return value
+        timestamp = pd.Timestamp(value)
+        if pd.isna(timestamp):
+            raise TypeError(f"backtest index value is not a timestamp: {value!r}")
+        converted = timestamp.to_pydatetime()
+        if not isinstance(converted, datetime):
+            raise TypeError(f"backtest index value is not a timestamp: {value!r}")
+        return converted
 
     def _check_tp_sl_hit(
         self,
@@ -169,21 +215,42 @@ class EnhancedBacktestEngine:
         sl_price: float,
         high: float,
         low: float,
-    ) -> Literal["tp", "sl", None]:
-        """Check if TP or SL was hit during a bar."""
+    ) -> Literal["tp", "sl"] | None:
+        """Check if TP or SL was hit during a bar.
+
+        Stop-first when both levels trade in the same bar (pessimistic).
+        ``entry_price`` is unused for the hit test; kept for call-site stability.
+        """
+        del entry_price
         if side == "buy":
-            # For long: TP above entry, SL below entry
-            if high >= tp_price:
-                return "tp"
             if low <= sl_price:
                 return "sl"
-        else:
-            # For short: TP below entry, SL above entry
-            if low <= tp_price:
+            if high >= tp_price:
                 return "tp"
+        else:
             if high >= sl_price:
                 return "sl"
+            if low <= tp_price:
+                return "tp"
         return None
+
+    def _fill_cash_pnl(
+        self,
+        *,
+        side: Literal["buy", "sell"],
+        entry_price: float,
+        exit_price: float,
+        sl_price: float,
+        balance: float,
+    ) -> tuple[float, float]:
+        """Return (cash_pnl, price_return) from slipped fills, risk-sized on SL."""
+
+        raw = (exit_price - entry_price) if side == "buy" else (entry_price - exit_price)
+        sl_dist = abs(entry_price - sl_price)
+        size = (balance * self.risk_per_trade / sl_dist) if sl_dist > 0 else 1.0
+        pnl = size * raw - self.cost_book.round_trip_commission_usd()
+        pnl_pct = raw / entry_price if entry_price else 0.0
+        return pnl, pnl_pct
 
     def _generate_signal(
         self,
@@ -296,11 +363,15 @@ class EnhancedBacktestEngine:
             EnhancedBacktestResult with detailed metrics
         """
         if data.empty or len(data) < lookback + atr_period:
-            now = datetime.now()
+            if len(data.index) > 0:
+                start = self._index_to_datetime(data.index[0])
+                end = self._index_to_datetime(data.index[-1])
+            else:
+                start = end = datetime(1970, 1, 1)
             return EnhancedBacktestResult(
                 symbol=symbol,
-                start_date=now,
-                end_date=now,
+                start_date=start,
+                end_date=end,
                 total_trades=0,
                 wins=0,
                 losses=0,
@@ -334,13 +405,13 @@ class EnhancedBacktestEngine:
         data["rsi_ma"] = rsi_ma_series
         # EMA trend reference for the confidence modifier (aligned to bars)
         if self.use_ema_confidence:
-            data["ema_ref"] = calculate_ema(
-                data["close"].tolist(), self.ema_confidence_ref_period
-            )
+            data["ema_ref"] = calculate_ema(data["close"].tolist(), self.ema_confidence_ref_period)
         data["hh"] = rolling_highest_highs(data["high"].tolist(), lookback)
         data["ll"] = rolling_lowest_lows(data["low"].tolist(), lookback)
         # SMA: rolling mean with min_periods=sma_period so early bars are NaN
-        data["sma"] = data["close"].rolling(window=self.sma_period, min_periods=self.sma_period).mean()
+        data["sma"] = (
+            data["close"].rolling(window=self.sma_period, min_periods=self.sma_period).mean()
+        )
 
         # Prepare data lists
         opens = data["open"].tolist() if "open" in data.columns else data["close"].tolist()
@@ -348,8 +419,14 @@ class EnhancedBacktestEngine:
         lows = data["low"].tolist()
         closes = data["close"].tolist()
 
-        # Track positions
+        # Track positions. Signals arm on close; fills wait for the next open.
         position: Literal["buy", "sell", None] = None
+        pending_side: Literal["buy", "sell"] | None = None
+        pending_atr = 0.0
+        pending_confidence = 0.0
+        pending_patterns: list[str] = []
+        pending_divergence: str | None = None
+        pending_rsi = 0.0
         entry_price = 0.0
         entry_idx = 0
         tp_price = 0.0
@@ -358,6 +435,7 @@ class EnhancedBacktestEngine:
         entry_patterns: list[str] = []
         entry_divergence: str | None = None
         entry_rsi = 0.0
+        pip_size = pip_size_for_pair(symbol)
 
         trades: list[Trade] = []
         equity_curve: list[float] = [self.initial_balance]
@@ -373,11 +451,26 @@ class EnhancedBacktestEngine:
         combined_total = 0
 
         for i in range(max(lookback, atr_period + 1), len(data)):
-            timestamp = data.index[i] if isinstance(data.index[i], datetime) else datetime.now()
+            timestamp = self._index_to_datetime(data.index[i])
             close = closes[i]
             high = highs[i]
             low = lows[i]
             rsi = data["rsi"].iloc[i]
+            if pending_side is not None and position is None:
+                position = pending_side
+                entry_price = self.cost_book.entry_fill(opens[i], position, pip_size)
+                entry_idx = i
+                entry_confidence = pending_confidence
+                entry_patterns = pending_patterns
+                entry_divergence = pending_divergence
+                entry_rsi = pending_rsi
+                if position == "buy":
+                    tp_price = entry_price + (pending_atr * self.reward_ratio)
+                    sl_price = entry_price - (pending_atr * self.sl_atr_multiplier)
+                else:
+                    tp_price = entry_price - (pending_atr * self.reward_ratio)
+                    sl_price = entry_price + (pending_atr * self.sl_atr_multiplier)
+                pending_side = None
             # ATR needs period+1 bars, include current bar
             atr = calculate_atr(
                 highs[max(0, i - atr_period) : i + 1],
@@ -385,9 +478,7 @@ class EnhancedBacktestEngine:
                 closes[max(0, i - atr_period) : i + 1],
                 atr_period,
             )
-
-            if pd.isna(rsi) or atr is None or atr <= 0:
-                continue
+            rsi_exit = 0.0 if pd.isna(rsi) else float(rsi)
 
             # Detect patterns
             bullish_pats: list[CandlePattern] = []
@@ -417,30 +508,29 @@ class EnhancedBacktestEngine:
                 result = self._check_tp_sl_hit(position, entry_price, tp_price, sl_price, high, low)
 
                 if result:
-                    # Position closed
-                    if result == "tp":
-                        if position == "buy":
-                            pnl_pct = (tp_price - entry_price) / entry_price
-                            pnl = balance * self.risk_per_trade * (self.reward_ratio / 2)
-                        else:
-                            pnl_pct = (entry_price - tp_price) / entry_price
-                            pnl = balance * self.risk_per_trade * (self.reward_ratio / 2)
-                        exit_reason: Literal["tp", "sl", "time", "signal"] = "tp"
-                    else:  # SL hit
-                        pnl_pct = -self.risk_per_trade
-                        pnl = -balance * self.risk_per_trade
-                        exit_reason = "sl"
-
+                    # Position closed — cash PnL from slipped fills, sized off SL distance.
+                    raw_exit = tp_price if result == "tp" else sl_price
+                    exit_price = self.cost_book.exit_fill(raw_exit, position, pip_size)
+                    pnl, pnl_pct = self._fill_cash_pnl(
+                        side=position,
+                        entry_price=entry_price,
+                        exit_price=exit_price,
+                        sl_price=sl_price,
+                        balance=balance,
+                    )
+                    exit_reason: Literal["tp", "sl", "time", "signal"] = (
+                        "tp" if result == "tp" else "sl"
+                    )
                     balance += pnl
                     if balance > peak_balance:
                         peak_balance = balance
 
                     trade = Trade(
                         entry_time=self._index_to_datetime(data.index[entry_idx]),
-                        exit_time=self._index_to_datetime(timestamp),
+                        exit_time=timestamp,
                         side=position,
                         entry_price=entry_price,
-                        exit_price=tp_price if result == "tp" else sl_price,
+                        exit_price=exit_price,
                         tp_price=tp_price,
                         sl_price=sl_price,
                         pnl=pnl,
@@ -450,7 +540,7 @@ class EnhancedBacktestEngine:
                         patterns=entry_patterns,
                         divergence=entry_divergence,
                         rsi_entry=entry_rsi,
-                        rsi_exit=float(rsi),
+                        rsi_exit=rsi_exit,
                     )
                     trades.append(trade)
                     equity_curve.append(balance)
@@ -475,20 +565,22 @@ class EnhancedBacktestEngine:
 
                 # Check max hold time
                 if i - entry_idx >= self.max_hold_bars:
-                    # Force close at current price
-                    if position == "buy":
-                        pnl_pct = (close - entry_price) / entry_price
-                    else:
-                        pnl_pct = (entry_price - close) / entry_price
-                    pnl = balance * pnl_pct
+                    exit_price = self.cost_book.exit_fill(close, position, pip_size)
+                    pnl, pnl_pct = self._fill_cash_pnl(
+                        side=position,
+                        entry_price=entry_price,
+                        exit_price=exit_price,
+                        sl_price=sl_price,
+                        balance=balance,
+                    )
                     balance += pnl
 
                     trade = Trade(
                         entry_time=self._index_to_datetime(data.index[entry_idx]),
-                        exit_time=self._index_to_datetime(timestamp),
+                        exit_time=timestamp,
                         side=position,
                         entry_price=entry_price,
-                        exit_price=close,
+                        exit_price=exit_price,
                         tp_price=tp_price,
                         sl_price=sl_price,
                         pnl=pnl,
@@ -498,13 +590,16 @@ class EnhancedBacktestEngine:
                         patterns=entry_patterns,
                         divergence=entry_divergence,
                         rsi_entry=entry_rsi,
-                        rsi_exit=float(rsi),
+                        rsi_exit=rsi_exit,
                     )
                     trades.append(trade)
                     equity_curve.append(balance)
                     position = None
                     entry_idx = i
                     continue
+
+            if pd.isna(rsi) or atr is None or atr <= 0:
+                continue
 
             sma_val = data["sma"].iloc[i]
 
@@ -551,7 +646,9 @@ class EnhancedBacktestEngine:
                         if self.rsi_ma_variant == "slope":
                             # Slope inflection: RSI-MA free-fall ending
                             ma_tail = [
-                                data["rsi_ma"].iloc[j] if not pd.isna(data["rsi_ma"].iloc[j]) else None
+                                data["rsi_ma"].iloc[j]
+                                if not pd.isna(data["rsi_ma"].iloc[j])
+                                else None
                                 for j in range(max(0, i - 10), i + 1)
                             ]
                             if not detect_rsi_slope_change(ma_tail, direction, lookback=3):
@@ -560,14 +657,22 @@ class EnhancedBacktestEngine:
                         elif self.rsi_ma_variant == "distance":
                             # Distance threshold: RSI must be at right distance from MA
                             if not rsi_ma_distance(
-                                rsi_val_now, rsi_ma_now, direction,
-                                min_distance=3.0, max_distance=self.rsi_ma_distance_max,
+                                rsi_val_now,
+                                rsi_ma_now,
+                                direction,
+                                min_distance=3.0,
+                                max_distance=self.rsi_ma_distance_max,
                             ):
                                 signal = SignalType.HOLD
 
                         elif self.rsi_ma_variant == "fresh":
                             # Fresh momentum: RSI moving AWAY from MA (still extreme)
-                            if signal == SignalType.BUY and rsi_val_now > rsi_ma_now or signal == SignalType.SELL and rsi_val_now < rsi_ma_now:
+                            if (
+                                signal == SignalType.BUY
+                                and rsi_val_now > rsi_ma_now
+                                or signal == SignalType.SELL
+                                and rsi_val_now < rsi_ma_now
+                            ):
                                 signal = SignalType.HOLD
 
                         elif self.rsi_ma_variant == "confidence":
@@ -579,7 +684,9 @@ class EnhancedBacktestEngine:
                                 for j in range(max(0, i - 10), i + 1)
                             ]
                             ma_tail = [
-                                data["rsi_ma"].iloc[j] if not pd.isna(data["rsi_ma"].iloc[j]) else None
+                                data["rsi_ma"].iloc[j]
+                                if not pd.isna(data["rsi_ma"].iloc[j])
+                                else None
                                 for j in range(max(0, i - 10), i + 1)
                             ]
                             if detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
@@ -597,7 +704,9 @@ class EnhancedBacktestEngine:
                                     for j in range(max(0, i - 10), i + 1)
                                 ]
                                 ma_tail = [
-                                    data["rsi_ma"].iloc[j] if not pd.isna(data["rsi_ma"].iloc[j]) else None
+                                    data["rsi_ma"].iloc[j]
+                                    if not pd.isna(data["rsi_ma"].iloc[j])
+                                    else None
                                     for j in range(max(0, i - 10), i + 1)
                                 ]
                                 if not detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
@@ -605,7 +714,12 @@ class EnhancedBacktestEngine:
 
                         elif self.rsi_ma_variant == "gate":
                             # Gate: SMA(RSI) must be outside 30/70 — mirrors live rsi_ma_gate_enabled
-                            if signal == SignalType.BUY and rsi_ma_now > self.rsi_oversold or signal == SignalType.SELL and rsi_ma_now < self.rsi_overbought:
+                            if (
+                                signal == SignalType.BUY
+                                and rsi_ma_now > self.rsi_oversold
+                                or signal == SignalType.SELL
+                                and rsi_ma_now < self.rsi_overbought
+                            ):
                                 signal = SignalType.HOLD
 
                         else:
@@ -617,7 +731,9 @@ class EnhancedBacktestEngine:
                                 for j in range(max(0, i - 10), i + 1)
                             ]
                             ma_tail = [
-                                data["rsi_ma"].iloc[j] if not pd.isna(data["rsi_ma"].iloc[j]) else None
+                                data["rsi_ma"].iloc[j]
+                                if not pd.isna(data["rsi_ma"].iloc[j])
+                                else None
                                 for j in range(max(0, i - 10), i + 1)
                             ]
                             if not detect_rsi_curl(rsi_tail, ma_tail, direction, lookback=3):
@@ -630,35 +746,27 @@ class EnhancedBacktestEngine:
                 if signal != SignalType.HOLD and self.use_ema_confidence:
                     ema_ref_now = data["ema_ref"].iloc[i]
                     if not pd.isna(ema_ref_now):
-                        aligned = (
-                            signal == SignalType.BUY and close > ema_ref_now
-                        ) or (signal == SignalType.SELL and close < ema_ref_now)
+                        aligned = (signal == SignalType.BUY and close > ema_ref_now) or (
+                            signal == SignalType.SELL and close < ema_ref_now
+                        )
                         if aligned:
                             confidence = min(1.0, confidence * self.ema_confidence_boost)
                         else:
                             confidence *= self.ema_confidence_dampen
 
-                # Only enter with sufficient confidence
-                if signal != SignalType.HOLD and confidence >= 0.4:
-                    position = "buy" if signal == SignalType.BUY else "sell"
-                    pip_size = 0.01 if "JPY" in symbol else 0.0001
-                    spread_price = self.spread_pips * pip_size
-                    entry_price = (
-                        close + spread_price if position == "buy" else close - spread_price
-                    )
-                    entry_idx = i
-                    entry_confidence = confidence
-                    entry_patterns = pattern_names
-                    entry_divergence = div_type
-                    entry_rsi = float(rsi)
-
-                    # Set TP/SL based on ATR
-                    if position == "buy":
-                        tp_price = entry_price + (atr * self.reward_ratio)
-                        sl_price = entry_price - (atr * self.sl_atr_multiplier)
-                    else:
-                        tp_price = entry_price - (atr * self.reward_ratio)
-                        sl_price = entry_price + (atr * self.sl_atr_multiplier)
+                # Arm a next-bar fill; never fill on the signal bar's close.
+                if (
+                    signal != SignalType.HOLD
+                    and confidence >= 0.4
+                    and i + 1 < len(data)
+                    and pending_side is None
+                ):
+                    pending_side = "buy" if signal == SignalType.BUY else "sell"
+                    pending_atr = atr
+                    pending_confidence = confidence
+                    pending_patterns = pattern_names
+                    pending_divergence = div_type
+                    pending_rsi = float(rsi)
 
         # Calculate metrics
         wins = sum(1 for t in trades if t.pnl > 0)
@@ -693,13 +801,13 @@ class EnhancedBacktestEngine:
         )
         sharpe = (avg_return * 252) / (std_return * (252**0.5)) if std_return > 0 else 0
 
-        start_date = data.index[max(lookback, atr_period + 1)]
-        end_date = data.index[-1]
+        start_date = self._index_to_datetime(data.index[max(lookback, atr_period + 1)])
+        end_date = self._index_to_datetime(data.index[-1])
 
         return EnhancedBacktestResult(
             symbol=symbol,
-            start_date=start_date if isinstance(start_date, datetime) else datetime.now(),
-            end_date=end_date if isinstance(end_date, datetime) else datetime.now(),
+            start_date=start_date,
+            end_date=end_date,
             total_trades=len(trades),
             wins=wins,
             losses=losses,

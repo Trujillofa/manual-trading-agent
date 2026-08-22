@@ -9,6 +9,15 @@ Mirrors the Pine Script v2 logic exactly:
 - Fixed-pip or ATR-based TP/SL
 - Breakeven stop, time-based exit
 
+Causality: closed-bar signals, next-bar-open fills, stop-first same-bar exits.
+Sweep ranking uses the chronological develop window only (first 65%); holdout
+is reported and never used to pick a winner.
+
+Clock: bar timestamps are UTC. Session filters use the bar's UTC hour
+(``session_start <= hour < session_end``). This is not broker-server time.
+
+Offline only: not a live-go or promote path. No broker orders are sent.
+
 Usage:
     python scripts/run_donchian_backtest.py --pairs EUR/USD,GBP/USD --days 365
     python scripts/run_donchian_backtest.py --pairs EUR/USD --sweep tp-sl
@@ -30,9 +39,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pandas as pd
 
+from src.backtest.cost_book import CostBook, pip_size_for_pair
 from src.data.dukascopy_fetcher import get_multi_timeframe_data_dukascopy
 from src.indicators.high_low import previous_rolling_highest_high, previous_rolling_lowest_low
 from src.indicators.rsi import calculate_rsi
+
+IS_FRACTION = 0.65
 
 # ---------------------------------------------------------------------------
 # Forex pairs
@@ -378,7 +390,7 @@ def build_pair_cache(
         closes=closes,
         opens=opens,
         index_15m=list(data_15m.index),
-        pip_size=0.01 if "JPY" in pair else 0.0001,
+        pip_size=pip_size_for_pair(pair),
         rsi_15m=_precompute_rsi_list(closes),
         rsi_1h_series=_precompute_rsi_series(data_1h),
         rsi_30m_series=_precompute_rsi_series(data_30m),
@@ -474,8 +486,12 @@ def run_config(
 
     pip = cache.pip_size
     buffer = buffer_pips * pip
-    spread = spread_pips * pip
-    slip = slippage_pips * pip
+    costs = CostBook(
+        spread_pips=spread_pips,
+        slippage_pips=slippage_pips,
+        commission_usd_per_lot_side=commission_per_order,
+    )
+    slip = costs.slippage_pips * pip
 
     balance = 100000.0
     peak = balance
@@ -499,18 +515,165 @@ def run_config(
     # Track alignment state
     last_ob_bar: int | None = None
     last_os_bar: int | None = None
+    pending_signal: Literal["buy", "sell"] | None = None
+    pending_atr = 0.0
+    pending_rsi = (0.0, 0.0, 0.0)
 
     highs = cache.highs
     lows = cache.lows
     closes = cache.closes
+    opens = cache.opens
 
     for i in range(warmup, len(closes)):
         ts = cast(pd.Timestamp, cache.index_15m[i])
         close = closes[i]
         high_val = highs[i]
         low_val = lows[i]
+        open_price = opens[i]
 
-        # --- Multi-TF RSI ---
+        if pending_signal is not None and position is None:
+            position = pending_signal
+            tp_distance = tp_pips * pip if use_fixed_pip else pending_atr * tp_atr_mult
+            sl_distance = sl_pips * pip if use_fixed_pip else pending_atr * sl_atr_mult
+            entry_price = costs.entry_fill(open_price, position, pip)
+            if position == "buy":
+                tp_price = entry_price + tp_distance
+                sl_price = entry_price - sl_distance
+            else:
+                tp_price = entry_price - tp_distance
+                sl_price = entry_price + sl_distance
+            entry_idx = i
+            entry_rsi = pending_rsi
+            be_active = False
+            trail_stop = None
+            pending_signal = None
+
+        # --- Manage open position (never skipped by indicator continues) ---
+        if position is not None:
+            exit_price = None
+            exit_reason = ""
+
+            # Frozen fill-time levels. Trailing may tighten if this bar has ATR.
+            tp_distance = abs(tp_price - entry_price)
+            sl_distance = abs(sl_price - entry_price)
+            bar_atr = cache.atr[i]
+
+            # Breakeven check
+            be_trigger_dist = tp_distance * (be_trigger_pct / 100)
+            if (
+                use_breakeven
+                and not be_active
+                and (
+                    (position == "buy" and high_val >= entry_price + be_trigger_dist)
+                    or (position == "sell" and low_val <= entry_price - be_trigger_dist)
+                )
+            ):
+                be_active = True
+
+            # Compute current SL
+            if position == "buy":
+                base_stop = entry_price if be_active else entry_price - sl_distance
+                if use_trailing and bar_atr is not None and bar_atr > 0:
+                    candidate = close - bar_atr * trail_atr_mult
+                    trail_stop = max(trail_stop, candidate) if trail_stop is not None else candidate
+                    final_stop = max(base_stop, trail_stop)
+                else:
+                    final_stop = base_stop
+                final_tp = entry_price + tp_distance
+
+                if low_val <= final_stop:
+                    exit_price, exit_reason = final_stop, "sl"
+                elif high_val >= final_tp:
+                    exit_price, exit_reason = final_tp, "tp"
+            else:
+                base_stop = entry_price if be_active else entry_price + sl_distance
+                if use_trailing and bar_atr is not None and bar_atr > 0:
+                    candidate = close + bar_atr * trail_atr_mult
+                    trail_stop = min(trail_stop, candidate) if trail_stop is not None else candidate
+                    final_stop = min(base_stop, trail_stop)
+                else:
+                    final_stop = base_stop
+                final_tp = entry_price - tp_distance
+
+                if high_val >= final_stop:
+                    exit_price, exit_reason = final_stop, "sl"
+                elif low_val <= final_tp:
+                    exit_price, exit_reason = final_tp, "tp"
+
+            # Time exit
+            if exit_price is None and use_time_exit and (i - entry_idx) >= max_bars_exit:
+                exit_price = close
+                exit_reason = "time"
+
+            if exit_price is not None:
+                effective_exit = costs.exit_fill(exit_price, position, pip)
+
+                if position == "buy":
+                    raw_pnl_price = effective_exit - entry_price
+                else:
+                    raw_pnl_price = entry_price - effective_exit
+
+                # Risk-based sizing: risk_pct of equity per SL distance
+                sl_dist = abs(final_stop - entry_price) if final_stop else sl_distance
+                risk_pct = 0.01
+                position_size = (balance * risk_pct / sl_dist) if sl_dist > 0 else 1
+                gross_pnl = position_size * raw_pnl_price
+
+                commission_cash = costs.round_trip_commission_usd()
+                commission_impact = commission_cash / balance if balance > 0 else 0
+
+                pnl = gross_pnl - commission_impact * balance
+
+                balance += pnl
+                trade_pnls.append(pnl)
+                bars_held_list.append(i - entry_idx)
+
+                if pnl <= 0:
+                    consecutive_losses += 1
+                    max_consecutive_losses = max(max_consecutive_losses, consecutive_losses)
+                else:
+                    consecutive_losses = 0
+
+                peak = max(peak, balance)
+                dd_pct = ((peak - balance) / peak) * 100 if peak > 0 else 0.0
+                max_dd_pct = max(max_dd_pct, dd_pct)
+
+                is_be_exit = be_active and exit_reason == "sl"
+                trades_list.append(
+                    TradeRecord(
+                        pair=pair,
+                        direction=position,
+                        entry_time=cache.index_15m[entry_idx],
+                        exit_time=ts,
+                        entry_price=entry_price,
+                        exit_price=exit_price,
+                        tp_price=final_tp,
+                        sl_price=final_stop,
+                        pnl=pnl,
+                        pnl_pct=pnl / balance * 100 if balance > 0 else 0,
+                        exit_reason=exit_reason,
+                        bars_held=i - entry_idx,
+                        rsi_15m=entry_rsi[0],
+                        rsi_30m=entry_rsi[1],
+                        rsi_1h=entry_rsi[2],
+                        be_triggered=is_be_exit,
+                    )
+                )
+
+                if exit_reason == "tp":
+                    result.tp_exits += 1
+                elif exit_reason == "sl":
+                    if be_active:
+                        result.be_exits += 1
+                    else:
+                        result.sl_exits += 1
+                elif exit_reason == "time":
+                    result.time_exits += 1
+
+                position = None
+                be_active = False
+                trail_stop = None
+
         rsi_15 = cache.rsi_15m[i]
         if rsi_15 is None:
             continue
@@ -622,133 +785,6 @@ def run_config(
             and mom_fade_long_ok
         )
 
-        # --- Manage open position ---
-        if position is not None:
-            exit_price = None
-            exit_reason = ""
-
-            # Compute TP/SL distances for this bar
-            tp_distance = tp_pips * pip if use_fixed_pip else atr * tp_atr_mult
-            sl_distance = sl_pips * pip if use_fixed_pip else atr * sl_atr_mult
-
-            # Breakeven check
-            be_trigger_dist = tp_distance * (be_trigger_pct / 100)
-            if (
-                use_breakeven
-                and not be_active
-                and (
-                    (position == "buy" and high_val >= entry_price + be_trigger_dist)
-                    or (position == "sell" and low_val <= entry_price - be_trigger_dist)
-                )
-            ):
-                be_active = True
-
-            # Compute current SL
-            if position == "buy":
-                base_stop = entry_price if be_active else entry_price - sl_distance
-                if use_trailing:
-                    candidate = close - atr * trail_atr_mult
-                    trail_stop = max(trail_stop, candidate) if trail_stop is not None else candidate
-                    final_stop = max(base_stop, trail_stop)
-                else:
-                    final_stop = base_stop
-                final_tp = entry_price + tp_distance
-
-                if low_val <= final_stop:
-                    exit_price, exit_reason = final_stop, "sl"
-                elif high_val >= final_tp:
-                    exit_price, exit_reason = final_tp, "tp"
-            else:
-                base_stop = entry_price if be_active else entry_price + sl_distance
-                if use_trailing:
-                    candidate = close + atr * trail_atr_mult
-                    trail_stop = min(trail_stop, candidate) if trail_stop is not None else candidate
-                    final_stop = min(base_stop, trail_stop)
-                else:
-                    final_stop = base_stop
-                final_tp = entry_price - tp_distance
-
-                if high_val >= final_stop:
-                    exit_price, exit_reason = final_stop, "sl"
-                elif low_val <= final_tp:
-                    exit_price, exit_reason = final_tp, "tp"
-
-            # Time exit
-            if exit_price is None and use_time_exit and (i - entry_idx) >= max_bars_exit:
-                exit_price = close
-                exit_reason = "time"
-
-            if exit_price is not None:
-                # Apply slippage to exit price (adverse)
-                effective_exit = exit_price - slip if position == "buy" else exit_price + slip
-
-                if position == "buy":
-                    raw_pnl_price = effective_exit - entry_price
-                else:
-                    raw_pnl_price = entry_price - effective_exit
-
-                # Risk-based sizing: risk_pct of equity per SL distance
-                sl_dist = abs(final_stop - entry_price) if final_stop else sl_distance
-                risk_pct = 0.01
-                position_size = (balance * risk_pct / sl_dist) if sl_dist > 0 else 1
-                gross_pnl = position_size * raw_pnl_price
-
-                # Commission: round-trip cash cost normalized to account
-                commission_cash = 2 * commission_per_order
-                commission_impact = commission_cash / balance if balance > 0 else 0
-
-                pnl = gross_pnl - commission_impact * balance
-
-                balance += pnl
-                trade_pnls.append(pnl)
-                bars_held_list.append(i - entry_idx)
-
-                if pnl <= 0:
-                    consecutive_losses += 1
-                    max_consecutive_losses = max(max_consecutive_losses, consecutive_losses)
-                else:
-                    consecutive_losses = 0
-
-                peak = max(peak, balance)
-                dd_pct = ((peak - balance) / peak) * 100 if peak > 0 else 0.0
-                max_dd_pct = max(max_dd_pct, dd_pct)
-
-                is_be_exit = be_active and exit_reason == "sl"
-                trades_list.append(
-                    TradeRecord(
-                        pair=pair,
-                        direction=position,
-                        entry_time=cache.index_15m[entry_idx],
-                        exit_time=ts,
-                        entry_price=entry_price,
-                        exit_price=exit_price,
-                        tp_price=final_tp,
-                        sl_price=final_stop,
-                        pnl=pnl,
-                        pnl_pct=pnl / balance * 100 if balance > 0 else 0,
-                        exit_reason=exit_reason,
-                        bars_held=i - entry_idx,
-                        rsi_15m=entry_rsi[0],
-                        rsi_30m=entry_rsi[1],
-                        rsi_1h=entry_rsi[2],
-                        be_triggered=is_be_exit,
-                    )
-                )
-
-                if exit_reason == "tp":
-                    result.tp_exits += 1
-                elif exit_reason == "sl":
-                    if be_active:
-                        result.be_exits += 1
-                    else:
-                        result.sl_exits += 1
-                elif exit_reason == "time":
-                    result.time_exits += 1
-
-                position = None
-                be_active = False
-                trail_stop = None
-
         # --- Counter-signal close ---
         if position is not None:
             counter_signal = (position == "buy" and short_trigger) or (
@@ -763,7 +799,7 @@ def run_config(
                     pnl = position_size * (close - entry_price - slip)
                 else:
                     pnl = position_size * (entry_price - close - slip)
-                pnl -= 2 * commission_per_order
+                pnl -= costs.round_trip_commission_usd()
                 balance += pnl
                 trade_pnls.append(pnl)
                 bars_held_list.append(i - entry_idx)
@@ -798,31 +834,18 @@ def run_config(
                 be_active = False
                 trail_stop = None
 
-        # --- Open new position ---
-        if position is None:
+        # --- Arm next-bar fill (never fill on the signal bar close) ---
+        if position is None and pending_signal is None:
             current_signal: Literal["buy", "sell", None] = None
             if long_trigger:
                 current_signal = "buy"
             elif short_trigger:
                 current_signal = "sell"
 
-            if current_signal is not None:
-                tp_distance = tp_pips * pip if use_fixed_pip else atr * tp_atr_mult
-                sl_distance = sl_pips * pip if use_fixed_pip else atr * sl_atr_mult
-
-                position = current_signal
-                if position == "buy":
-                    entry_price = close + spread
-                    tp_price = entry_price + tp_distance
-                    sl_price = entry_price - sl_distance
-                else:
-                    entry_price = close - spread
-                    tp_price = entry_price - tp_distance
-                    sl_price = entry_price + sl_distance
-                entry_idx = i
-                entry_rsi = (rsi_15, rsi_30m, rsi_1h)
-                be_active = False
-                trail_stop = None
+            if current_signal is not None and i + 1 < len(closes):
+                pending_signal = current_signal
+                pending_atr = atr
+                pending_rsi = (rsi_15, rsi_30m, rsi_1h)
 
     # Calculate final stats
     wins = sum(1 for p in trade_pnls if p > 0)
@@ -1113,7 +1136,50 @@ def get_sweep_configs(sweep_type: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def write_outputs(results: list[ConfigResult], output_dir: Path) -> tuple[Path, Path]:
+def _trade_in_holdout(entry_time: object, cutoff: pd.Timestamp) -> bool:
+    return pd.Timestamp(entry_time) > cutoff
+
+
+def develop_metrics(
+    results: list[ConfigResult],
+    cutoffs: dict[str, pd.Timestamp],
+    *,
+    holdout: bool,
+) -> tuple[int, int, float, float, float]:
+    """Return trades, wins, pnl% (vs 100k), PF, max DD for one chronological window."""
+
+    window: list[TradeRecord] = []
+    for result in results:
+        cutoff = cutoffs[result.pair]
+        selected = [
+            trade
+            for trade in result.trades_list
+            if _trade_in_holdout(trade.entry_time, cutoff) == holdout
+        ]
+        window.extend(selected)
+    window.sort(key=lambda trade: pd.Timestamp(trade.entry_time))
+    trades = len(window)
+    wins = sum(1 for trade in window if trade.pnl > 0)
+    gross_win = sum(trade.pnl for trade in window if trade.pnl > 0)
+    gross_loss = sum(-trade.pnl for trade in window if trade.pnl <= 0)
+    pf = gross_win / gross_loss if gross_loss > 0 else (999.0 if gross_win > 0 else 0.0)
+    total_pnl_pct = sum(trade.pnl for trade in window) / 1000.0
+    equity = 100_000.0
+    peak = equity
+    max_dd = 0.0
+    for trade in window:
+        equity += trade.pnl
+        peak = max(peak, equity)
+        if peak > 0:
+            max_dd = max(max_dd, (peak - equity) / peak * 100.0)
+    return trades, wins, total_pnl_pct, pf, max_dd
+
+
+def write_outputs(
+    results: list[ConfigResult],
+    output_dir: Path,
+    cutoffs: dict[str, pd.Timestamp] | None = None,
+) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     csv_path = output_dir / f"donchian_backtest_{stamp}.csv"
@@ -1219,17 +1285,35 @@ def write_outputs(results: list[ConfigResult], output_dir: Path) -> tuple[Path, 
         pairs_profitable = sum(1 for r in crs if r.total_pnl_pct > 0)
         max_cl = max(r.max_consecutive_losses for r in crs)
 
-        # Composite score
-        score = pf * min(wr / 0.75, 1.0) * min(total_trades / 30, 1.0) / (1 + max_dd / 1000)
+        # Composite score uses develop trades when a split is provided.
+        if cutoffs:
+            dev_trades, dev_wins, dev_pnl, dev_pf, dev_dd = develop_metrics(
+                crs, cutoffs, holdout=False
+            )
+            score = (
+                dev_pf
+                * min((dev_wins / dev_trades if dev_trades else 0.0) / 0.75, 1.0)
+                * min(dev_trades / 30, 1.0)
+                / (1 + dev_dd / 1000)
+            )
+            rank_trades, rank_wr, rank_pnl, rank_pf = (
+                dev_trades,
+                dev_wins / dev_trades if dev_trades else 0.0,
+                dev_pnl,
+                dev_pf,
+            )
+        else:
+            score = pf * min(wr / 0.75, 1.0) * min(total_trades / 30, 1.0) / (1 + max_dd / 1000)
+            rank_trades, rank_wr, rank_pnl, rank_pf = total_trades, wr, avg_pnl_pct, pf
 
         agg_rows.append(
             {
                 "config": label,
-                "total_trades": total_trades,
-                "win_rate": wr,
-                "avg_pnl_pct": avg_pnl_pct,
-                "profit_factor": pf,
-                "max_dd": max_dd,
+                "total_trades": rank_trades,
+                "win_rate": rank_wr,
+                "avg_pnl_pct": rank_pnl,
+                "profit_factor": rank_pf,
+                "max_dd": dev_dd if cutoffs else max_dd,
                 "pairs_profitable": pairs_profitable,
                 "pairs_tested": len(crs),
                 "score": score,
@@ -1248,6 +1332,9 @@ def write_outputs(results: list[ConfigResult], output_dir: Path) -> tuple[Path, 
         f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}",
         "",
         "Strategy: MTF RSI (15m/30m/1h) + Donchian HH/LL Reclaim + RSI Cross-back",
+        "Execution: closed-bar signal, next-bar-open fill, stop-first exits.",
+        "Ranking: develop window only (first 65% by bar). Holdout is unused for selection.",
+        "Not a live-go path.",
         f"Pairs tested: {len({r.pair for r in results})}",
         f"Total configurations: {len(agg_rows)}",
         "",
@@ -1315,7 +1402,17 @@ def main() -> int:
     parser.add_argument(
         "--sweep",
         default="baseline",
-        choices=["baseline", "pine", "atr-exits", "rsi", "structure", "filters", "exits", "costs", "full"],
+        choices=[
+            "baseline",
+            "pine",
+            "atr-exits",
+            "rsi",
+            "structure",
+            "filters",
+            "exits",
+            "costs",
+            "full",
+        ],
         help="Sweep type",
     )
     parser.add_argument("--output-dir", default="results")
@@ -1382,7 +1479,12 @@ def main() -> int:
     total_time = time.time() - t0
     print(f"\nCompleted {run_count} backtests in {total_time:.0f}s ({total_time / 60:.1f}m)")
 
-    csv_path, md_path = write_outputs(results, Path(args.output_dir))
+    cutoffs = {
+        pair: pd.Timestamp(cache.index_15m[int(len(cache.index_15m) * IS_FRACTION)])
+        for pair, cache in pair_caches.items()
+        if cache.index_15m
+    }
+    csv_path, md_path = write_outputs(results, Path(args.output_dir), cutoffs)
     print(f"\nSaved CSV: {csv_path}")
     print(f"Saved MD:  {md_path}")
 
@@ -1393,18 +1495,16 @@ def main() -> int:
 
     ranked = []
     for label, crs in config_agg.items():
-        total_trades = sum(r.trades for r in crs)
-        if total_trades < 5:
+        dev_trades, dev_wins, dev_pnl, dev_pf, _dev_dd = develop_metrics(
+            crs, cutoffs, holdout=False
+        )
+        if dev_trades < 5:
             continue
-        avg_pnl = sum(r.total_pnl_pct for r in crs) / len(crs)
-        gross_win = sum(r.avg_win * r.wins for r in crs)
-        gross_loss = sum(r.avg_loss * r.losses for r in crs)
-        pf = gross_win / gross_loss if gross_loss > 0 else 0.0
-        wr = sum(r.wins for r in crs) / total_trades
-        ranked.append((label, total_trades, avg_pnl, pf, wr))
+        wr = dev_wins / dev_trades if dev_trades else 0.0
+        ranked.append((label, dev_trades, dev_pnl, dev_pf, wr))
     ranked.sort(key=lambda x: x[2], reverse=True)
 
-    print("\n=== TOP 10 CONFIGS (≥5 trades, by avg PnL%) ===")
+    print("\n=== TOP 10 CONFIGS (develop window, ≥5 trades, by PnL%) ===")
     for i, (label, trades, pnl, pf, wr) in enumerate(ranked[:10], 1):
         print(f"  {i:2d}. {label}")
         print(f"      {trades} trades | WR {wr:.0%} | avg PnL {pnl:.2f}% | PF {pf:.2f}")

@@ -12,6 +12,10 @@ It deliberately evaluates two predeclared variants instead of optimizing:
 The pasted indicator had no orders or exits, so ``marker_baseline`` is not a
 claim of exact TradingView strategy parity. It is the smallest executable
 interpretation of its markers. Market orders fill on the next bar open.
+
+Offline only: not a live-go or promote path. No broker orders are sent.
+
+Clock: Dukascopy/cached bars are UTC. This runner is not session-aware.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.run_donchian_backtest import fetch_pair
+from src.backtest.cost_book import CostBook, pip_size_for_pair
 
 DEFAULT_PAIRS = (
     "EUR/USD",
@@ -384,7 +389,7 @@ def _confirmed_htf_rsi(data: pd.DataFrame, frequency: str, period: int) -> pd.Se
 
 
 def _pip_size(pair: str) -> float:
-    return 0.01 if "JPY" in pair else 0.0001
+    return pip_size_for_pair(pair)
 
 
 def _profit_factor(values: list[float]) -> float:
@@ -542,6 +547,11 @@ def run_prepared_backtest(
 ) -> BacktestResult:
     """Run one prepared pair/config with pessimistic same-bar exits."""
 
+    costs = CostBook(
+        spread_pips=spread_pips,
+        slippage_pips=slippage_pips,
+        commission_usd_per_lot_side=commission_per_order,
+    )
     ema50 = prepared.ema50
     ema200 = prepared.ema200
     rsi15 = prepared.rsi15
@@ -572,8 +582,7 @@ def run_prepared_backtest(
     previous_short_condition = False
     traded_swing_version = -1
     pip = _pip_size(pair)
-    spread = spread_pips * pip
-    slippage = slippage_pips * pip
+    slippage = costs.slippage_pips * pip
 
     for i, timestamp in enumerate(prepared.timestamps):
         open_price = prepared.opens[i]
@@ -603,11 +612,11 @@ def run_prepared_backtest(
             else:
                 stop_distance = pending_atr * config.sl_atr
             if position == "long":
-                entry_price = entry_mid + spread + slippage
+                entry_price = costs.entry_fill(entry_mid, position, pip)
                 stop_price = entry_price - stop_distance
                 target_price = entry_price + pending_atr * config.tp_atr
             else:
-                entry_price = entry_mid - spread - slippage
+                entry_price = costs.entry_fill(entry_mid, position, pip)
                 stop_price = entry_price + stop_distance
                 target_price = entry_price - pending_atr * config.tp_atr
             risk_distance = abs(entry_price - stop_price)
@@ -617,21 +626,21 @@ def run_prepared_backtest(
             exit_price: float | None = None
             exit_reason = ""
             if i - entry_index > config.max_hold_bars:
-                exit_price = open_price + (slippage if position == "short" else -slippage)
+                exit_price = costs.exit_fill(open_price, position, pip)
                 exit_reason = "time"
             elif position == "long":
                 if low <= stop_price:
-                    exit_price = stop_price - slippage
+                    exit_price = costs.exit_fill(stop_price, position, pip)
                     exit_reason = "stop"
                 elif high >= target_price:
-                    exit_price = target_price - slippage
+                    exit_price = costs.exit_fill(target_price, position, pip)
                     exit_reason = "target"
             else:
                 if high >= stop_price:
-                    exit_price = stop_price + slippage
+                    exit_price = costs.exit_fill(stop_price, position, pip)
                     exit_reason = "stop"
                 elif low <= target_price:
-                    exit_price = target_price + slippage
+                    exit_price = costs.exit_fill(target_price, position, pip)
                     exit_reason = "target"
             if exit_price is not None and risk_distance > 0:
                 net_move = (
@@ -655,7 +664,7 @@ def run_prepared_backtest(
                     risk_cash = balance * risk_fraction
                     quantity = risk_cash / (risk_distance * usd_per_quote)
                     lots = quantity / 100_000.0
-                    commission = 2.0 * commission_per_order
+                    commission = costs.round_trip_commission_usd()
                 else:
                     lots = account.lot_size
                     quantity = lots * 100_000.0
@@ -933,7 +942,8 @@ def _write_report(
         "",
         "Data: cached Dukascopy 15-minute OHLC, chronologically judged at 65% IS / 35% OOS.",
         "Execution: signal on close, market entry at next bar open, stop-first when TP and SL share a bar.",
-        "Costs: 2.0 pip spread, 2.0 pip adverse slippage per fill, $3 commission per order.",
+        "Costs: frozen CostBook — 2.0 pip spread, 2.0 pip adverse slippage per fill, $3/side.",
+        "Not a live-go path. OOS is a judge only; configs are preregistered.",
         "Sizing: 1% equity risk per trade. Results exclude news because no point-in-time news archive is present.",
         "",
         "## Results",

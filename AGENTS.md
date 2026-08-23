@@ -8,6 +8,11 @@ This file is the **source of truth** for all AI agents operating in this reposit
 - **Purpose**: Manual forex trading assistant with RSI-based multi-timeframe strategy
 - **Reference Projects**: `/home/emilio/ctrader-trading-agent/` and `/home/emilio/crypto-trading-agent/`
 
+## Related docs
+
+- [`docs/BACKTEST_RUNNERS.md`](docs/BACKTEST_RUNNERS.md) — offline runner inventory (next-bar fills, `CostBook`, develop-only rank). Not a live-go.
+- [`docs/MATH_MODELS_ROADMAP.md`](docs/MATH_MODELS_ROADMAP.md) — which math overlays to implement next (GARCH / regime / meta-label). Shared `src/risk/` layer; not new strategies.
+
 ## Trading Strategy Requirements
 
 From `instruction.md`:

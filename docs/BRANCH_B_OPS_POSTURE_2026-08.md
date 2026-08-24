@@ -29,5 +29,7 @@ A **paper-mode decision-support agent**:
 
 - `docs/MANUAL_TRADING_AGENT_OPERATOR_GUIDE.md`
 - `docs/PROJECT_STATUS_2026-06.md`
+- `docs/BACKTEST_RUNNERS.md`
+- `docs/MATH_MODELS_ROADMAP.md`
 - `docs/research/PROGRAM_DECISION_MEMO_2026-06-20.md`
 - `docs/research/PROGRAM_DECISION_MEMO_ADDENDUM_2026-06-24.md`

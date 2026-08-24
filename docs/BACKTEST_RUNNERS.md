@@ -24,3 +24,7 @@ Related scripts left alone: `optimize_htf_fib_backtest.py` (already IS-only rank
 `evaluate_htf_fib_accounts.py`, `research/evaluate.py` / autosearch (already
 split data before the runner; SMC autosearch ranks on **validation**, not the
 final holdout), `run_entry_optimization.py`, `run_confirmation_bakeoff.py`.
+
+Math overlays (GARCH vol, regime router, LightGBM “take this alert?”) are
+planned in [`MATH_MODELS_ROADMAP.md`](MATH_MODELS_ROADMAP.md). Replay this
+inventory first; do not layer math on pre-#49 fills.

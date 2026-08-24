@@ -252,3 +252,18 @@ This project references two existing trading agents:
 - `/home/emilio/crypto-trading-agent/` — Crypto trading on Binance, multi-strategy framework
 
 Both projects follow similar patterns and can be used for implementation reference.
+
+## Workspace worktrees
+
+This repo lives in `/home/yderf/Projects/trading`. New worktrees go under `.worktrees/manual-trading-agent/`, never as `../manual-trading-agent-*` siblings.
+
+```bash
+# BAD
+git worktree add ../manual-trading-agent-foo -b feat/foo
+
+# GOOD
+mkdir -p ../.worktrees/manual-trading-agent
+git worktree add ../.worktrees/manual-trading-agent/foo -b feat/foo
+```
+
+Relocate a registered worktree with `git worktree move`. See `/home/yderf/Projects/trading/LAYOUT.md`.

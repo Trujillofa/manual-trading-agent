@@ -58,6 +58,10 @@ Record develop/holdout counts. Those numbers are the baseline any GARCH or
 regime overlay must beat on the **same** book (2/2 pip + $3/side). HTF Fib
 needs no fill rewrite. SMC: IS `selection_score` only.
 
+Recorded 2026-08-24 for EUR/USD:
+[`COSTBOOK_REPLAY_2026-08-24.md`](research/COSTBOOK_REPLAY_2026-08-24.md).
+No overlay work is authorized from that replay.
+
 ## Now
 
 This “Now” section is a map, not an implement authorization. Do not add

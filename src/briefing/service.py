@@ -439,7 +439,7 @@ async def maybe_send_briefing(
         and notifier.enabled
     )
     chunks_sent = 0
-    if telegram_ok:
+    if telegram_ok and notifier is not None:
         from src.etr.alerts import chunk_telegram
 
         try:

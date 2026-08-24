@@ -64,8 +64,11 @@ def _last_bar_time(frame: pd.DataFrame) -> datetime | None:
         raw = frame.index[-1]
         parsed = pd.Timestamp(raw)
         if parsed.tzinfo is None:
-            return parsed.to_pydatetime().replace(tzinfo=UTC)
-        return parsed.tz_convert(UTC).to_pydatetime()
+            parsed = parsed.tz_localize(UTC)
+        else:
+            parsed = parsed.tz_convert(UTC)
+        result = parsed.to_pydatetime()
+        return result if isinstance(result, datetime) else None
     except Exception:
         return None
 

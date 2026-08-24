@@ -7,7 +7,10 @@ set -euo pipefail
 
 if [ -n "${1:-}" ]; then
   BRANCH_NAME="$1"
-  WORKTREE_DIR="../manual-trading-agent-${BRANCH_NAME}"
+  WORKTREE_DIR="../.worktrees/manual-trading-agent/${BRANCH_NAME}"
+  if [ ! -d "${WORKTREE_DIR}" ]; then
+    WORKTREE_DIR="../manual-trading-agent-${BRANCH_NAME}"
+  fi
 
   echo "Removing worktree: ${WORKTREE_DIR}"
   git worktree remove "${WORKTREE_DIR}" --force 2>/dev/null || true

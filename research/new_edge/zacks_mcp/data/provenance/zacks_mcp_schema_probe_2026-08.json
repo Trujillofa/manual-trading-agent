@@ -48,6 +48,37 @@
     "ebit",
     "ebitda"
   ],
+  "balance_columns": [
+    "ticker",
+    "period_end",
+    "type",
+    "cash_and_st_investments",
+    "receivables",
+    "inventory",
+    "total_current_assets",
+    "ppe_net",
+    "goodwill_intangibles",
+    "total_assets",
+    "total_current_liabilities",
+    "long_term_debt",
+    "total_liabilities",
+    "retained_earnings",
+    "total_equity"
+  ],
+  "cash_flow_columns": [
+    "ticker",
+    "period_end",
+    "type",
+    "operating_cash_flow",
+    "depreciation_amortization",
+    "capex",
+    "investing_cash_flow",
+    "financing_cash_flow",
+    "dividends_paid",
+    "net_stock_buyback",
+    "net_change_in_cash",
+    "ending_cash"
+  ],
   "etf_holdings_columns": [
     "ticker",
     "name",
@@ -58,7 +89,10 @@
     "as_of_epoch",
     "note"
   ],
-  "etf_tool_params": ["symbol", "top_n"],
+  "etf_tool_params": [
+    "symbol",
+    "top_n"
+  ],
   "etf_has_as_of_history_param": false,
   "pead_fields_present": [],
   "pead_fields_absent": [
@@ -69,7 +103,9 @@
   ],
   "live_probe": {
     "snapshot_annual": {
-      "tickers": ["AAPL"],
+      "tickers": [
+        "AAPL"
+      ],
       "periods_requested": 40,
       "period_ends": [
         "2025-09-30",
@@ -80,13 +116,17 @@
       ]
     },
     "snapshot_quarterly": {
-      "tickers": ["AAPL"],
+      "tickers": [
+        "AAPL"
+      ],
       "periods_requested": 12,
       "oldest_period_end": "2023-09-30",
       "newest_period_end": "2026-06-30"
     },
     "income_annual": {
-      "tickers": ["NEM"],
+      "tickers": [
+        "NEM"
+      ],
       "periods_requested": 8,
       "period_ends": [
         "2025-12-31",
@@ -97,7 +137,10 @@
       ]
     },
     "etf_holdings": {
-      "symbols": ["SPY", "GDX"],
+      "symbols": [
+        "SPY",
+        "GDX"
+      ],
       "as_of": "2026-08-22",
       "top_n_requested": 5
     }

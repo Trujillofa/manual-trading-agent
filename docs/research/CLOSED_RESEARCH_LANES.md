@@ -113,7 +113,7 @@ Re-opening without a new premise violates the fail-fast discipline.
 | COT positioning reversal | RELATIONSHIP_FAIL / CLOSED |
 | Term-structure roll yield (commodity futures) | BLOCKED (data gate) |
 | PEAD | CONTRACT_DEFINED (data proof only) |
-| Zacks MCP statements / current ETF holdings | SCHEMA_PASS / ALPHA_BLOCKED (2026-08-22) |
+| Zacks MCP statements / current ETF holdings | SCHEMA_PASS / ALPHA_BLOCKED (2026-08-22) — open data-proof; not closed |
 
 **Deferred (not a standalone alpha lane):** Microstructure / execution-quality research should not proceed unless tied to an already-positive gross edge. It must not be used to rescue discarded signals.
 

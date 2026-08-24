@@ -60,6 +60,12 @@ needs no fill rewrite. SMC: IS `selection_score` only.
 
 ## Now
 
+This “Now” section is a map, not an implement authorization. Do not add
+`src/risk/vol.py` (or `regime.py`) until a one-page overlay contract exists
+**and** the #49 replay numbers above are recorded. This GARCH size/skip
+overlay is **not** a reopen of the discarded H1 vol-regime
+compression-breakout lane.
+
 ### 1. Shared GARCH vol overlay — `src/risk/vol.py`
 
 GARCH(1,1) on the same UTC bars the runner already walks (15m preferred;
@@ -111,9 +117,13 @@ Start with features this repo already computes:
 - Session — bar UTC hour (`session_allowed_utc`, pivot SESSION 07–17 / 13–22)
 - Optional: GARCH percentile, regime label
 
-Label from the #49 replay: did the alert hit TP before SL under next-bar
-`CostBook`? Train on develop only; freeze; holdout judges. Default **off**
-in scan.
+Label from the #49 **runner** replay only (RSI / Donchian / pivot /
+enhanced), not from live `evaluate_entry` / MTF+V2 scanner fires — that
+family is structurally near zero trades. Did the alert hit TP before SL
+under next-bar `CostBook`? Train on develop only; freeze; holdout judges.
+Require develop N ≥ 30 before the model is allowed; if N is below that,
+skip LightGBM. The model must not become a second entry rule. Default
+**off** in scan.
 
 ### Short cointegration scan
 

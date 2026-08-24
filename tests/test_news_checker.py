@@ -438,3 +438,48 @@ class TestNewsCache:
         ]
         assert checker.has_timestamped_actuals() is False
         assert "BLOCKED" in checker.get_surprise_readiness()
+
+    def test_hours_behind_keeps_older_event(self, checker):
+        now = datetime(2026, 8, 13, 14, 40, tzinfo=UTC)
+        released = now - timedelta(hours=2)
+        xml = f"""
+        <weeklyevents>
+          <event>
+            <title>CPI</title>
+            <country>USD</country>
+            <date>{released.strftime("%Y-%m-%d")}</date>
+            <time>{released.strftime("%H:%M")}</time>
+            <impact>High</impact>
+            <forecast>0.3%</forecast>
+          </event>
+        </weeklyevents>
+        """
+        dropped = checker._select_events_from_xml(xml, now, hours_ahead=24)
+        kept = checker._select_events_from_xml(xml, now, hours_ahead=24, hours_behind=8)
+        assert dropped == []
+        assert len(kept) == 1
+        assert kept[0].name == "CPI"
+
+    def test_get_events_in_window_uses_explicit_lookback(self, checker):
+        now = datetime.now(UTC)
+        future_event = NewsEvent(
+            timestamp=now + timedelta(hours=2),
+            currency="USD",
+            name="Non-Farm Employment Change",
+            importance=3,
+            country="US",
+        )
+        past = NewsEvent(
+            timestamp=now - timedelta(hours=3),
+            currency="USD",
+            name="Old CPI",
+            importance=3,
+            country="US",
+        )
+        checker._events = [future_event, past]
+        windowed = checker.get_events_in_window(now=now, hours_ahead=24, hours_behind=8)
+        names = {event.name for event in windowed}
+        assert future_event.name in names
+        assert "Old CPI" in names
+        narrow = checker.get_events_in_window(now=now, hours_ahead=24, hours_behind=0.01)
+        assert "Old CPI" not in {event.name for event in narrow}

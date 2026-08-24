@@ -52,6 +52,7 @@ rotate_managed_logs() {
   rotate_file "$LOG_DIR/etr_audit.jsonl"
   rotate_file "$LOG_DIR/etr_shadow_polls.jsonl"
   rotate_file "$LOG_DIR/etr_shadow_events.jsonl"
+  rotate_file "$LOG_DIR/briefing.log"
 }
 
 mkdir -p "$LOG_DIR"
@@ -77,5 +78,8 @@ while true; do
   # ETR Market Terminal change-only alerts (best-effort; never fail the loop).
   echo "=== $(date) ===" >>"$LOG_DIR/etr.log"
   python -u -m src.cli etr-scan >>"$LOG_DIR/etr.log" 2>&1 || echo "etr-scan failed (exit=$?)" >>"$LOG_DIR/etr.log"
+  # Pre-NY three-pillar briefing (self-skips outside the once-per-day window).
+  echo "=== $(date) ===" >>"$LOG_DIR/briefing.log"
+  python -u -m src.cli pre-ny-briefing >>"$LOG_DIR/briefing.log" 2>&1 || echo "pre-ny-briefing failed (exit=$?)" >>"$LOG_DIR/briefing.log"
   sleep "$SCAN_INTERVAL_SECONDS"
 done

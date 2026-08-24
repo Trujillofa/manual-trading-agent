@@ -119,21 +119,28 @@ class NewsChecker:
         }
         self.CACHE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    async def fetch_events(self, hours_ahead: int = 24) -> list[NewsEvent]:
+    async def fetch_events(
+        self,
+        hours_ahead: int = 24,
+        *,
+        hours_behind: float | None = None,
+        force: bool = False,
+    ) -> list[NewsEvent]:
         """Fetch high-impact news events with cache/backoff.
 
         Retention includes the post-release lockout so a fresh fetch does not
-        drop events that still block trading.
+        drop events that still block trading. Optional ``hours_behind`` widens
+        the lookback (used by the pre-NY briefing). Default behavior is unchanged.
         """
         now = datetime.now(UTC)
         window_end = now + timedelta(hours=hours_ahead)
 
         # Use recent cache first
-        if self._last_fetch and now - self._last_fetch < self._cache_ttl:
+        if not force and self._last_fetch and now - self._last_fetch < self._cache_ttl:
             return list(self._events)
 
         # Respect backoff window
-        if self._next_allowed_fetch and now < self._next_allowed_fetch:
+        if not force and self._next_allowed_fetch and now < self._next_allowed_fetch:
             return list(self._events)
 
         response_text: str | None = None
@@ -159,7 +166,9 @@ class NewsChecker:
             return list(self._events)
 
         try:
-            parsed_events = self._select_events_from_xml(response_text, now, hours_ahead)
+            parsed_events = self._select_events_from_xml(
+                response_text, now, hours_ahead, hours_behind=hours_behind
+            )
         except ET.ParseError as exc:
             logger.warning("failed to parse forex factory xml: %s", exc)
             await self._best_effort_grok_verify(now, window_end)
@@ -200,10 +209,15 @@ class NewsChecker:
         now: datetime,
         hours_ahead: int = 24,
         prior_events: list[NewsEvent] | None = None,
+        *,
+        hours_behind: float | None = None,
     ) -> list[NewsEvent]:
-        """Parse feed XML and keep events in [now - lockout_after, now + hours]."""
+        """Parse feed XML and keep events in [now - lookback, now + hours]."""
         root = ET.fromstring(xml_text)
-        window_start = now - timedelta(minutes=self.lockout_after)
+        if hours_behind is None:
+            window_start = now - timedelta(minutes=self.lockout_after)
+        else:
+            window_start = now - timedelta(hours=float(hours_behind))
         window_end = now + timedelta(hours=hours_ahead)
         source = self._events if prior_events is None else prior_events
         prior_by_id = {self._event_identity(event): event for event in source}
@@ -368,6 +382,24 @@ class NewsChecker:
         timestamp: datetime | None = None,
     ) -> list[NewsEvent]:
         return self.get_display_events(hours_ahead, timestamp)
+
+    def get_events_in_window(
+        self,
+        *,
+        now: datetime | None = None,
+        hours_ahead: int = 24,
+        hours_behind: float = 0,
+    ) -> list[NewsEvent]:
+        """Filter cached events to an explicit lookback/lookahead window."""
+        current = now.astimezone(UTC) if now is not None else datetime.now(UTC)
+        window_start = current - timedelta(hours=hours_behind)
+        window_end = current + timedelta(hours=hours_ahead)
+        return [
+            event
+            for event in self._events
+            if window_start <= event.timestamp <= window_end
+            and event.importance >= self.importance_threshold
+        ]
 
     def get_blocked_currencies(self, timestamp: datetime | None = None) -> set[str]:
         """Get set of currencies currently blocked by news."""

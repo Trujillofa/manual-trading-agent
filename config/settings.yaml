@@ -134,6 +134,7 @@ telegram:
   aligned_pending_notifications: false
   setup_digest_notifications: false
   setup_digest_interval_minutes: 60
+  pre_ny_briefing_notifications: true
   bot_token: "${TELEGRAM_BOT_TOKEN}"
   chat_id: "${TELEGRAM_CHAT_ID}"
 
@@ -158,3 +159,35 @@ etr:
   shadow_horizon_hours: 24
   login: "${ETRACADEMY_LOGIN}"
   password: "${ETRACADEMY_PASSWORD}"
+
+# Once-per-day pre-NY three-pillar briefing (Gold / BTC / Nasdaq / Oil).
+# NY open = 12:00 UTC to match this repo's historical FX NY window (12–21 UTC).
+# That is ~08:00 America/New_York in EDT and ~07:00 in EST. No DST flip.
+# Not CME Globex reopen and not US cash equity open (13:30/14:30 UTC).
+# Decision-support only — not a trade-entry signal and not live-go authorization.
+briefing:
+  enabled: true
+  ny_open_utc: "12:00"
+  lead_minutes: 60
+  skip_weekends: true
+  news_hours_ahead: 24
+  news_hours_behind: 8
+  max_events_per_instrument: 3
+  telegram_notifications: true
+  instruments:
+    - id: XAU/USD
+      etr_asset: gold
+      extra_news_currencies: [USD]
+      news_keywords: [gold, xau]
+    - id: BTC/USD
+      etr_asset: btc
+      extra_news_currencies: [USD]
+      news_keywords: [bitcoin, crypto]
+    - id: NASDAQ
+      etr_asset: nasdaq
+      extra_news_currencies: [USD]
+      news_keywords: [nasdaq]
+    - id: OIL
+      etr_asset: oil
+      extra_news_currencies: [USD]
+      news_keywords: [oil, crude, eia, wti, opec, inventory, api]

@@ -311,6 +311,7 @@ class TelegramConfig:
     aligned_pending_notifications: bool = True
     setup_digest_notifications: bool = True
     setup_digest_interval_minutes: int = 60
+    pre_ny_briefing_notifications: bool = True
     scan_results: bool = True
 
     def __post_init__(self) -> None:
@@ -430,6 +431,105 @@ class EtrConfig:
         return _is_non_empty_string(self.login) and _is_non_empty_string(self.password)
 
 
+@dataclass(frozen=True)
+class BriefingInstrumentConfig:
+    """One instrument in the pre-NY briefing (registry id + news/ETR mapping)."""
+
+    id: str
+    etr_asset: str | None = None
+    extra_news_currencies: tuple[str, ...] = ()
+    news_keywords: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not _is_non_empty_string(self.id):
+            raise ValueError("briefing.instruments[].id must be a non-empty string")
+        if self.etr_asset is not None and not _is_non_empty_string(self.etr_asset):
+            raise ValueError("briefing.instruments[].etr_asset must be a non-empty string or null")
+        allowed = {"btc", "gold", "nasdaq", "oil"}
+        if self.etr_asset is not None and self.etr_asset.lower() not in allowed:
+            raise ValueError(
+                f"briefing.instruments[].etr_asset invalid: {self.etr_asset!r}; "
+                f"allowed={sorted(allowed)}"
+            )
+        object.__setattr__(
+            self,
+            "extra_news_currencies",
+            tuple(item.strip().upper() for item in self.extra_news_currencies if item.strip()),
+        )
+        object.__setattr__(
+            self,
+            "news_keywords",
+            tuple(item.strip().lower() for item in self.news_keywords if item.strip()),
+        )
+        if self.etr_asset is not None:
+            object.__setattr__(self, "etr_asset", self.etr_asset.strip().lower())
+
+
+def default_briefing_instruments() -> list[BriefingInstrumentConfig]:
+    return [
+        BriefingInstrumentConfig(
+            id="XAU/USD",
+            etr_asset="gold",
+            extra_news_currencies=("USD",),
+            news_keywords=("gold", "xau"),
+        ),
+        BriefingInstrumentConfig(
+            id="BTC/USD",
+            etr_asset="btc",
+            extra_news_currencies=("USD",),
+            news_keywords=("bitcoin", "crypto"),
+        ),
+        BriefingInstrumentConfig(
+            id="NASDAQ",
+            etr_asset="nasdaq",
+            extra_news_currencies=("USD",),
+            news_keywords=("nasdaq",),
+        ),
+        BriefingInstrumentConfig(
+            id="OIL",
+            etr_asset="oil",
+            extra_news_currencies=("USD",),
+            news_keywords=("oil", "crude", "eia", "wti", "opec", "inventory", "api"),
+        ),
+    ]
+
+
+@dataclass
+class BriefingConfig:
+    """Once-per-day pre-NY three-pillar Telegram briefing.
+
+    ``ny_open_utc`` defaults to 12:00 UTC — the historical FX NY window start
+    used in this repo (``12-21`` UTC). Not cash-equity 13:30/14:30 UTC.
+    """
+
+    enabled: bool = True
+    ny_open_utc: str = "12:00"
+    lead_minutes: int = 60
+    skip_weekends: bool = True
+    news_hours_ahead: int = 24
+    news_hours_behind: int = 8
+    max_events_per_instrument: int = 3
+    telegram_notifications: bool = True
+    instruments: list[BriefingInstrumentConfig] = field(
+        default_factory=default_briefing_instruments
+    )
+
+    def __post_init__(self) -> None:
+        from src.briefing.schedule import parse_hhmm
+
+        parse_hhmm(self.ny_open_utc)
+        if not 1 <= self.lead_minutes <= 180:
+            raise ValueError("briefing.lead_minutes must be between 1 and 180")
+        if self.news_hours_ahead <= 0:
+            raise ValueError("briefing.news_hours_ahead must be > 0")
+        if self.news_hours_behind < 0:
+            raise ValueError("briefing.news_hours_behind must be >= 0")
+        if self.max_events_per_instrument <= 0:
+            raise ValueError("briefing.max_events_per_instrument must be > 0")
+        if not self.instruments:
+            raise ValueError("briefing.instruments must not be empty")
+
+
 @dataclass
 class Settings:
     trading: TradingConfig = field(default_factory=TradingConfig)
@@ -440,6 +540,7 @@ class Settings:
     data: DataConfig = field(default_factory=DataConfig)
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
     etr: EtrConfig = field(default_factory=EtrConfig)
+    briefing: BriefingConfig = field(default_factory=BriefingConfig)
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> Settings:
@@ -485,6 +586,9 @@ class Settings:
         etr_data = payload.get("etr", {})
         if etr_data is None:
             etr_data = {}
+        briefing_data = payload.get("briefing", {})
+        if briefing_data is None:
+            briefing_data = {}
         oanda_data = data_data.get("oanda", {}) if isinstance(data_data.get("oanda"), dict) else {}
 
         for section_name, section_data in (
@@ -495,6 +599,7 @@ class Settings:
             ("data", data_data),
             ("telegram", telegram_data),
             ("etr", etr_data),
+            ("briefing", briefing_data),
         ):
             if not isinstance(section_data, dict):
                 raise ValueError(f"'{section_name}' must be a YAML object")
@@ -522,6 +627,9 @@ class Settings:
             ),
             "setup_digest_notifications": telegram_data.get("setup_digest_notifications", True),
             "setup_digest_interval_minutes": telegram_data.get("setup_digest_interval_minutes", 60),
+            "pre_ny_briefing_notifications": telegram_data.get(
+                "pre_ny_briefing_notifications", True
+            ),
             "scan_results": telegram_data.get("scan_results", True),
         }
 
@@ -609,7 +717,55 @@ class Settings:
             data=data_config,
             telegram=TelegramConfig(**telegram_payload),
             etr=EtrConfig(**etr_payload),
+            briefing=_parse_briefing_config(briefing_data),
         )
+
+
+def _parse_briefing_config(raw: dict[str, Any]) -> BriefingConfig:
+    instruments_raw = raw.get("instruments")
+    if instruments_raw is None:
+        instruments = default_briefing_instruments()
+    else:
+        if not isinstance(instruments_raw, list) or not instruments_raw:
+            raise ValueError("briefing.instruments must be a non-empty list")
+        instruments = []
+        for item in instruments_raw:
+            if not isinstance(item, dict):
+                raise ValueError("briefing.instruments entries must be objects")
+            extra = item.get("extra_news_currencies", [])
+            keywords = item.get("news_keywords", [])
+            if extra is None:
+                extra = []
+            if keywords is None:
+                keywords = []
+            if not isinstance(extra, list) or not all(isinstance(x, str) for x in extra):
+                raise ValueError(
+                    "briefing.instruments[].extra_news_currencies must be a string list"
+                )
+            if not isinstance(keywords, list) or not all(isinstance(x, str) for x in keywords):
+                raise ValueError("briefing.instruments[].news_keywords must be a string list")
+            etr_asset = item.get("etr_asset")
+            if etr_asset is not None and not str(etr_asset).strip():
+                etr_asset = None
+            instruments.append(
+                BriefingInstrumentConfig(
+                    id=str(item.get("id", "")),
+                    etr_asset=None if etr_asset is None else str(etr_asset),
+                    extra_news_currencies=tuple(extra),
+                    news_keywords=tuple(keywords),
+                )
+            )
+    return BriefingConfig(
+        enabled=bool(raw.get("enabled", True)),
+        ny_open_utc=str(raw.get("ny_open_utc", "12:00")),
+        lead_minutes=int(raw.get("lead_minutes", 60)),
+        skip_weekends=bool(raw.get("skip_weekends", True)),
+        news_hours_ahead=int(raw.get("news_hours_ahead", 24)),
+        news_hours_behind=int(raw.get("news_hours_behind", 8)),
+        max_events_per_instrument=int(raw.get("max_events_per_instrument", 3)),
+        telegram_notifications=bool(raw.get("telegram_notifications", True)),
+        instruments=instruments,
+    )
 
 
 _settings: Settings | None = None

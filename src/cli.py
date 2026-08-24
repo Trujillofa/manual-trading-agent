@@ -358,6 +358,21 @@ def create_parser() -> argparse.ArgumentParser:
         help="Forward paper-shadow summary (TP1 vs invalidation, open events)",
     )
 
+    briefing_parser = subparsers.add_parser(
+        "pre-ny-briefing",
+        help="Once-per-day pre-NY three-pillar briefing (Gold/BTC/Nasdaq/Oil)",
+    )
+    briefing_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Ignore schedule window, weekend skip, and once-per-day state",
+    )
+    briefing_parser.add_argument(
+        "--no-notify",
+        action="store_true",
+        help="Build the briefing without sending Telegram",
+    )
+
     return parser
 
 
@@ -2004,6 +2019,28 @@ async def run_etr_shadow() -> None:
     print(format_shadow_summary())
 
 
+async def run_pre_ny_briefing(*, force: bool = False, no_notify: bool = False) -> None:
+    """Build the pre-NY briefing; send Telegram when in the once-per-day window."""
+    from src.briefing.formatter import format_pre_ny_briefing
+    from src.briefing.service import maybe_send_briefing
+    from src.notifications.telegram import TelegramNotifier
+
+    settings = get_settings()
+    notifier = None
+    if settings.telegram.enabled and settings.telegram.is_configured and not no_notify:
+        notifier = TelegramNotifier(settings.telegram.bot_token, settings.telegram.chat_id)
+
+    result = await maybe_send_briefing(
+        settings,
+        notifier,
+        force=force,
+        notify=not no_notify,
+    )
+    print(f"[PRE-NY] {result.reason} session={result.session_date} sent={result.sent}")
+    if result.briefing is not None and (no_notify or not result.sent):
+        print(format_pre_ny_briefing(result.briefing))
+
+
 async def run_logs_status(notify: bool) -> None:
     await _logs_status_run(notify=notify)
 
@@ -2051,6 +2088,10 @@ def main() -> int:
             assets=_parse_etr_assets(getattr(args, "assets", None)),
         ),
         "etr-shadow": run_etr_shadow,
+        "pre-ny-briefing": lambda: run_pre_ny_briefing(
+            force=getattr(args, "force", False),
+            no_notify=getattr(args, "no_notify", False),
+        ),
     }
 
     handler = handlers.get(args.command)

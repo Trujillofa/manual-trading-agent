@@ -84,6 +84,7 @@ Expected unsolicited messages are few:
 - **EMA crossover** on **30m only** (15m standalone is off — too much whip)
 - **ETR CAMBIO** only when bias, primary direction, or price **enters** the zone
 - **BUY/SELL** and TP/SL when the rare RSI entry actually fires
+- **Pre-NY briefing** once per weekday ~11:00 UTC (Gold / BTC / Nasdaq / Oil)
 
 Hourly scan digest, near-setup, aligned-pending, EMA price-touch, and ETR
 estado/score ticks are **off**. Use `/etr`, `/news`, `/watchlist` to pull detail.
@@ -120,6 +121,26 @@ Runs a fresh scan immediately.
 
 ### /help
 Lists commands.
+
+### Scheduled: pre-NY briefing
+Once per weekday, about 60 minutes before FX NY open (12:00 UTC), Telegram
+receives a Gold / BTC / Nasdaq / Oil briefing with Technical, Fundamental, and
+Sentiment sections. It is a session prep note — not an entry signal and not
+live-go authorization. Idempotent via `logs/pre_ny_briefing_state.json`.
+Force a dry run with `python -m src.cli pre-ny-briefing --force --no-notify`.
+
+Workspace reuse on that same message (no new vendors, no live-go):
+- Technical: existing RSI/ADX/ATR/SMA/EMA/range, instrument session windows,
+  plus cached Rule C / near-setup from `logs/active_signal_state.json` and
+  `logs/near_setup_state.json` when present.
+- Fundamental: Forex Factory 3★ + in-repo surprise labels, USD lockout now vs
+  12:00 UTC (same minutes as `NewsChecker`), NY-window event count, oil
+  inventory lines only when EIA/API titles are on the calendar.
+- Sentiment: cached ETR thesis fields (score / zone / invalidation) labeled as
+  thesis, not a market index; BTC-only public Binance funding if the fetch
+  works. No COT, no paid sentiment, no fear-greed (no in-repo unlicensed BTC
+  F&G helper to reuse). Continuous futures (`GC=F` / `CL=F` / `NQ=F`) stay
+  approximate.
 
 ---
 
@@ -223,7 +244,7 @@ These documents are the source of truth for why current promoted pair profiles w
 
 ### Hetzner (SSH: `crypto-agent` / `root@46.225.119.221`)
 - manual-trading-agent: `/home/emilio/manual-trading-agent`
-- Container: `manual-trading-agent` (15m scan + Telegram poll + optional ETR poll-with-scan)
+- Container: `manual-trading-agent` (15m scan + Telegram poll + ETR poll + pre-NY briefing)
 - After deploy, `git rev-parse HEAD`, `.deploy-sha`, and the image revision
   must match. Tracked dirt on the remote is a stop, not something to reset away.
 

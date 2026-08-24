@@ -54,6 +54,7 @@ research is **terminated** (locked + agent-guarded). The system's honest posture
   for point-in-time US equity earnings surprises. No source has passed, no
   purchase is authorized, and no relationship or strategy code may begin before
   `DATA_PASS`.
+- 2026-08-22 update — Zacks MCP: a new data-proof lane for standardized US statements and current ETF holdings (`docs/research/zacks_mcp/`). Schema inventory passed; KEEP-path remains BLOCKED (5y annual history, no dated holdings, no prices/costs). This does **not** unblock PEAD.
 
 ## Key evidence (the diagnostic table)
 

@@ -1,6 +1,6 @@
 # Zacks MCP Data Manifest — 2026-08-22
 
-Generated `2026-08-22T18:32:46Z` from `research/new_edge/zacks_mcp/data/provenance/zacks_mcp_schema_probe_2026-08.json`.
+Generated `2026-08-24T16:22:44Z` from `research/new_edge/zacks_mcp/data/provenance/zacks_mcp_schema_probe_2026-08.json`
 
 Source: Zacks Investment Research (MCP `https://mcp.zacksdata.com`). Numeric statement and holdings values are not stored in-repo.
 

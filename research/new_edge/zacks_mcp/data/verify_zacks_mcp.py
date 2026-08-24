@@ -37,6 +37,19 @@ REQUIRED_SNAPSHOT_COLUMNS = (
     "total_assets",
     "total_equity",
 )
+REQUIRED_BALANCE_COLUMNS = (
+    "ticker",
+    "period_end",
+    "type",
+    "total_assets",
+    "total_equity",
+)
+REQUIRED_CASH_FLOW_COLUMNS = (
+    "ticker",
+    "period_end",
+    "type",
+    "operating_cash_flow",
+)
 REQUIRED_HOLDINGS_COLUMNS = (
     "ticker",
     "name",
@@ -73,13 +86,19 @@ def _as_str_tuple(value: Any) -> tuple[str, ...]:
 
 
 def _statement_years(inventory: dict[str, Any]) -> float:
+    """Count distinct annual years, not calendar span.
+
+    ``["2021-09-30", "2025-09-30"]`` is 2y, not 5y.
+    """
     probe = inventory.get("live_probe") or {}
     annual = probe.get("snapshot_annual") or {}
     ends = _as_str_tuple(annual.get("period_ends"))
-    if len(ends) < 2:
-        return float(len(ends))
-    years = sorted(int(end[:4]) for end in ends if len(end) >= 4)
-    return float(years[-1] - years[0] + 1)
+    years: set[int] = set()
+    for end in ends:
+        prefix = end[:4]
+        if len(prefix) == 4 and prefix.isdigit():
+            years.add(int(prefix))
+    return float(len(years))
 
 
 def _missing(required: tuple[str, ...], present: tuple[str, ...]) -> tuple[str, ...]:
@@ -94,7 +113,9 @@ def audit_inventory(inventory: dict[str, Any]) -> ZacksMcpAudit:
     holdings_cols = _as_str_tuple(inventory.get("etf_holdings_columns"))
     declared_pead = _as_str_tuple(inventory.get("pead_fields_present"))
     income_cols = _as_str_tuple(inventory.get("income_columns"))
-    all_columns = snapshot_cols + holdings_cols + income_cols
+    balance_cols = _as_str_tuple(inventory.get("balance_columns"))
+    cash_flow_cols = _as_str_tuple(inventory.get("cash_flow_columns"))
+    all_columns = snapshot_cols + holdings_cols + income_cols + balance_cols + cash_flow_cols
     leaked_pead = tuple(field for field in PEAD_FIELDS if field in all_columns)
     pead_present = tuple(dict.fromkeys((*declared_pead, *leaked_pead)))
 
@@ -104,6 +125,12 @@ def audit_inventory(inventory: dict[str, Any]) -> ZacksMcpAudit:
     missing_snapshot = _missing(REQUIRED_SNAPSHOT_COLUMNS, snapshot_cols)
     if missing_snapshot:
         issues.append("missing snapshot columns: " + ", ".join(missing_snapshot))
+    missing_balance = _missing(REQUIRED_BALANCE_COLUMNS, balance_cols)
+    if missing_balance:
+        issues.append("missing balance-sheet columns: " + ", ".join(missing_balance))
+    missing_cash = _missing(REQUIRED_CASH_FLOW_COLUMNS, cash_flow_cols)
+    if missing_cash:
+        issues.append("missing cash-flow columns: " + ", ".join(missing_cash))
     missing_holdings = _missing(REQUIRED_HOLDINGS_COLUMNS, holdings_cols)
     if missing_holdings:
         issues.append("missing ETF holdings columns: " + ", ".join(missing_holdings))
@@ -114,7 +141,13 @@ def audit_inventory(inventory: dict[str, Any]) -> ZacksMcpAudit:
             + "); this MCP is still not a PEAD source"
         )
 
-    schema_ok = not missing_tools and not missing_snapshot and not missing_holdings
+    schema_ok = (
+        not missing_tools
+        and not missing_snapshot
+        and not missing_balance
+        and not missing_cash
+        and not missing_holdings
+    )
     schema_verdict = "SCHEMA_PASS" if schema_ok else "BLOCKED"
     years = _statement_years(inventory)
     has_history = bool(inventory.get("etf_has_as_of_history_param"))
@@ -157,7 +190,7 @@ def render_manifest(audit: ZacksMcpAudit, provenance: Path) -> str:
     pead = ", ".join(audit.pead_fields_present) or "none"
     return (
         "# Zacks MCP Data Manifest — 2026-08-22\n\n"
-        f"Generated `{generated}` from `{provenance.as_posix()}`.\n\n"
+        f"Generated `{generated}` from `{provenance.as_posix()}`\n\n"
         "Source: Zacks Investment Research (MCP `https://mcp.zacksdata.com`). "
         "Numeric statement and holdings values are not stored in-repo.\n\n"
         "| Field | Value |\n|---|---|\n"
@@ -194,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
     )
-    return 0
+    return 0 if audit.schema_verdict == "SCHEMA_PASS" else 2
 
 
 if __name__ == "__main__":

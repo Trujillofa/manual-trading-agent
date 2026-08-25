@@ -2037,7 +2037,7 @@ async def run_pre_ny_briefing(*, force: bool = False, no_notify: bool = False) -
         notify=not no_notify,
     )
     print(f"[PRE-NY] {result.reason} session={result.session_date} sent={result.sent}")
-    if result.briefing is not None and (no_notify or not result.sent):
+    if result.briefing is not None:
         print(format_pre_ny_briefing(result.briefing))
 
 

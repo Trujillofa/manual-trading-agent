@@ -81,6 +81,7 @@ def test_repo_settings_yaml_enables_pre_ny_briefing() -> None:
     assert settings.briefing.enabled is True
     assert settings.briefing.ny_open_utc == "12:00"
     assert settings.briefing.lead_minutes == 60
+    assert settings.briefing.news_hours_ahead == 36
     assert settings.telegram.pre_ny_briefing_notifications is True
     assert [item.id for item in settings.briefing.instruments] == [
         "XAU/USD",

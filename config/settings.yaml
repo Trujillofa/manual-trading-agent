@@ -170,7 +170,7 @@ briefing:
   ny_open_utc: "12:00"
   lead_minutes: 60
   skip_weekends: true
-  news_hours_ahead: 24
+  news_hours_ahead: 36
   news_hours_behind: 8
   max_events_per_instrument: 3
   telegram_notifications: true
@@ -190,4 +190,4 @@ briefing:
     - id: OIL
       etr_asset: oil
       extra_news_currencies: [USD]
-      news_keywords: [oil, crude, eia, wti, opec, inventory, api]
+      news_keywords: [oil, crude, eia, wti, opec, inventory]

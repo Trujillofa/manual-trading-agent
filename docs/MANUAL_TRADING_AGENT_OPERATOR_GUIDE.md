@@ -130,17 +130,20 @@ live-go authorization. Idempotent via `logs/pre_ny_briefing_state.json`.
 Force a dry run with `python -m src.cli pre-ny-briefing --force --no-notify`.
 
 Workspace reuse on that same message (no new vendors, no live-go):
-- Technical: existing RSI/ADX/ATR/SMA/EMA/range, instrument session windows,
-  plus cached Rule C / near-setup from `logs/active_signal_state.json` and
-  `logs/near_setup_state.json` when present.
-- Fundamental: Forex Factory 3★ + in-repo surprise labels, USD lockout now vs
-  12:00 UTC (same minutes as `NewsChecker`), NY-window event count, oil
-  inventory lines only when EIA/API titles are on the calendar.
-- Sentiment: cached ETR thesis fields (score / zone / invalidation) labeled as
-  thesis, not a market index; BTC-only public Binance funding if the fetch
-  works. No COT, no paid sentiment, no fear-greed (no in-repo unlicensed BTC
-  F&G helper to reuse). Continuous futures (`GC=F` / `CL=F` / `NQ=F`) stay
-  approximate.
+- Technical: existing RSI/ADX/ATR/SMA/EMA/range, plus cached Rule C /
+  near-setup from `logs/active_signal_state.json` and
+  `logs/near_setup_state.json` when present. Forming/stale last-bar labels.
+- Fundamental: one shared Macro 3★ block (all high-impact prints in the
+  lookback/36h window, USD lockout now vs 12:00 UTC, NY-window count)
+  plus a one-line Spanish header (`hoy: sin lockout; riesgo = …`) from
+  that same calendar.
+  Per-instrument lines are title-keyword only. Oil inventory only when
+  EIA/API titles are on the calendar.
+- Sentiment: cached ETR thesis (zone / invalidation) labeled as thesis, not
+  a market index, with a stale-cache warning; BTC-only public Binance
+  funding if the fetch works. No COT, no paid sentiment, no fear-greed.
+  Continuous futures (`GC=F` / `CL=F` / `NQ=F`) stay approximate.
+  Successful sends always log the full body to `logs/briefing.log`.
 
 ---
 

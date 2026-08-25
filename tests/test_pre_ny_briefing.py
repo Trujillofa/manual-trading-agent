@@ -11,6 +11,7 @@ import yaml
 
 from src.briefing.formatter import format_pre_ny_briefing
 from src.briefing.fundamental import (
+    build_header_synthesis,
     events_in_lockout,
     events_in_ny_window,
     inventory_calendar_events,
@@ -19,7 +20,9 @@ from src.briefing.fundamental import (
 from src.briefing.funding import FundingSnapshot, parse_funding_payload
 from src.briefing.schedule import in_pre_ny_window, ny_open_at, should_send_briefing
 from src.briefing.service import build_briefing, maybe_send_briefing
+from src.briefing.technical import bar_freshness
 from src.config.settings import BriefingConfig, BriefingInstrumentConfig, Settings
+from src.etr.alerts import chunk_telegram
 from src.etr.models import EtrReport, EtrScenario, PriceZone
 from src.news.news_checker import NewsEvent
 from src.news.surprise import SOURCE_FOREX_FACTORY
@@ -228,18 +231,23 @@ async def test_build_briefing_has_four_instruments_and_three_pillars(tmp_path: P
     assert gold.fundamental.available is True
     assert gold.sentiment.available is True
     assert any("RSI" in line for line in gold.technical.lines)
-    assert any("CPI" in line for line in gold.fundamental.lines)
-    assert any("proxy" in line.lower() for line in gold.sentiment.lines)
+    assert any("sin 3★ propios" in line for line in gold.fundamental.lines)
+    assert not any("CPI" in line for line in gold.fundamental.lines)
     assert any("Tesis ETR" in line for line in gold.sentiment.lines)
     assert any("Score tesis ETR" in line for line in gold.sentiment.lines)
     assert any("en zona SÍ" in line for line in gold.sentiment.lines)
-    assert any("Lockout 3★ ahora" in line for line in gold.fundamental.lines)
+    assert briefing.shared_fundamental is not None
+    assert any("CPI" in line for line in briefing.shared_fundamental.lines)
+    assert any("Lockout USD ahora" in line for line in briefing.shared_fundamental.lines)
     oil = briefing.instruments[3]
-    assert any("Inventarios" in line for line in oil.fundamental.lines)
+    assert any(
+        "Inventarios" in line or "EIA Crude Inventories" in line for line in oil.fundamental.lines
+    )
     assert any("EIA Crude Inventories" in line for line in oil.fundamental.lines)
 
     message = format_pre_ny_briefing(briefing)
     assert "Briefing pre-sesión NY" in message
+    assert "Macro 3★" in message
     assert "Técnico" in message
     assert "Fundamental" in message
     assert "Sentimiento" in message
@@ -248,6 +256,10 @@ async def test_build_briefing_has_four_instruments_and_three_pillars(tmp_path: P
     assert "Bitcoin" in message
     assert "Nasdaq" in message
     assert "Petróleo" in message
+    assert "proxy" in message.lower()
+    assert briefing.synthesis == "hoy: sin lockout; riesgo = CPI"
+    assert message.count("CPI") == 2  # header synthesis + shared Macro 3★
+    assert len(chunk_telegram(message)) == 1
 
 
 @pytest.mark.asyncio
@@ -495,4 +507,163 @@ async def test_etr_and_funding_absence_is_graceful(tmp_path: Path) -> None:
         assert item.sentiment.available is True
         assert any("Tesis ETR: no disponible" in line for line in item.sentiment.lines)
         assert item.fundamental.available is True
-        assert any("Lockout 3★ ahora: no" in line for line in item.fundamental.lines)
+        assert any("sin 3★ propios" in line for line in item.fundamental.lines)
+    assert briefing.shared_fundamental is not None
+    assert any("Lockout USD ahora: no" in line for line in briefing.shared_fundamental.lines)
+
+
+def test_bar_freshness_forming_and_stale() -> None:
+    now = datetime(2026, 8, 25, 11, 20, tzinfo=UTC)
+    forming = datetime(2026, 8, 25, 11, 0, tzinfo=UTC)
+    stale = datetime(2026, 8, 25, 7, 0, tzinfo=UTC)
+    assert bar_freshness(forming, now) == "barra 1h en curso"
+    assert bar_freshness(stale, now) == "OHLC atrasado ~4h"
+    assert bar_freshness(now - timedelta(hours=1, minutes=30), now) is None
+
+
+@pytest.mark.asyncio
+async def test_shared_macro_keeps_non_usd_and_does_not_repeat(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    now = datetime(2026, 8, 25, 11, 15, tzinfo=UTC)
+
+    def fetch(_instrument_id: str) -> dict[str, pd.DataFrame]:
+        return _frames(100.0)
+
+    events = [
+        _event("CPI m/m", "AUD", now + timedelta(hours=14)),
+        _event("Core PCE Price Index m/m", "USD", now + timedelta(hours=25)),
+        _event("Prelim GDP q/q", "USD", now + timedelta(hours=25)),
+    ]
+    briefing = await build_briefing(
+        settings,
+        now=now,
+        fetch_mtf=fetch,
+        events=events,
+        etr_reports={},
+        fetch_funding=False,
+        active_signals={},
+        near_setups={},
+    )
+    assert briefing.shared_fundamental is not None
+    shared = "\n".join(briefing.shared_fundamental.lines)
+    assert "CPI m/m" in shared
+    assert "Core PCE" in shared
+    assert "Prelim GDP" in shared
+    gold = next(item for item in briefing.instruments if item.instrument_id == "XAU/USD")
+    assert not any("CPI" in line or "PCE" in line for line in gold.fundamental.lines)
+    message = format_pre_ny_briefing(briefing)
+    assert message.count("Core PCE Price Index m/m") == 1
+    assert briefing.synthesis == "hoy: sin lockout; riesgo = AUD CPI / PCE"
+    assert "hoy: sin lockout; riesgo = AUD CPI / PCE" in message
+    assert len(chunk_telegram(message)) == 1
+
+
+@pytest.mark.asyncio
+async def test_stale_etr_is_labeled(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    now = datetime(2026, 8, 25, 11, 20, tzinfo=UTC)
+
+    def fetch(_instrument_id: str) -> dict[str, pd.DataFrame]:
+        return _frames(100.0)
+
+    etr = {
+        "gold": EtrReport(
+            asset="gold",
+            label="Oro",
+            price=2400.0,
+            updated_at="11/08/2026",
+            context_score=93.0,
+            bias="alcista",
+            estado="Zona",
+            lectura_headline="",
+            lectura_body="",
+            h4_context="",
+            m5_execution="",
+            structure="",
+        )
+    }
+    briefing = await build_briefing(
+        settings,
+        now=now,
+        fetch_mtf=fetch,
+        events=[],
+        etr_reports=etr,
+        etr_polled={"gold": "2026-08-11T22:45:47+00:00"},
+        fetch_funding=False,
+        active_signals={},
+        near_setups={},
+    )
+    gold = next(item for item in briefing.instruments if item.instrument_id == "XAU/USD")
+    assert any("caché vieja" in line for line in gold.sentiment.lines)
+    assert not any("zona" in line.lower() or "Score tesis" in line for line in gold.sentiment.lines)
+
+
+@pytest.mark.asyncio
+async def test_partial_telegram_send_does_not_mark_sent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(tmp_path)
+    monkeypatch.setenv("MANUAL_TRADING_AGENT_LOG_DIR", str(tmp_path / "logs"))
+    monkeypatch.setattr(
+        "src.etr.alerts.chunk_telegram",
+        lambda _message, limit=4000: ["chunk-a", "chunk-b"],
+    )
+    now = datetime(2026, 8, 24, 11, 20, tzinfo=UTC)
+    sent: list[str] = []
+
+    class _Notifier:
+        enabled = True
+
+        async def send(self, message: str, parse_mode: str = "Markdown") -> bool:
+            sent.append(message)
+            return message == "chunk-a"
+
+    def fetch(_instrument_id: str) -> dict[str, pd.DataFrame]:
+        return _frames(100.0)
+
+    first = await maybe_send_briefing(
+        settings,
+        _Notifier(),
+        now=now,
+        fetch_mtf=fetch,
+        events=[],
+        etr_reports={},
+        fetch_funding=False,
+        active_signals={},
+        near_setups={},
+    )
+    assert first.sent is False
+    assert first.reason == "send_failed"
+    assert sent == ["chunk-a", "chunk-b"]
+    second = await maybe_send_briefing(
+        settings,
+        _Notifier(),
+        now=now,
+        fetch_mtf=fetch,
+        events=[],
+        etr_reports={},
+        fetch_funding=False,
+        active_signals={},
+        near_setups={},
+    )
+    assert second.reason != "already_sent"
+
+
+def test_header_synthesis_lockout_and_missing_calendar() -> None:
+    now = datetime(2026, 8, 25, 11, 45, tzinfo=UTC)
+    cpi = _event("CPI m/m", "USD", datetime(2026, 8, 25, 12, 30, tzinfo=UTC))
+    pce = _event("Core PCE Price Index m/m", "USD", now + timedelta(hours=20))
+    assert (
+        build_header_synthesis(events=[cpi, pce], now=now) == "hoy: lockout USD (CPI); riesgo = PCE"
+    )
+    assert (
+        build_header_synthesis(
+            events=[],
+            now=now,
+            news_error="calendario no disponible: timeout",
+        )
+        == "hoy: calendario no disponible"
+    )
+    assert build_header_synthesis(events=[], now=now) == "hoy: sin lockout; riesgo = sin claves 3★"

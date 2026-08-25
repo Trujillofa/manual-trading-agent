@@ -1,14 +1,15 @@
-"""Sentiment proxy: cached ETR thesis + calendar headline density + BTC funding.
+"""Sentiment proxy: cached ETR thesis + BTC funding.
 
 Labeled as a proxy. Not a Bloomberg-grade (or any numeric) sentiment score.
 ETR context_score is the terminal's own thesis field, not a market index.
 BTC funding is a public Binance crowding print, only when the fetch works.
+Calendar density lives in the shared macro block, not per instrument.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from src.briefing.funding import FundingSnapshot
 from src.briefing.models import Pillar
@@ -18,64 +19,51 @@ from src.news.news_checker import NewsEvent
 
 logger = logging.getLogger(__name__)
 
-_RISK_KEYWORDS = (
-    "fomc",
-    "cpi",
-    "nfp",
-    "payroll",
-    "powell",
-    "pce",
-    "jackson hole",
-    "interest rate",
-    "rate decision",
-    "non-farm",
-    "nonfarm",
-)
-
-_BUCKET_ES = {
-    "low": "bajo",
-    "mid": "medio",
-    "high": "alto",
-    "unknown": "—",
-}
+ETR_STALE_HOURS = 24
 
 
-def _density_label(count: int) -> str:
-    if count <= 0:
-        return "ligero"
-    if count <= 2:
-        return "moderado"
-    return "denso"
+def _parse_timestamp(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
-def _keyword_hits(events: list[NewsEvent]) -> list[str]:
-    hits: list[str] = []
-    for event in events:
-        name = event.name.lower()
-        for keyword in _RISK_KEYWORDS:
-            if keyword in name and keyword not in hits:
-                hits.append(keyword)
-    return hits
+def _etr_age_hours(report: EtrReport, polled_at: str | None, now: datetime) -> int | None:
+    stamp = _parse_timestamp(polled_at) or _parse_timestamp(report.fetched_at)
+    if stamp is None:
+        return None
+    age = now.astimezone(UTC) - stamp
+    if age < timedelta(0):
+        return 0
+    return int(age.total_seconds() // 3600)
 
 
 def _etr_lines(
     report: EtrReport,
     polled_at: str | None,
+    now: datetime,
     *,
-    score_low: float,
-    score_high: float,
+    instrument_id: str,
 ) -> list[str]:
+    age_hours = _etr_age_hours(report, polled_at, now)
+    if age_hours is not None and age_hours >= ETR_STALE_HOURS:
+        return [f"Tesis ETR: caché vieja ~{age_hours}h · no usar"]
+
     bias = report.bias or "—"
     estado = report.estado or "—"
     direction = report.primary.direction if report.primary else "—"
     lines = [f"Tesis ETR (caché): {bias} · {estado} · dir. {direction}"]
     if report.context_score is not None:
-        bucket = _BUCKET_ES.get(report.score_bucket(score_low, score_high), "—")
-        lines.append(
-            f"Score tesis ETR: {report.context_score:g}/100 "
-            f"(cubeta {bucket} · umbral alerta {score_low:g}/{score_high:g} · "
-            "no es índice de mercado)"
-        )
+        lines.append(f"Score tesis ETR: {report.context_score:g}/100 (no es índice de mercado)")
     primary = report.primary
     if primary is not None:
         bits: list[str] = []
@@ -93,11 +81,13 @@ def _etr_lines(
         if bits:
             lines.append("Escenario ETR: " + " · ".join(bits))
     if report.lectura_headline:
-        headline = report.lectura_headline.strip()[:160]
+        headline = report.lectura_headline.strip()[:80]
         lines.append(f"Titular ETR: {headline}")
     freshness = polled_at or report.fetched_at or report.updated_at
     if freshness:
         lines.append(f"ETR actualizado: {freshness}")
+    if instrument_id == "NASDAQ":
+        lines.append("ETR en escala QQQ, no NQ=F")
     return lines
 
 
@@ -113,7 +103,7 @@ def _funding_line(snapshot: FundingSnapshot) -> str:
 def build_sentiment_pillar(
     *,
     instrument: BriefingInstrumentConfig,
-    events: list[NewsEvent],
+    events: list[NewsEvent] | None = None,
     etr_report: EtrReport | None,
     etr_polled_at: str | None,
     now: datetime,
@@ -122,21 +112,11 @@ def build_sentiment_pillar(
     btc_funding: FundingSnapshot | None = None,
     funding_error: str | None = None,
 ) -> Pillar:
+    del events, score_low, score_high
     try:
-        now_utc = now.astimezone(UTC)
-        relevant = [
-            event
-            for event in events
-            if event.currency in {"USD"}
-            or any(keyword.lower() in event.name.lower() for keyword in instrument.news_keywords)
-        ]
-        lines = [
-            "Proxy — no es un score de sentimiento de mercado",
-        ]
+        lines: list[str] = []
         if etr_report is not None:
-            lines.extend(
-                _etr_lines(etr_report, etr_polled_at, score_low=score_low, score_high=score_high)
-            )
+            lines.extend(_etr_lines(etr_report, etr_polled_at, now, instrument_id=instrument.id))
         else:
             lines.append("Tesis ETR: no disponible (sin caché)")
 
@@ -146,19 +126,11 @@ def build_sentiment_pillar(
             elif funding_error:
                 lines.append(f"Funding BTCUSDT: no disponible ({funding_error})")
 
-        upcoming = sum(1 for event in relevant if event.timestamp >= now_utc)
-        lines.append(
-            f"Densidad de calendario 3★: {_density_label(upcoming)} "
-            f"({upcoming} próximos relevantes · proxy de titulares)"
-        )
-        hits = _keyword_hits(relevant)
-        if hits:
-            lines.append(f"Palabras clave: {', '.join(hits)} (proxy de titular, no sesgo)")
         return Pillar(
             name="sentiment",
             available=True,
             lines=tuple(lines),
-            source="etr_cache+forex_factory_headlines",
+            source="etr_cache+binance_funding",
         )
     except Exception as exc:
         logger.warning("sentiment pillar failed for %s: %s", instrument.id, exc)
@@ -166,5 +138,5 @@ def build_sentiment_pillar(
             name="sentiment",
             available=False,
             unavailable_reason=str(exc),
-            source="etr_cache+forex_factory_headlines",
+            source="etr_cache+binance_funding",
         )

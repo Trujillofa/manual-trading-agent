@@ -15,7 +15,7 @@ import os
 import re
 import shlex
 import shutil
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -240,7 +240,8 @@ def build_decision_prompt(briefing: PreNyBriefing) -> str:
         "Solo tienes velas/indicadores de 1h, 30m y 15m. NO inventes D1/H4 ni otros TF.",
         "Oro / Nasdaq / Petróleo: futuros continuos — niveles aproximados.",
         "Usa SOLO los hechos de abajo. Si ETR está viejo o faltan datos, bájale la confianza.",
-        "Recomendación: wait | buy_pullback | sell_rally | stand_aside.",
+        "NO des BUY/SELL ni compra/venta. Eso lo decide solo el scanner V2.",
+        "Recomendación contextual (no es la acción): wait | stand_aside.",
         "Responde SOLO un JSON (sin markdown, sin herramientas) con esta forma:",
         "{",
         '  "XAU/USD": {',
@@ -248,7 +249,7 @@ def build_decision_prompt(briefing: PreNyBriefing) -> str:
         '    "htf_basis": "qué TF/indicador usaste de los suministrados",',
         '    "support": ["nivel", "..."],',
         '    "resistance": ["nivel", "..."],',
-        '    "recommendation": "wait|buy_pullback|sell_rally|stand_aside",',
+        '    "recommendation": "wait|stand_aside",',
         '    "why": "una frase",',
         '    "invalidation": "qué cancela el plan",',
         '    "confidence": "low|medium|high",',
@@ -289,7 +290,8 @@ def format_ny_plan(plan: NyPlan) -> list[str]:
     support = _short_levels(plan.support)
     resist = _short_levels(plan.resistance)
     trend = plan.htf_trend[:40]
-    first = f"*Plan NY* {plan.recommendation} · HTF {trend} · S {support} / R {resist}"
+    action = plan.recommendation or plan.action or "no operar"
+    first = f"*Plan NY* {action} · HTF {trend} · S {support} / R {resist}"
     bits = [part for part in (plan.why, plan.invalidation and f"Inv: {plan.invalidation}") if part]
     if plan.confidence:
         bits.append(f"Conf: {plan.confidence}")
@@ -447,29 +449,55 @@ async def attach_ny_plans(
     *,
     cfg: BriefingHermesConfig,
     complete: HermesComplete | None = None,
+    actions: Mapping[str, str] | None = None,
 ) -> PreNyBriefing:
-    """Fill ``ny_plan`` on each instrument. Never raises to the scan loop."""
+    """Fill ``ny_plan`` then overwrite the action from V2. Never raises."""
+    from src.briefing.actions import DeskAction, apply_desk_action
+
+    allowed: dict[str, DeskAction] = {
+        "STAND_ASIDE": "STAND_ASIDE",
+        "WATCH": "WATCH",
+        "ENTER_ONLY_IF": "ENTER_ONLY_IF",
+    }
     ids = [item.instrument_id for item in briefing.instruments]
-    if not cfg.enabled:
-        return briefing
-    try:
-        runner: HermesComplete
-        if complete is None:
-            client = HermesClient.from_config(cfg)
-            runner = client.complete
-        else:
-            runner = complete
-        raw = await runner(build_decision_prompt(briefing))
-        plans = parse_plans(raw, ids)
-    except Exception as exc:
-        logger.warning("Hermes NY plan failed: %s", exc)
-        reason = str(exc).strip() or exc.__class__.__name__
-        if isinstance(exc, TimeoutError) or "timeout" in reason.lower():
-            reason = reason if reason.startswith("timeout") else f"timeout: {reason}"
-        plans = {item: unavailable_plan(reason) for item in ids}
+    resolved: dict[str, DeskAction] = {}
+    for instrument_id in ids:
+        resolved[instrument_id] = allowed.get(
+            (actions or {}).get(instrument_id, "STAND_ASIDE"),
+            "STAND_ASIDE",
+        )
+
+    hermes_note: str | None = None
+    plans: dict[str, NyPlan] = {}
+    if cfg.enabled:
+        try:
+            runner: HermesComplete
+            if complete is None:
+                client = HermesClient.from_config(cfg)
+                runner = client.complete
+            else:
+                runner = complete
+            raw = await runner(build_decision_prompt(briefing))
+            plans = parse_plans(raw, ids)
+        except Exception as exc:
+            logger.warning("Hermes NY plan failed: %s", exc)
+            reason = str(exc).strip() or exc.__class__.__name__
+            if isinstance(exc, TimeoutError) or "timeout" in reason.lower():
+                reason = reason if reason.startswith("timeout") else f"timeout: {reason}"
+            hermes_note = reason
+            plans = {item: unavailable_plan(reason) for item in ids}
+    else:
+        hermes_note = "Hermes deshabilitado"
 
     briefing.instruments = [
-        replace(item, ny_plan=plans.get(item.instrument_id) or unavailable_plan("sin plan"))
+        replace(
+            item,
+            ny_plan=apply_desk_action(
+                plans.get(item.instrument_id),
+                resolved[item.instrument_id],
+                hermes_note=hermes_note,
+            ),
+        )
         for item in briefing.instruments
     ]
     return briefing

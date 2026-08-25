@@ -33,6 +33,7 @@ class NyPlan:
     support: tuple[str, ...] = ()
     resistance: tuple[str, ...] = ()
     recommendation: str = ""
+    action: str = ""
     why: str = ""
     invalidation: str = ""
     confidence: str = ""

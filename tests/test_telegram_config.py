@@ -118,14 +118,14 @@ def test_settings_loads_quiet_alert_defaults(tmp_path: Path) -> None:
     assert settings.telegram.setup_digest_interval_minutes == 45
 
 
-def test_repo_settings_yaml_enables_intraday_ema_crossover_alerts() -> None:
-    """Production config opts into 30m GC/DC standalone Telegram alerts."""
+def test_repo_settings_yaml_disables_standalone_ema_telegram() -> None:
+    """Production config keeps EMA computation but no standalone Telegram ping."""
     repo_yaml = Path(__file__).resolve().parents[1] / "config" / "settings.yaml"
     settings = Settings.load(repo_yaml)
 
     ema = settings.strategy.ema
     assert ema.enabled is True
-    assert ema.standalone_notifications_enabled is True
+    assert ema.standalone_notifications_enabled is False
     assert ema.standalone_signal_types == ["crossover"]
     assert ema.standalone_timeframes == ["30m"]
     assert ema.standalone_session_filter_enabled is True

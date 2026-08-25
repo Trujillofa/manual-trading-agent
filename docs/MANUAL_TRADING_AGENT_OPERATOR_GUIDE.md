@@ -69,9 +69,9 @@ All pairs now run on global defaults (V2 reversal, b0.5/c2, sma=50, tp=1.0×ATR,
 
 ### Watchlist (all on default config)
 
-majors + minors listed in config/settings.yaml (27 pairs total; EUR/GBP remains excluded).
+Live scan and briefing watchlist (`config/settings.yaml`): **XAU/USD, BTC/USD, OIL, NASDAQ**.
 
-**EUR/GBP** remains excluded (historical negative results across multiple backtests; no reinstatement without full 180d+ Dukascopy validation on the unified live entry).
+Do not restore the old 27-pair FX scan. EUR/GBP stays excluded.
 
 Refer to `config/settings.yaml` for exact current profiles (now minimal) and CLAUDE.md for the full R1 evidence, driver details, and Branch B rationale. The operator should treat alerts as rare, high-quality decision support — not high-volume autonomous trades. TP/SL levels are advisory.
 
@@ -81,13 +81,12 @@ Refer to `config/settings.yaml` for exact current profiles (now minimal) and CLA
 
 Expected unsolicited messages are few:
 
-- **EMA crossover** on **30m only** (15m standalone is off — too much whip)
+- **V2 BUY/SELL** and TP/SL when the live entry actually fires
 - **ETR CAMBIO** only when bias, primary direction, or price **enters** the zone
-- **BUY/SELL** and TP/SL when the rare RSI entry actually fires
-- **Pre-NY briefing** once per weekday ~11:00 UTC (Gold / BTC / Nasdaq / Oil)
+- **Pre-NY briefing** once per weekday ~11:00 UTC (Gold / BTC / Nasdaq / Oil). Plan NY action is V2-gated (`no operar` / `esperar` / `entrar solo si V2`)
 
-Hourly scan digest, near-setup, aligned-pending, EMA price-touch, and ETR
-estado/score ticks are **off**. Use `/etr`, `/news`, `/watchlist` to pull detail.
+Hourly scan digest, near-setup, aligned-pending, standalone EMA Telegram, and ETR
+estado/score ticks are **off**. Use `/plan`, `/etr`, `/news`, `/watchlist` to pull detail.
 
 ## Telegram commands
 ### /watchlist
@@ -113,8 +112,11 @@ Shows:
 ### /pairs
 Lists tracked pairs.
 
-### /pair GBP/USD
-Runs a fresh single-pair review.
+### /pair XAU/USD
+Runs a fresh single-instrument review.
+
+### /plan
+Reprints today's desk card (skips Hermes). `/plan XAU/USD` for one symbol.
 
 ### /scan
 Runs a fresh scan immediately.

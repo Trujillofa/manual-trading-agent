@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.cli import _ema_standalone_fingerprint, _filter_standalone_ema_signals
 from src.indicators.ema import (
     EMACrossover,
     EMACrossoverType,
@@ -18,6 +17,7 @@ from src.indicators.ema import (
 from src.notifications.digest import EmaSignalEntry
 from src.notifications.telegram import TelegramNotifier
 from src.scanner.gates import _session_allowed
+from src.scanner.scan_service import _ema_standalone_fingerprint, _filter_standalone_ema_signals
 
 
 def _crossover(
@@ -174,7 +174,7 @@ async def test_send_ema_crossover_death_bias_without_price() -> None:
 
 
 def test_ema_alert_audit_payload_records_adx_regime() -> None:
-    from src.cli import _ema_alert_audit_payload
+    from src.scanner.scan_service import _ema_alert_audit_payload
 
     data = _crossover(kind=EMACrossoverType.DEATH_CROSS, timeframe="30m", fast=20, slow=50)
     payload = _ema_alert_audit_payload(
@@ -196,7 +196,7 @@ def test_ema_alert_audit_payload_records_adx_regime() -> None:
 
 
 def test_ema_alert_audit_payload_tolerates_missing_adx() -> None:
-    from src.cli import _ema_alert_audit_payload
+    from src.scanner.scan_service import _ema_alert_audit_payload
 
     payload = _ema_alert_audit_payload(
         ts_iso="2026-08-11T12:00:00+00:00",

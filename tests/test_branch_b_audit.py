@@ -91,7 +91,9 @@ def _record_for_state(
         news_blocked=False,
         audit_path=audit,
     )
-    rows = [json.loads(line) for line in audit.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows = [
+        json.loads(line) for line in audit.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
     decision_rows = [row for row in rows if row.get("kind") == KIND_DECISION_SIGNAL]
     assert len(decision_rows) == 1
     return decision_rows[0]
@@ -156,7 +158,9 @@ def test_existing_scan_telemetry_rows_still_append_as_before(
         audit_path=audit,
     )
 
-    rows = [json.loads(line) for line in audit.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows = [
+        json.loads(line) for line in audit.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
     assert rows[0]["kind"] == "scan_telemetry"
     assert rows[0]["state"] == "entry"
     assert rows[1]["kind"] == KIND_DECISION_SIGNAL
@@ -194,16 +198,20 @@ def test_builder_failure_does_not_prevent_legacy_telemetry_append(
     )
 
     assert recorded is False
-    rows = [json.loads(line) for line in audit.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows = [
+        json.loads(line) for line in audit.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
     assert len(rows) == 1
     assert rows[0]["kind"] == "scan_telemetry"
 
 
 def test_cli_has_no_telegram_behavior_changes() -> None:
     cli_source = Path("src/cli.py").read_text(encoding="utf-8")
-    assert "await notifier.send_signal(" in cli_source
-    assert "record_branch_b_scan_decision_signal(" in cli_source
-    assert cli_source.index("record_branch_b_scan_decision_signal(") > cli_source.index(
+    scan_source = Path("src/scanner/scan_service.py").read_text(encoding="utf-8")
+    assert "run_scan(" in cli_source
+    assert "await notifier.send_signal(" in scan_source
+    assert "record_branch_b_scan_decision_signal(" in scan_source
+    assert scan_source.index("record_branch_b_scan_decision_signal(") > scan_source.index(
         "_append_audit_log(telemetry_payload)"
     )
 

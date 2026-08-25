@@ -4,13 +4,16 @@
 
 ## What Branch B is
 
-A **paper-mode decision-support agent**:
+A **paper-mode decision-support desk**:
 
 - Multi-asset scanner (XAU/USD, BTC/USD, OIL, NASDAQ)
-- RSI multi-timeframe setup classification + EMA 20/50 crossover context (30m Telegram only)
-- ETR thesis-change Telegram (bias / direction / zone entry) + forward shadow logs
-- Once-per-day pre-NY three-pillar briefing (Gold / BTC / Nasdaq / Oil)
+- Rare V2 RSI+reclaim Telegram interrupt (entry + paper TP/SL)
+- Once-per-day pre-NY briefing. Plan NY action is V2-gated:
+  `no operar` / `esperar` / `entrar solo si V2`
+- ETR thesis-change Telegram (bias / direction / zone entry) + `/etr` pull + shadow logs
 - Audit / OHLCV persistence for later research
+
+EMA 20/50 remains indicator context on the briefing card. Standalone EMA Telegram is **off**.
 
 ## What Branch B is not
 
@@ -18,13 +21,15 @@ A **paper-mode decision-support agent**:
 - Not an autonomous execution system
 - Not a reason to increase lot size, leverage, or capital allocation
 - Not a reopen of closed FX directional-TA or other discarded research lanes
+- Plan NY is desk context, not a trade list
 
 ## Operator rules
 
 1. Treat every Telegram alert as **discretionary context**.
 2. Do not map alert count → trading frequency or “edge is working.”
 3. Use ETR shadow / audit logs as **evidence collection**, not as live sizing inputs, until a written price-basis audit and KEEP gates pass.
-4. New profitability work happens on **isolated research branches/worktrees** under the harness rules — not by retuning live Branch B gates for P&L.
+4. Hermes HTF / S/R / ETR thesis must not set the Plan NY action. Only `evaluate_entry` may.
+5. New profitability work happens on **isolated research branches/worktrees** under the harness rules — not by retuning live Branch B gates for P&L.
 
 ## Related docs
 

@@ -115,3 +115,8 @@ def format_pre_ny_briefing(briefing: PreNyBriefing) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def format_instrument_briefing(item: InstrumentBriefing) -> str:
+    """Single-symbol card shared by Telegram briefing and ``analyze``."""
+    return _instrument_block(item)

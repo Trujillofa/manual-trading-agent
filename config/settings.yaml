@@ -195,10 +195,11 @@ briefing:
   # Scheduled invoke is host cron as emilio (scripts/run_pre_ny_briefing_host.sh),
   # not the scan container (no hermes binary; hermes serve is not up).
   # Set endpoint only if you expose an OpenAI-compat proxy. Do not use --safe-mode.
+  # 120s finished a thin 4-symbol call; 240s is the floor once ETR cache is in the prompt.
   # If Hermes is down, briefing still sends: "Plan NY: no disponible".
   hermes:
     enabled: true
     endpoint: ""
     cli_command: hermes
-    timeout_seconds: 120
+    timeout_seconds: 240
     model: ""

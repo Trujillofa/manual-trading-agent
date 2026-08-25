@@ -501,7 +501,7 @@ class BriefingHermesConfig:
     enabled: bool = True
     endpoint: str = ""
     cli_command: str = "hermes"
-    timeout_seconds: float = 120.0
+    timeout_seconds: float = 240.0
     model: str = ""
     api_key: str | None = None
 
@@ -786,7 +786,7 @@ def _parse_briefing_config(raw: dict[str, Any]) -> BriefingConfig:
         enabled=bool(hermes_raw.get("enabled", True)),
         endpoint=str(hermes_raw.get("endpoint", "") or ""),
         cli_command=str(hermes_raw.get("cli_command", "hermes") or "hermes"),
-        timeout_seconds=float(hermes_raw.get("timeout_seconds", 120)),
+        timeout_seconds=float(hermes_raw.get("timeout_seconds", 240)),
         model=str(hermes_raw.get("model", "") or ""),
         api_key=hermes_raw.get("api_key"),
     )

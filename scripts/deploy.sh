@@ -161,11 +161,23 @@ EOF
 log "Installing host pre-NY briefing cron as emilio …"
 remote bash <<EOF
 set -euo pipefail
+# Older SHAs (and deploy-alignment fixtures) do not have the host script.
+# Skip rather than fail chmod; production this SHA always has the file.
+if [ ! -f '${REMOTE_PATH}/scripts/run_pre_ny_briefing_host.sh' ]; then
+  echo "[deploy] host briefing script not in this SHA — skip cron install"
+  exit 0
+fi
 chmod +x '${REMOTE_PATH}/scripts/run_pre_ny_briefing_host.sh'
 mkdir -p '${REMOTE_PATH}/logs'
 touch '${REMOTE_PATH}/logs/briefing.log' '${REMOTE_PATH}/logs/pre_ny_briefing_state.json'
-chown emilio:emilio '${REMOTE_PATH}/logs/briefing.log' '${REMOTE_PATH}/logs/pre_ny_briefing_state.json'
+if id emilio >/dev/null 2>&1; then
+  chown emilio:emilio '${REMOTE_PATH}/logs/briefing.log' '${REMOTE_PATH}/logs/pre_ny_briefing_state.json'
+fi
 chmod 664 '${REMOTE_PATH}/logs/briefing.log' '${REMOTE_PATH}/logs/pre_ny_briefing_state.json'
+if [ ! -d /etc/cron.d ] || [ ! -w /etc/cron.d ]; then
+  echo "[deploy] ERROR: /etc/cron.d is not writable; host Hermes cron cannot be installed" >&2
+  exit 1
+fi
 cat > /etc/cron.d/manual-trading-pre-ny-briefing <<CRON
 SHELL=/bin/sh
 PATH=/home/emilio/.local/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin

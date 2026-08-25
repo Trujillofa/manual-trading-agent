@@ -104,3 +104,38 @@ def test_rotate_once_uses_configurable_log_dir(tmp_path: Path) -> None:
 @pytest.mark.skipif(not SCRIPT.exists(), reason="run_scanner_loop.sh missing")
 def test_script_is_executable() -> None:
     assert os.access(SCRIPT, os.X_OK)
+
+
+def test_loop_skips_in_container_briefing_when_host_invoke() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "BRIEFING_INVOKE" in text
+    assert 'BRIEFING_INVOKE" = "host"' in text
+    assert "skip in-container briefing" in text
+    assert "python -u -m src.cli pre-ny-briefing" in text
+
+
+def test_host_briefing_script_uses_emilio_hermes_env() -> None:
+    host = SCRIPT.parent / "run_pre_ny_briefing_host.sh"
+    assert host.is_file()
+    assert os.access(host, os.X_OK)
+    text = host.read_text(encoding="utf-8")
+    assert "HERMES_HOME" in text
+    assert "/home/emilio/.local/bin" in text
+    assert "pre-ny-briefing" in text
+    exec_lines = [line for line in text.splitlines() if line.lstrip().startswith("exec ")]
+    assert exec_lines
+    assert all("--safe-mode" not in line for line in exec_lines)
+
+
+def test_compose_defaults_briefing_invoke_to_host() -> None:
+    compose = SCRIPT.parent.parent / "docker-compose.yml"
+    text = compose.read_text(encoding="utf-8")
+    assert "BRIEFING_INVOKE=${BRIEFING_INVOKE:-host}" in text
+
+
+def test_deploy_installs_emilio_host_briefing_cron() -> None:
+    deploy = SCRIPT.parent / "deploy.sh"
+    text = deploy.read_text(encoding="utf-8")
+    assert "manual-trading-pre-ny-briefing" in text
+    assert "run_pre_ny_briefing_host.sh" in text
+    assert "emilio" in text

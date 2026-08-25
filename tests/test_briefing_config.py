@@ -40,6 +40,10 @@ def test_settings_load_briefing_defaults(tmp_path: Path) -> None:
         "OIL",
     ]
     assert settings.telegram.pre_ny_briefing_notifications is True
+    assert settings.briefing.hermes.enabled is True
+    assert settings.briefing.hermes.endpoint == ""
+    assert settings.briefing.hermes.cli_command == "hermes"
+    assert settings.briefing.hermes.timeout_seconds == 120
 
 
 def test_settings_load_briefing_overrides(tmp_path: Path) -> None:
@@ -63,6 +67,7 @@ def test_settings_load_briefing_overrides(tmp_path: Path) -> None:
             "ny_open_utc": "13:00",
             "lead_minutes": 45,
             "instruments": [{"id": "XAU/USD", "etr_asset": "gold"}],
+            "hermes": {"enabled": False, "timeout_seconds": 12, "endpoint": "http://127.0.0.1:9"},
         },
     }
     path = tmp_path / "settings.yaml"
@@ -73,6 +78,9 @@ def test_settings_load_briefing_overrides(tmp_path: Path) -> None:
     assert settings.briefing.lead_minutes == 45
     assert [item.id for item in settings.briefing.instruments] == ["XAU/USD"]
     assert settings.telegram.pre_ny_briefing_notifications is False
+    assert settings.briefing.hermes.enabled is False
+    assert settings.briefing.hermes.timeout_seconds == 12
+    assert settings.briefing.hermes.endpoint == "http://127.0.0.1:9"
 
 
 def test_repo_settings_yaml_enables_pre_ny_briefing() -> None:
@@ -83,6 +91,10 @@ def test_repo_settings_yaml_enables_pre_ny_briefing() -> None:
     assert settings.briefing.lead_minutes == 60
     assert settings.briefing.news_hours_ahead == 36
     assert settings.telegram.pre_ny_briefing_notifications is True
+    assert settings.briefing.hermes.enabled is True
+    assert settings.briefing.hermes.cli_command == "hermes"
+    assert settings.briefing.hermes.timeout_seconds == 120
+    assert settings.briefing.hermes.endpoint == ""
     assert [item.id for item in settings.briefing.instruments] == [
         "XAU/USD",
         "BTC/USD",

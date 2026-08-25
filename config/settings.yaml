@@ -191,3 +191,14 @@ briefing:
       etr_asset: oil
       extra_news_currencies: [USD]
       news_keywords: [oil, crude, eia, wti, opec, inventory]
+  # Existing Hermes Agent on Hetzner (emilio user): `hermes chat -q` → glm-5.2 / Z.AI.
+  # Scheduled invoke is host cron as emilio (scripts/run_pre_ny_briefing_host.sh),
+  # not the scan container (no hermes binary; hermes serve is not up).
+  # Set endpoint only if you expose an OpenAI-compat proxy. Do not use --safe-mode.
+  # If Hermes is down, briefing still sends: "Plan NY: no disponible".
+  hermes:
+    enabled: true
+    endpoint: ""
+    cli_command: hermes
+    timeout_seconds: 120
+    model: ""

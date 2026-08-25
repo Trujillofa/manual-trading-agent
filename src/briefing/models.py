@@ -24,6 +24,23 @@ class Pillar:
 
 
 @dataclass(frozen=True)
+class NyPlan:
+    """Hermes NY-session judgment. ``available=False`` is an explicit skip/fail."""
+
+    available: bool
+    htf_trend: str = ""
+    htf_basis: str = ""
+    support: tuple[str, ...] = ()
+    resistance: tuple[str, ...] = ()
+    recommendation: str = ""
+    why: str = ""
+    invalidation: str = ""
+    confidence: str = ""
+    honesty: str = ""
+    unavailable_reason: str | None = None
+
+
+@dataclass(frozen=True)
 class InstrumentBriefing:
     instrument_id: str
     display_name: str
@@ -33,6 +50,7 @@ class InstrumentBriefing:
     sentiment: Pillar
     data_as_of: datetime | None = None
     data_freshness: str | None = None
+    ny_plan: NyPlan | None = None
 
 
 @dataclass

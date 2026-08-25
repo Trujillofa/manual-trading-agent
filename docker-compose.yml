@@ -23,6 +23,8 @@ services:
       - RETAIN_BYTES=${RETAIN_BYTES:-26214400}
       - SCAN_INTERVAL_SECONDS=${SCAN_INTERVAL_SECONDS:-900}
       - DEPLOY_GIT_SHA=${GIT_SHA:-unknown}
+      # Container has no hermes binary. Scheduled Plan NY is host cron as emilio.
+      - BRIEFING_INVOKE=${BRIEFING_INVOKE:-host}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

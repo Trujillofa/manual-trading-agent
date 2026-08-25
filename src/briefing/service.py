@@ -17,6 +17,7 @@ from src.briefing.fundamental import (
     build_shared_fundamental_pillar,
 )
 from src.briefing.funding import FundingSnapshot, try_fetch_btc_funding
+from src.briefing.hermes import HermesComplete, attach_ny_plans
 from src.briefing.models import InstrumentBriefing, Pillar, PreNyBriefing
 from src.briefing.schedule import ny_open_at, should_send_briefing
 from src.briefing.sentiment import build_sentiment_pillar
@@ -290,6 +291,7 @@ async def build_briefing(
     fetch_funding: bool = True,
     active_signals: dict[str, object] | None = None,
     near_setups: dict[str, object] | None = None,
+    hermes_complete: HermesComplete | None = None,
 ) -> PreNyBriefing:
     current = now or datetime.now(UTC)
     cfg = settings.briefing
@@ -378,7 +380,7 @@ async def build_briefing(
         lockout_before=settings.news.lockout_minutes_before,
         lockout_after=settings.news.lockout_minutes_after,
     )
-    return PreNyBriefing(
+    briefing = PreNyBriefing(
         session_date=current.astimezone(UTC).date().isoformat(),
         generated_at=current.astimezone(UTC),
         ny_open_utc=cfg.ny_open_utc,
@@ -389,6 +391,7 @@ async def build_briefing(
         shared_fundamental=shared,
         synthesis=synthesis,
     )
+    return await attach_ny_plans(briefing, cfg=cfg.hermes, complete=hermes_complete)
 
 
 async def maybe_send_briefing(
@@ -405,6 +408,7 @@ async def maybe_send_briefing(
     fetch_funding: bool = True,
     active_signals: dict[str, object] | None = None,
     near_setups: dict[str, object] | None = None,
+    hermes_complete: HermesComplete | None = None,
 ) -> BriefingRunResult:
     current = now or datetime.now(UTC)
     cfg = settings.briefing
@@ -437,6 +441,7 @@ async def maybe_send_briefing(
             fetch_funding=fetch_funding,
             active_signals=active_signals,
             near_setups=near_setups,
+            hermes_complete=hermes_complete,
         )
         message = format_pre_ny_briefing(briefing)
     except Exception as exc:

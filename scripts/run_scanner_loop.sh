@@ -10,6 +10,9 @@
 #   RETAIN_BYTES             default 26214400 (25 MiB)
 #   SCAN_INTERVAL_SECONDS    default 900 (15 minutes)
 #   TELEGRAM_POLL_ENABLED    default true
+#   BRIEFING_INVOKE          container (default) | host
+#                            host = skip in-container briefing; host cron as emilio
+#                            calls scripts/run_pre_ny_briefing_host.sh (Hermes CLI)
 #   ROTATE_ONCE              default false — test-only one-shot rotation then exit 0
 
 set -eu
@@ -19,6 +22,7 @@ ROTATE_THRESHOLD_BYTES="${ROTATE_THRESHOLD_BYTES:-52428800}"
 RETAIN_BYTES="${RETAIN_BYTES:-26214400}"
 SCAN_INTERVAL_SECONDS="${SCAN_INTERVAL_SECONDS:-900}"
 TELEGRAM_POLL_ENABLED="${TELEGRAM_POLL_ENABLED:-true}"
+BRIEFING_INVOKE="${BRIEFING_INVOKE:-container}"
 ROTATE_ONCE="${ROTATE_ONCE:-false}"
 
 TELEGRAM_PID=""
@@ -78,8 +82,13 @@ while true; do
   # ETR Market Terminal change-only alerts (best-effort; never fail the loop).
   echo "=== $(date) ===" >>"$LOG_DIR/etr.log"
   python -u -m src.cli etr-scan >>"$LOG_DIR/etr.log" 2>&1 || echo "etr-scan failed (exit=$?)" >>"$LOG_DIR/etr.log"
-  # Pre-NY three-pillar briefing (self-skips outside the once-per-day window).
+  # Pre-NY briefing. Production sets BRIEFING_INVOKE=host so Hermes runs as emilio
+  # on the host (container has no hermes binary; hermes serve is not listening).
   echo "=== $(date) ===" >>"$LOG_DIR/briefing.log"
-  python -u -m src.cli pre-ny-briefing >>"$LOG_DIR/briefing.log" 2>&1 || echo "pre-ny-briefing failed (exit=$?)" >>"$LOG_DIR/briefing.log"
+  if [ "$BRIEFING_INVOKE" = "host" ]; then
+    echo "skip in-container briefing (BRIEFING_INVOKE=host; Hermes is host cron as emilio)" >>"$LOG_DIR/briefing.log"
+  else
+    python -u -m src.cli pre-ny-briefing >>"$LOG_DIR/briefing.log" 2>&1 || echo "pre-ny-briefing failed (exit=$?)" >>"$LOG_DIR/briefing.log"
+  fi
   sleep "$SCAN_INTERVAL_SECONDS"
 done

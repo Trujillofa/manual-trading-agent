@@ -155,7 +155,27 @@ fi
 echo "[deploy] verified HEAD/SHA ${COMMIT_SHA}"
 EOF
 
-# ── 5. Build & restart Docker service ─────────────────────────────────────────
+# ── 5. Host cron as emilio so scheduled Plan NY can call Hermes ───────────────
+# The scan container has no hermes binary and hermes serve is not listening.
+# BRIEFING_INVOKE=host (compose default) skips in-container briefing.
+log "Installing host pre-NY briefing cron as emilio …"
+remote bash <<EOF
+set -euo pipefail
+chmod +x '${REMOTE_PATH}/scripts/run_pre_ny_briefing_host.sh'
+mkdir -p '${REMOTE_PATH}/logs'
+touch '${REMOTE_PATH}/logs/briefing.log' '${REMOTE_PATH}/logs/pre_ny_briefing_state.json'
+chown emilio:emilio '${REMOTE_PATH}/logs/briefing.log' '${REMOTE_PATH}/logs/pre_ny_briefing_state.json'
+chmod 664 '${REMOTE_PATH}/logs/briefing.log' '${REMOTE_PATH}/logs/pre_ny_briefing_state.json'
+cat > /etc/cron.d/manual-trading-pre-ny-briefing <<CRON
+SHELL=/bin/sh
+PATH=/home/emilio/.local/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=""
+*/15 * * * * emilio APP_DIR=${REMOTE_PATH} /bin/sh ${REMOTE_PATH}/scripts/run_pre_ny_briefing_host.sh >> ${REMOTE_PATH}/logs/briefing.log 2>&1
+CRON
+chmod 644 /etc/cron.d/manual-trading-pre-ny-briefing
+EOF
+
+# ── 6. Build & restart Docker service ─────────────────────────────────────────
 log "Building Docker image for ${SERVICE_NAME} …"
 remote bash <<EOF
 set -euo pipefail
@@ -164,7 +184,7 @@ GIT_SHA='${COMMIT_SHA}' docker compose build ${SERVICE_NAME}
 GIT_SHA='${COMMIT_SHA}' docker compose up -d --no-deps ${SERVICE_NAME}
 EOF
 
-# ── 6. Health check ───────────────────────────────────────────────────────────
+# ── 7. Health check ───────────────────────────────────────────────────────────
 log "Waiting for container health check …"
 for i in $(seq 1 "${HEALTH_RETRIES}"); do
   STATUS=$(remote \

@@ -1,8 +1,8 @@
 # Branch B production config.
 #
 # POSTURE: ops / decision-support only — NOT a KEEP / profitability claim.
-# RSI MTF, EMA standalone, and ETR alerts are discretionary human aids.
-# Do not auto-size or auto-execute from these signals.
+# RSI MTF + V2 entry interrupt, pre-NY briefing, and ETR thesis pulls.
+# EMA standalone Telegram is off. Do not auto-size or auto-execute.
 #
 trading:
   mode: "paper"
@@ -57,11 +57,11 @@ strategy:
     NASDAQ: 85
   pair_overrides: {}
 
-  # EMA: 20/50 golden/death cross for intraday multi-asset alerts (Branch B).
+  # EMA: 20/50 context on the briefing card. Standalone Telegram is off.
   # medium_period stays 100 (not 50) so it does not duplicate slow.
   ema:
     enabled: true
-    standalone_notifications_enabled: true
+    standalone_notifications_enabled: false
     standalone_signal_types:
       - crossover
     standalone_timeframes:
@@ -143,7 +143,6 @@ telegram:
 etr:
   enabled: true
   assets: [btc, gold, nasdaq, oil]
-  poll_with_scan: true
   min_poll_interval_seconds: 900
   score_alert_low: 50
   score_alert_high: 80
@@ -196,7 +195,7 @@ briefing:
   # not the scan container (no hermes binary; hermes serve is not up).
   # Set endpoint only if you expose an OpenAI-compat proxy. Do not use --safe-mode.
   # 120s finished a thin 4-symbol call; 240s is the floor once ETR cache is in the prompt.
-  # If Hermes is down, briefing still sends: "Plan NY: no disponible".
+  # If Hermes is down, briefing still sends a V2-gated Plan NY (no operar / esperar / entrar solo si V2).
   hermes:
     enabled: true
     endpoint: ""

@@ -148,13 +148,17 @@ async def test_attach_success_prints_plan_ny(tmp_path: Path) -> None:
     )
     assert called["n"] == 1
     assert all(item.ny_plan is not None and item.ny_plan.available for item in briefing.instruments)
+    assert all(item.ny_plan.action == "STAND_ASIDE" for item in briefing.instruments)
+    assert all(item.ny_plan.recommendation == "no operar" for item in briefing.instruments)
     message = format_pre_ny_briefing(briefing)
     assert message.count("*Plan NY*") == 4
-    assert "esperar" in message
-    assert "compra en retroceso" in message
-    assert "venta en rally" in message
     assert "no operar" in message
+    assert "compra en retroceso" not in message
+    assert "venta en rally" not in message
+    assert "BUY" not in message
+    assert "SELL" not in message
     assert "*Plan NY* no disponible" not in message
+    assert "alcista" in message
     assert len(chunk_telegram(message)) == 1
 
 
@@ -178,12 +182,15 @@ async def test_attach_timeout(tmp_path: Path) -> None:
     )
     gold = briefing.instruments[0]
     assert gold.ny_plan is not None
-    assert gold.ny_plan.available is False
-    assert "timeout" in (gold.ny_plan.unavailable_reason or "")
+    assert gold.ny_plan.available is True
+    assert gold.ny_plan.recommendation == "no operar"
+    assert gold.ny_plan.action == "STAND_ASIDE"
+    assert "timeout" in (gold.ny_plan.honesty or "")
     message = format_pre_ny_briefing(briefing)
     assert "Plan NY" in message
-    assert "no disponible" in message
+    assert "no operar" in message
     assert "timeout" in message
+    assert "*Plan NY* no disponible" not in message
 
 
 @pytest.mark.asyncio
@@ -235,8 +242,12 @@ async def test_hermes_skip_when_disabled(tmp_path: Path) -> None:
         hermes_complete=fake,
     )
     assert called["n"] == 0
-    assert all(item.ny_plan is None for item in briefing.instruments)
-    assert "Plan NY" not in format_pre_ny_briefing(briefing)
+    assert all(item.ny_plan is not None and item.ny_plan.available for item in briefing.instruments)
+    assert all(item.ny_plan.recommendation == "no operar" for item in briefing.instruments)
+    assert all(item.ny_plan.action == "STAND_ASIDE" for item in briefing.instruments)
+    message = format_pre_ny_briefing(briefing)
+    assert "Plan NY" in message
+    assert "Hermes deshabilitado" in message
 
 
 @pytest.mark.asyncio
@@ -296,3 +307,72 @@ def test_format_ny_plan_keeps_levels_short() -> None:
         )
     )
     assert lines[0] == "*Plan NY* esperar · HTF alcista · S 4693.7/4659.5 / R 4716.4"
+
+
+@pytest.mark.asyncio
+async def test_attach_hermes_false_still_emits_v2_action(tmp_path: Path) -> None:
+    settings = _settings(tmp_path, hermes_enabled=True)
+    called = {"n": 0}
+
+    async def fake(_prompt: str) -> str:
+        called["n"] += 1
+        return _ok_json()
+
+    briefing = await build_briefing(
+        settings,
+        now=datetime(2026, 8, 24, 11, 20, tzinfo=UTC),
+        fetch_mtf=lambda _i: {},
+        events=[],
+        etr_reports={},
+        fetch_funding=False,
+        active_signals={},
+        near_setups={},
+        hermes_complete=fake,
+        attach_hermes=False,
+    )
+    assert called["n"] == 0
+    gold = briefing.instruments[0]
+    assert gold.ny_plan is not None
+    assert gold.ny_plan.recommendation == "no operar"
+    assert gold.ny_plan.action == "STAND_ASIDE"
+
+
+@pytest.mark.asyncio
+async def test_attach_injected_enter_overwrites_hermes_buy(tmp_path: Path) -> None:
+    from src.briefing.hermes import attach_ny_plans
+    from src.briefing.models import InstrumentBriefing, Pillar, PreNyBriefing
+    from src.config.settings import BriefingHermesConfig
+
+    missing = Pillar(name="Técnico", available=False, unavailable_reason="test")
+    briefing = PreNyBriefing(
+        session_date="2026-08-25",
+        generated_at=datetime(2026, 8, 25, 11, 0, tzinfo=UTC),
+        ny_open_utc="12:00",
+        lead_minutes=60,
+        instruments=[
+            InstrumentBriefing(
+                instrument_id="BTC/USD",
+                display_name="Bitcoin",
+                yf_symbol="BTC-USD",
+                technical=missing,
+                fundamental=missing,
+                sentiment=missing,
+            )
+        ],
+    )
+
+    async def fake(_prompt: str) -> str:
+        return _ok_json()
+
+    out = await attach_ny_plans(
+        briefing,
+        cfg=BriefingHermesConfig(enabled=True, timeout_seconds=5),
+        complete=fake,
+        actions={"BTC/USD": "ENTER_ONLY_IF"},
+    )
+    plan = out.instruments[0].ny_plan
+    assert plan is not None
+    assert plan.recommendation == "entrar solo si V2"
+    assert plan.action == "ENTER_ONLY_IF"
+    assert plan.htf_trend == "alcista"
+    assert "compra" not in plan.recommendation

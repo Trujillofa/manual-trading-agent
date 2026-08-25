@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Protocol
 
 import pandas as pd
 
+from src.briefing.actions import DeskAction, evaluate_desk_action
 from src.briefing.formatter import format_pre_ny_briefing
 from src.briefing.fundamental import (
     build_fundamental_pillar,
@@ -30,7 +31,7 @@ from src.news.news_checker import NewsChecker, NewsEvent
 from src.news.surprise import SOURCE_FOREX_FACTORY, surprise_readiness_label
 
 if TYPE_CHECKING:
-    from src.config.settings import BriefingInstrumentConfig, Settings
+    from src.config.settings import BriefingConfig, BriefingInstrumentConfig, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,35 @@ def _display_name(instrument_id: str) -> str:
     return spec.display_name if spec is not None else instrument_id
 
 
+def _news_blocked_for(
+    instrument: BriefingInstrumentConfig,
+    events: list[NewsEvent],
+    now: datetime,
+    settings: Settings,
+) -> bool:
+    from datetime import timedelta
+
+    if not settings.news.enabled or not events:
+        return False
+    currencies = _currencies_for(instrument)
+    if not currencies:
+        return False
+    current = now.astimezone(UTC)
+    before = settings.news.lockout_minutes_before
+    after = settings.news.lockout_minutes_after
+    threshold = settings.news.importance_threshold
+    for event in events:
+        if event.importance < threshold:
+            continue
+        if event.currency not in currencies:
+            continue
+        start = event.timestamp - timedelta(minutes=before)
+        end = event.timestamp + timedelta(minutes=after)
+        if start <= current <= end:
+            return True
+    return False
+
+
 def _currencies_for(instrument: BriefingInstrumentConfig) -> set[str]:
     spec = get_instrument_optional(instrument.id)
     base = set(spec.currencies) if spec is not None else set()
@@ -99,6 +129,40 @@ def _scanner_cache() -> tuple[dict[str, object], dict[str, object]]:
     except Exception as exc:
         logger.warning("scanner cache unavailable for briefing: %s", exc)
         return {}, {}
+
+
+def _alignment_cache() -> dict[str, object]:
+    try:
+        from src.scanner.state import _load_alignment_state
+
+        return dict(_load_alignment_state())
+    except Exception as exc:
+        logger.warning("alignment cache unavailable for briefing: %s", exc)
+        return {}
+
+
+def _resolve_briefing_instruments(
+    cfg: BriefingConfig,
+    instrument_ids: list[str] | None,
+) -> list[BriefingInstrumentConfig]:
+    """Watchlist only. Compact aliases resolve; unknown symbols are dropped."""
+    if not instrument_ids:
+        return list(cfg.instruments)
+    by_id = {item.id.upper(): item for item in cfg.instruments}
+    selected: list[BriefingInstrumentConfig] = []
+    seen: set[str] = set()
+    for raw in instrument_ids:
+        key = raw.strip().upper()
+        match = by_id.get(key)
+        if match is None:
+            spec = get_instrument_optional(raw)
+            if spec is not None:
+                match = by_id.get(spec.id.upper())
+        if match is None or match.id in seen:
+            continue
+        selected.append(match)
+        seen.add(match.id)
+    return selected
 
 
 def _lookup_pair_state(state: dict[str, object], instrument_id: str) -> object | None:
@@ -292,6 +356,8 @@ async def build_briefing(
     active_signals: dict[str, object] | None = None,
     near_setups: dict[str, object] | None = None,
     hermes_complete: HermesComplete | None = None,
+    instrument_ids: list[str] | None = None,
+    attach_hermes: bool = True,
 ) -> PreNyBriefing:
     current = now or datetime.now(UTC)
     cfg = settings.briefing
@@ -327,9 +393,13 @@ async def build_briefing(
         readiness = _surprise_readiness(loaded_events)
         status = f"{status} · {readiness}" if status else readiness
 
+    selected = _resolve_briefing_instruments(cfg, instrument_ids)
+    alignment_state = _alignment_cache()
+
     fetcher = fetch_mtf or _default_fetcher
     items: list[InstrumentBriefing] = []
-    for instrument in cfg.instruments:
+    actions: dict[str, DeskAction] = {}
+    for instrument in selected:
         frames: dict[str, pd.DataFrame] | None
         frame_error: str | None = None
         try:
@@ -344,6 +414,16 @@ async def build_briefing(
                 active_signals=active_signals,
                 near_setups=near_setups,
             )
+        )
+        news_blocked = _news_blocked_for(instrument, loaded_events, current, settings)
+        actions[instrument.id] = evaluate_desk_action(
+            instrument.id,
+            frames,
+            news_blocked=news_blocked,
+            now_utc=current,
+            active_signal_state=active_signals if isinstance(active_signals, dict) else {},
+            alignment_state=alignment_state,
+            settings=settings,
         )
         etr_key = (instrument.etr_asset or "").lower()
         items.append(
@@ -391,7 +471,14 @@ async def build_briefing(
         shared_fundamental=shared,
         synthesis=synthesis,
     )
-    return await attach_ny_plans(briefing, cfg=cfg.hermes, complete=hermes_complete)
+    hermes_cfg = cfg.hermes
+    if not attach_hermes:
+        from dataclasses import replace as _replace
+
+        hermes_cfg = _replace(hermes_cfg, enabled=False)
+    return await attach_ny_plans(
+        briefing, cfg=hermes_cfg, complete=hermes_complete, actions=actions
+    )
 
 
 async def maybe_send_briefing(

@@ -353,7 +353,6 @@ class EtrConfig:
 
     enabled: bool = True
     assets: list[str] = field(default_factory=lambda: ["btc", "gold", "nasdaq", "oil"])
-    poll_with_scan: bool = True
     min_poll_interval_seconds: int = 900
     score_alert_low: float = 50.0
     score_alert_high: float = 80.0
@@ -714,7 +713,6 @@ class Settings:
         etr_payload: dict[str, Any] = {
             "enabled": etr_data.get("enabled", True),
             "assets": etr_data.get("assets", ["btc", "gold", "nasdaq", "oil"]),
-            "poll_with_scan": etr_data.get("poll_with_scan", True),
             "min_poll_interval_seconds": etr_data.get("min_poll_interval_seconds", 900),
             "score_alert_low": etr_data.get("score_alert_low", 50.0),
             "score_alert_high": etr_data.get("score_alert_high", 80.0),

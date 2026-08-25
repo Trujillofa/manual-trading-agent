@@ -286,12 +286,14 @@ class TelegramCommandHandler:
         elif command == "/pair":
             parts = text.split(maxsplit=1)
             if len(parts) < 2:
-                await self.send_message("Usage: /pair GBP/USD")
+                await self.send_message("Usage: /pair XAU/USD")
             else:
                 await self.send_message(f"Running pair scan for {parts[1]}...")
                 await self.send_message(await self._run_fresh_scan(parts[1]))
         elif command == "/etr":
             await self._handle_etr(text)
+        elif command == "/plan":
+            await self._handle_plan(text)
         elif command in {"/help", "/start"}:
             await self.send_message(
                 "*Manual Trading Bot Commands*\n\n"
@@ -299,14 +301,47 @@ class TelegramCommandHandler:
                 "/signal — latest confirmed entry signal\n"
                 "/status — bot status + top setup\n"
                 "/news — blocked currencies + cached events\n"
-                "/pairs — tracked forex pairs\n"
-                "/pair GBP/USD — explain one pair right now\n"
+                "/pairs — tracked instruments\n"
+                "/pair XAU/USD — explain one pair right now\n"
+                "/plan — today's desk card (V2-gated Plan NY)\n"
+                "/plan XAU/USD — one-symbol card\n"
                 "/scan — run a fresh scan now\n"
                 "/etr — ETR Market Terminal summary (cached)\n"
                 "/etr btc|gold|nasdaq|oil — live full report"
             )
         else:
             await self.send_message("Unknown command. Try /help")
+
+    async def _handle_plan(self, text: str) -> None:
+        """Reprint today's briefing card. Skips Hermes for pull latency."""
+        from src.briefing.formatter import format_instrument_briefing, format_pre_ny_briefing
+        from src.briefing.service import build_briefing
+        from src.config.settings import get_settings
+        from src.etr.alerts import chunk_telegram
+
+        settings = get_settings()
+        parts = text.split(maxsplit=1)
+        symbol = parts[1].strip().upper() if len(parts) >= 2 else None
+        await self.send_message("Building desk card...")
+        try:
+            briefing = await build_briefing(
+                settings,
+                instrument_ids=[symbol] if symbol else None,
+                attach_hermes=False,
+                fetch_funding=symbol is None,
+            )
+        except Exception as exc:
+            await self.send_message(f"Plan NY no disponible: {exc}")
+            return
+        if symbol:
+            if not briefing.instruments:
+                await self.send_message(f"Sin card para `{symbol}`")
+                return
+            message = format_instrument_briefing(briefing.instruments[0])
+        else:
+            message = format_pre_ny_briefing(briefing)
+        for chunk in chunk_telegram(message):
+            await self.send_message(chunk)
 
     async def _handle_etr(self, text: str) -> None:
         """Handle /etr and /etr <asset> commands."""

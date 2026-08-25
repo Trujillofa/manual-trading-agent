@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from src.briefing.models import InstrumentBriefing, Pillar, PreNyBriefing
 
 _WEEKDAYS = (
@@ -18,6 +20,7 @@ _PILLAR_TITLES = {
     "technical": "Técnico",
     "fundamental": "Fundamental",
     "sentiment": "Sentimiento",
+    "macro": "Macro 3★",
 }
 
 _EMOJI = {
@@ -32,9 +35,19 @@ def _esc(text: str) -> str:
     return text.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
 
 
-def _pillar_block(pillar: Pillar) -> list[str]:
-    title = _PILLAR_TITLES.get(pillar.name, pillar.name.title())
-    lines = [f"*{title}*"]
+def _short_news_status(status: str | None) -> str | None:
+    if not status:
+        return None
+    if "BLOCKED" in status:
+        return "FF · sorpresa no puntuable (sin actual+hora)"
+    if "available" in status.lower():
+        return "FF · sorpresa disponible"
+    return status
+
+
+def _pillar_block(pillar: Pillar, *, title: str | None = None) -> list[str]:
+    label = title or _PILLAR_TITLES.get(pillar.name, pillar.name.title())
+    lines = [f"*{label}*"]
     for line in pillar.render_lines():
         if "`" in line or line.startswith("•"):
             lines.append(line)
@@ -45,10 +58,14 @@ def _pillar_block(pillar: Pillar) -> list[str]:
 
 def _instrument_block(item: InstrumentBriefing) -> str:
     emoji = _EMOJI.get(item.instrument_id, "•")
-    header = f"{emoji} *{_esc(item.display_name)}* (`{item.instrument_id}` · `{item.yf_symbol}`)"
+    header = f"{emoji} *{_esc(item.display_name)}* (`{item.yf_symbol}`)"
     parts = [header]
     if item.data_as_of is not None:
-        parts.append(f"OHLC al: `{item.data_as_of.strftime('%Y-%m-%d %H:%M')} UTC`")
+        stamp = item.data_as_of.strftime("%Y-%m-%d %H:%M")
+        extra = f" · {item.data_freshness}" if item.data_freshness else ""
+        parts.append(f"OHLC al: `{stamp} UTC`{extra}")
+    elif item.data_freshness:
+        parts.append(_esc(item.data_freshness))
     parts.append("")
     parts.extend(_pillar_block(item.technical))
     parts.append("")
@@ -61,25 +78,26 @@ def _instrument_block(item: InstrumentBriefing) -> str:
 def format_pre_ny_briefing(briefing: PreNyBriefing) -> str:
     generated = briefing.generated_at.strftime("%Y-%m-%d %H:%M")
     try:
-        session = briefing.generated_at.date()
-        weekday = _WEEKDAYS[session.weekday()]
-        date_label = f"{weekday} {briefing.session_date}"
-    except Exception:
+        session = date.fromisoformat(briefing.session_date)
+        date_label = f"{_WEEKDAYS[session.weekday()]} {briefing.session_date}"
+    except ValueError:
         date_label = briefing.session_date
 
     lines = [
         "📋 *Briefing pre-sesión NY*",
-        f"Sesión: `{date_label}` · Enviado: `{generated} UTC`",
-        (
-            f"Apertura NY (FX): `{briefing.ny_open_utc} UTC` "
-            f"(lead {briefing.lead_minutes} min · ventana histórica 12–21 UTC; sin DST)"
-        ),
-        "_No es señal de entrada ni autorización para operar._",
+        f"`{date_label}` · `{generated} UTC` · NY FX `{briefing.ny_open_utc}`",
     ]
-    if briefing.news_source_status:
-        lines.append(f"News: `{_esc(briefing.news_source_status)}`")
+    if briefing.synthesis:
+        lines.append(_esc(briefing.synthesis))
+    lines.append("_No es señal de entrada ni autorización para operar._")
+    news = _short_news_status(briefing.news_source_status)
+    if news:
+        lines.append(f"News: `{_esc(news)}`")
     if briefing.caveats:
-        lines.append("· ".join(_esc(caveat) for caveat in briefing.caveats))
+        lines.append(" ".join(_esc(caveat) for caveat in briefing.caveats))
+
+    if briefing.shared_fundamental is not None:
+        lines.extend(["", *_pillar_block(briefing.shared_fundamental, title="Macro 3★")])
 
     for item in briefing.instruments:
         lines.extend(["", "━━━━━━━━", "", _instrument_block(item)])
@@ -87,7 +105,7 @@ def format_pre_ny_briefing(briefing: PreNyBriefing) -> str:
     lines.extend(
         [
             "",
-            "Fuentes: yfinance OHLC · Forex Factory 3★ · tesis ETR en caché · funding Binance (BTC) · scanner Rule C (si hay)",
+            "yfinance · FF 3★ · tesis ETR caché · funding Binance (BTC) · Rule C si hay",
             "_Informativo · Branch B · no es recomendación de inversión._",
         ]
     )

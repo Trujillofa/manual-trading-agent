@@ -489,7 +489,7 @@ def default_briefing_instruments() -> list[BriefingInstrumentConfig]:
             id="OIL",
             etr_asset="oil",
             extra_news_currencies=("USD",),
-            news_keywords=("oil", "crude", "eia", "wti", "opec", "inventory", "api"),
+            news_keywords=("oil", "crude", "eia", "wti", "opec", "inventory"),
         ),
     ]
 
@@ -506,7 +506,7 @@ class BriefingConfig:
     ny_open_utc: str = "12:00"
     lead_minutes: int = 60
     skip_weekends: bool = True
-    news_hours_ahead: int = 24
+    news_hours_ahead: int = 36
     news_hours_behind: int = 8
     max_events_per_instrument: int = 3
     telegram_notifications: bool = True
@@ -760,7 +760,7 @@ def _parse_briefing_config(raw: dict[str, Any]) -> BriefingConfig:
         ny_open_utc=str(raw.get("ny_open_utc", "12:00")),
         lead_minutes=int(raw.get("lead_minutes", 60)),
         skip_weekends=bool(raw.get("skip_weekends", True)),
-        news_hours_ahead=int(raw.get("news_hours_ahead", 24)),
+        news_hours_ahead=int(raw.get("news_hours_ahead", 36)),
         news_hours_behind=int(raw.get("news_hours_behind", 8)),
         max_events_per_instrument=int(raw.get("max_events_per_instrument", 3)),
         telegram_notifications=bool(raw.get("telegram_notifications", True)),

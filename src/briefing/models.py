@@ -32,6 +32,7 @@ class InstrumentBriefing:
     fundamental: Pillar
     sentiment: Pillar
     data_as_of: datetime | None = None
+    data_freshness: str | None = None
 
 
 @dataclass
@@ -43,3 +44,5 @@ class PreNyBriefing:
     instruments: list[InstrumentBriefing] = field(default_factory=list)
     caveats: list[str] = field(default_factory=list)
     news_source_status: str | None = None
+    shared_fundamental: Pillar | None = None
+    synthesis: str | None = None

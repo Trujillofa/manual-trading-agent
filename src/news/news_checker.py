@@ -109,15 +109,18 @@ class NewsChecker:
         return item
 
     def _save_cache(self) -> None:
-        self.CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "last_fetch": self._last_fetch.isoformat() if self._last_fetch else None,
-            "next_allowed_fetch": (
-                self._next_allowed_fetch.isoformat() if self._next_allowed_fetch else None
-            ),
-            "events": [self._event_to_cache_item(event) for event in self._events],
-        }
-        self.CACHE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        try:
+            self.CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "last_fetch": self._last_fetch.isoformat() if self._last_fetch else None,
+                "next_allowed_fetch": (
+                    self._next_allowed_fetch.isoformat() if self._next_allowed_fetch else None
+                ),
+                "events": [self._event_to_cache_item(event) for event in self._events],
+            }
+            self.CACHE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        except OSError as exc:
+            logger.warning("news cache persist failed: %s", exc)
 
     async def fetch_events(
         self,
@@ -125,6 +128,7 @@ class NewsChecker:
         *,
         hours_behind: float | None = None,
         force: bool = False,
+        now: datetime | None = None,
     ) -> list[NewsEvent]:
         """Fetch high-impact news events with cache/backoff.
 
@@ -132,7 +136,7 @@ class NewsChecker:
         drop events that still block trading. Optional ``hours_behind`` widens
         the lookback (used by the pre-NY briefing). Default behavior is unchanged.
         """
-        now = datetime.now(UTC)
+        now = now.astimezone(UTC) if now is not None else datetime.now(UTC)
         window_end = now + timedelta(hours=hours_ahead)
 
         # Use recent cache first

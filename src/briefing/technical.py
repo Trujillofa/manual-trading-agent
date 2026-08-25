@@ -6,7 +6,7 @@ Not a strategy family and not an entry signal. Graceful if a TF is missing.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pandas as pd
@@ -20,6 +20,25 @@ from src.indicators.rsi import calculate_rsi
 from src.indicators.sma import calculate_sma
 
 logger = logging.getLogger(__name__)
+
+STALE_OHLC_HOURS = 3
+
+
+def bar_freshness(as_of: datetime | None, now: datetime | None) -> str | None:
+    """Label forming or stale last bars. None when the clock is unusable."""
+    if as_of is None or now is None:
+        return None
+    as_utc = as_of.astimezone(UTC)
+    now_utc = now.astimezone(UTC)
+    age = now_utc - as_utc
+    if age < timedelta(0):
+        return None
+    if age <= timedelta(minutes=65):
+        return "barra 1h en curso"
+    if age >= timedelta(hours=STALE_OHLC_HOURS):
+        hours = int(age.total_seconds() // 3600)
+        return f"OHLC atrasado ~{hours}h"
+    return None
 
 
 def _closes(frame: pd.DataFrame) -> list[float]:
@@ -143,11 +162,8 @@ def build_technical_pillar(
             slow = calculate_ema_last(closes_s, ema_slow)
             tf_label = "15m" if m15 is not None else "1h"
             if fast is not None and slow is not None:
-                bias = "alcista" if fast > slow else "bajista"
-                lines.append(
-                    f"EMA{ema_fast}/{ema_slow} {tf_label}: "
-                    f"{'20>50' if fast > slow else '20<50'} ({bias})"
-                )
+                side = "20>50" if fast > slow else "20<50"
+                lines.append(f"EMA{ema_fast}/{ema_slow} {tf_label}: {side}")
             hh = highest_high(_highs(structure_frame), lookback)
             ll = lowest_low(_lows(structure_frame), lookback)
             last_s = closes_s[-1]
@@ -161,7 +177,6 @@ def build_technical_pillar(
                 )
 
         lines.extend(extra_lines)
-        lines.append("Snapshot técnico · no es señal de entrada")
         return (
             Pillar(name="technical", available=True, lines=tuple(lines), source="yfinance"),
             as_of,

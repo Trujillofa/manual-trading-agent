@@ -11,13 +11,17 @@ from typing import TYPE_CHECKING, Protocol
 import pandas as pd
 
 from src.briefing.formatter import format_pre_ny_briefing
-from src.briefing.fundamental import build_fundamental_pillar
+from src.briefing.fundamental import (
+    build_fundamental_pillar,
+    build_header_synthesis,
+    build_shared_fundamental_pillar,
+)
 from src.briefing.funding import FundingSnapshot, try_fetch_btc_funding
 from src.briefing.models import InstrumentBriefing, Pillar, PreNyBriefing
 from src.briefing.schedule import ny_open_at, should_send_briefing
 from src.briefing.sentiment import build_sentiment_pillar
 from src.briefing.state import load_briefing_state, save_briefing_state
-from src.briefing.technical import build_technical_pillar
+from src.briefing.technical import bar_freshness, build_technical_pillar
 from src.config.instruments import get_instrument_optional
 from src.etr.models import EtrReport
 from src.etr.state import load_etr_state
@@ -132,17 +136,6 @@ def _scanner_extra_lines(
     return tuple(lines)
 
 
-def _session_window_line(instrument_id: str) -> str | None:
-    spec = get_instrument_optional(instrument_id)
-    if spec is None or not spec.session_windows_utc:
-        return None
-    windows = " / ".join(spec.session_windows_utc)
-    note = ""
-    if "00-21" in spec.session_windows_utc and "22-24" in spec.session_windows_utc:
-        note = " · hueco Globex aprox. 21–22 UTC"
-    return f"Ventanas instrumento: {windows} UTC{note}"
-
-
 def _surprise_readiness(events: list[NewsEvent]) -> str:
     has = any(
         event.source == SOURCE_FOREX_FACTORY
@@ -177,6 +170,7 @@ async def _load_news(
             hours_ahead=cfg.news_hours_ahead,
             hours_behind=cfg.news_hours_behind,
             force=True,
+            now=now,
         )
     except Exception as exc:
         logger.warning("briefing news fetch failed: %s", exc)
@@ -194,7 +188,10 @@ async def _load_news(
         hours_ahead=cfg.news_hours_ahead,
         hours_behind=cfg.news_hours_behind,
     )
-    return events, None, checker.get_source_status()
+    status = checker.get_source_status()
+    if not events and status == "none":
+        return [], "calendario no disponible (sin feed ni caché)", status
+    return events, None, status
 
 
 def build_instrument_briefing(
@@ -275,6 +272,7 @@ def build_instrument_briefing(
         fundamental=fundamental,
         sentiment=sentiment,
         data_as_of=as_of,
+        data_freshness=bar_freshness(as_of, now),
     )
 
 
@@ -296,8 +294,8 @@ async def build_briefing(
     current = now or datetime.now(UTC)
     cfg = settings.briefing
     caveats = [
-        "Futuros continuos (GC=F / CL=F / NQ=F) ruedan; niveles aproximados.",
-        "Sentimiento es proxy (tesis ETR + titulares FF + funding BTC si hay), no un índice.",
+        "Futuros continuos: niveles aprox.",
+        "Sentimiento = proxy (ETR + FF + funding BTC).",
     ]
     loaded_error = news_error
     status = news_status
@@ -338,11 +336,7 @@ async def build_briefing(
             logger.warning("briefing OHLC failed for %s: %s", instrument.id, exc)
             frames = None
             frame_error = str(exc)
-        extra: list[str] = []
-        session_line = _session_window_line(instrument.id)
-        if session_line:
-            extra.append(session_line)
-        extra.extend(
+        extra = list(
             _scanner_extra_lines(
                 instrument.id,
                 active_signals=active_signals,
@@ -367,6 +361,23 @@ async def build_briefing(
             )
         )
 
+    ny_open = ny_open_at(current.astimezone(UTC).date(), cfg.ny_open_utc)
+    shared = build_shared_fundamental_pillar(
+        events=loaded_events,
+        now=current,
+        news_error=loaded_error,
+        ny_open=ny_open,
+        lockout_before=settings.news.lockout_minutes_before,
+        lockout_after=settings.news.lockout_minutes_after,
+        lead_minutes=cfg.lead_minutes,
+    )
+    synthesis = build_header_synthesis(
+        events=loaded_events,
+        now=current,
+        news_error=loaded_error,
+        lockout_before=settings.news.lockout_minutes_before,
+        lockout_after=settings.news.lockout_minutes_after,
+    )
     return PreNyBriefing(
         session_date=current.astimezone(UTC).date().isoformat(),
         generated_at=current.astimezone(UTC),
@@ -375,6 +386,8 @@ async def build_briefing(
         instruments=items,
         caveats=caveats,
         news_source_status=status,
+        shared_fundamental=shared,
+        synthesis=synthesis,
     )
 
 
@@ -443,15 +456,22 @@ async def maybe_send_briefing(
         from src.etr.alerts import chunk_telegram
 
         try:
-            for chunk in chunk_telegram(message):
+            chunks = chunk_telegram(message)
+            for chunk in chunks:
                 ok = await notifier.send(chunk)
-                if ok:
-                    chunks_sent += 1
+                if not ok:
+                    logger.warning(
+                        "pre-NY briefing Telegram send failed after %s/%s chunks",
+                        chunks_sent,
+                        len(chunks),
+                    )
+                    return BriefingRunResult(
+                        False, False, "send_failed", iso, chunks_sent, briefing=briefing
+                    )
+                chunks_sent += 1
         except Exception as exc:
             logger.warning("pre-NY briefing Telegram send failed: %s", exc)
             return BriefingRunResult(False, False, f"send_failed: {exc}", iso, briefing=briefing)
-        if chunks_sent == 0:
-            return BriefingRunResult(False, False, "send_failed", iso, briefing=briefing)
         save_briefing_state(
             {
                 "last_session_date": iso,

@@ -420,6 +420,13 @@ class TestNewsCache:
         assert payload["events"][0]["forecast"] == "0.3%"
         assert payload["events"][1]["source"] == "grok"
 
+    def test_save_cache_oserror_is_non_fatal(self, monkeypatch):
+        monkeypatch.setattr(NewsChecker, "CACHE_PATH", Path("/proc/news_cache.json"))
+        checker = NewsChecker()
+        checker._events = []
+        checker._last_fetch = datetime(2026, 8, 25, 11, 15, tzinfo=UTC)
+        checker._save_cache()  # must not raise
+
     def test_readiness_requires_observation_timestamp(self, tmp_path, monkeypatch):
         monkeypatch.setattr(NewsChecker, "CACHE_PATH", tmp_path / "news_cache.json")
         checker = NewsChecker()

@@ -335,7 +335,7 @@ class HermesClient:
     enabled: bool = True
     endpoint: str = ""
     cli_command: str = "hermes"
-    timeout_seconds: float = 120.0
+    timeout_seconds: float = 240.0
     model: str = ""
     api_key: str | None = None
 

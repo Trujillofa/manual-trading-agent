@@ -43,7 +43,7 @@ def test_settings_load_briefing_defaults(tmp_path: Path) -> None:
     assert settings.briefing.hermes.enabled is True
     assert settings.briefing.hermes.endpoint == ""
     assert settings.briefing.hermes.cli_command == "hermes"
-    assert settings.briefing.hermes.timeout_seconds == 120
+    assert settings.briefing.hermes.timeout_seconds == 240
 
 
 def test_settings_load_briefing_overrides(tmp_path: Path) -> None:
@@ -93,7 +93,7 @@ def test_repo_settings_yaml_enables_pre_ny_briefing() -> None:
     assert settings.telegram.pre_ny_briefing_notifications is True
     assert settings.briefing.hermes.enabled is True
     assert settings.briefing.hermes.cli_command == "hermes"
-    assert settings.briefing.hermes.timeout_seconds == 120
+    assert settings.briefing.hermes.timeout_seconds == 240
     assert settings.briefing.hermes.endpoint == ""
     assert [item.id for item in settings.briefing.instruments] == [
         "XAU/USD",

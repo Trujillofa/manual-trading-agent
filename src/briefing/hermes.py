@@ -15,7 +15,7 @@ import os
 import re
 import shlex
 import shutil
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -449,17 +449,22 @@ async def attach_ny_plans(
     *,
     cfg: BriefingHermesConfig,
     complete: HermesComplete | None = None,
-    actions: dict[str, str] | None = None,
+    actions: Mapping[str, str] | None = None,
 ) -> PreNyBriefing:
     """Fill ``ny_plan`` then overwrite the action from V2. Never raises."""
     from src.briefing.actions import DeskAction, apply_desk_action
 
+    allowed: dict[str, DeskAction] = {
+        "STAND_ASIDE": "STAND_ASIDE",
+        "WATCH": "WATCH",
+        "ENTER_ONLY_IF": "ENTER_ONLY_IF",
+    }
     ids = [item.instrument_id for item in briefing.instruments]
     resolved: dict[str, DeskAction] = {}
     for instrument_id in ids:
-        raw_action = (actions or {}).get(instrument_id, "STAND_ASIDE")
-        resolved[instrument_id] = (
-            raw_action if raw_action in {"STAND_ASIDE", "WATCH", "ENTER_ONLY_IF"} else "STAND_ASIDE"
+        resolved[instrument_id] = allowed.get(
+            (actions or {}).get(instrument_id, "STAND_ASIDE"),
+            "STAND_ASIDE",
         )
 
     hermes_note: str | None = None

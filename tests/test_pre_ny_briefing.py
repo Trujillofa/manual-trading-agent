@@ -86,7 +86,12 @@ def _settings(tmp_path: Path) -> Settings:
         "news": {"enabled": True},
         "data": {"provider": "yfinance"},
         "telegram": {"enabled": True, "pre_ny_briefing_notifications": True},
-        "briefing": {"enabled": True, "ny_open_utc": "12:00", "lead_minutes": 60},
+        "briefing": {
+            "enabled": True,
+            "ny_open_utc": "12:00",
+            "lead_minutes": 60,
+            "hermes": {"enabled": False},
+        },
     }
     path = tmp_path / "settings.yaml"
     path.write_text(yaml.safe_dump(payload), encoding="utf-8")

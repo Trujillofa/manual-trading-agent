@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from src.briefing.hermes import format_ny_plan
 from src.briefing.models import InstrumentBriefing, Pillar, PreNyBriefing
 
 _WEEKDAYS = (
@@ -72,6 +73,10 @@ def _instrument_block(item: InstrumentBriefing) -> str:
     parts.extend(_pillar_block(item.fundamental))
     parts.append("")
     parts.extend(_pillar_block(item.sentiment))
+    if item.ny_plan is not None:
+        parts.append("")
+        for line in format_ny_plan(item.ny_plan):
+            parts.append(line if line.startswith("*") else _esc(line))
     return "\n".join(parts)
 
 

@@ -495,6 +495,27 @@ def default_briefing_instruments() -> list[BriefingInstrumentConfig]:
 
 
 @dataclass
+class BriefingHermesConfig:
+    """Existing Hermes Agent (CLI or OpenAI-compat HTTP). Not a new LLM stack."""
+
+    enabled: bool = True
+    endpoint: str = ""
+    cli_command: str = "hermes"
+    timeout_seconds: float = 120.0
+    model: str = ""
+    api_key: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.timeout_seconds <= 0:
+            raise ValueError("briefing.hermes.timeout_seconds must be > 0")
+        object.__setattr__(self, "endpoint", (self.endpoint or "").strip())
+        object.__setattr__(self, "cli_command", (self.cli_command or "hermes").strip())
+        object.__setattr__(self, "model", (self.model or "").strip())
+        key = _resolve_env_placeholder(self.api_key)
+        object.__setattr__(self, "api_key", key if key else None)
+
+
+@dataclass
 class BriefingConfig:
     """Once-per-day pre-NY three-pillar Telegram briefing.
 
@@ -513,6 +534,7 @@ class BriefingConfig:
     instruments: list[BriefingInstrumentConfig] = field(
         default_factory=default_briefing_instruments
     )
+    hermes: BriefingHermesConfig = field(default_factory=BriefingHermesConfig)
 
     def __post_init__(self) -> None:
         from src.briefing.schedule import parse_hhmm
@@ -528,6 +550,8 @@ class BriefingConfig:
             raise ValueError("briefing.max_events_per_instrument must be > 0")
         if not self.instruments:
             raise ValueError("briefing.instruments must not be empty")
+        if not isinstance(self.hermes, BriefingHermesConfig):
+            raise ValueError("briefing.hermes must be a BriefingHermesConfig")
 
 
 @dataclass
@@ -755,6 +779,17 @@ def _parse_briefing_config(raw: dict[str, Any]) -> BriefingConfig:
                     news_keywords=tuple(keywords),
                 )
             )
+    hermes_raw = raw.get("hermes") or {}
+    if not isinstance(hermes_raw, dict):
+        raise ValueError("briefing.hermes must be a YAML object")
+    hermes = BriefingHermesConfig(
+        enabled=bool(hermes_raw.get("enabled", True)),
+        endpoint=str(hermes_raw.get("endpoint", "") or ""),
+        cli_command=str(hermes_raw.get("cli_command", "hermes") or "hermes"),
+        timeout_seconds=float(hermes_raw.get("timeout_seconds", 120)),
+        model=str(hermes_raw.get("model", "") or ""),
+        api_key=hermes_raw.get("api_key"),
+    )
     return BriefingConfig(
         enabled=bool(raw.get("enabled", True)),
         ny_open_utc=str(raw.get("ny_open_utc", "12:00")),
@@ -765,6 +800,7 @@ def _parse_briefing_config(raw: dict[str, Any]) -> BriefingConfig:
         max_events_per_instrument=int(raw.get("max_events_per_instrument", 3)),
         telegram_notifications=bool(raw.get("telegram_notifications", True)),
         instruments=instruments,
+        hermes=hermes,
     )
 
 

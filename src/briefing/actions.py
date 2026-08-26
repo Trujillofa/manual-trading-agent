@@ -115,7 +115,7 @@ def apply_desk_action(
     )
 
 
-def evaluate_desk_action(
+def evaluate_desk_decision(
     pair: str,
     frames: dict[str, Any] | None,
     *,
@@ -124,22 +124,22 @@ def evaluate_desk_action(
     active_signal_state: dict[str, Any] | None = None,
     alignment_state: dict[str, Any] | None = None,
     settings: Any | None = None,
-) -> DeskAction:
-    """Run the same evaluate_entry contract as the 15-minute scan."""
+) -> tuple[DeskAction, str | None]:
+    """Same evaluate_entry contract as the scan. Direction only when V2 fires."""
     if not frames:
-        return "STAND_ASIDE"
+        return "STAND_ASIDE", None
     data_1h = frames.get("1h")
     data_30m = frames.get("30m")
     data_15m = frames.get("15m")
     if data_1h is None or data_30m is None or data_15m is None:
-        return "STAND_ASIDE"
+        return "STAND_ASIDE", None
     empty = (
         getattr(data_1h, "empty", False)
         or getattr(data_30m, "empty", False)
         or getattr(data_15m, "empty", False)
     )
     if empty:
-        return "STAND_ASIDE"
+        return "STAND_ASIDE", None
     try:
         from src.config.settings import get_settings
         from src.scanner.evaluator import evaluate_entry
@@ -162,6 +162,33 @@ def evaluate_desk_action(
             overrides=overrides or None,
         )
     except Exception:
-        logger.exception("evaluate_desk_action failed for %s", pair)
-        return "STAND_ASIDE"
-    return desk_action_from_result(result, news_blocked=news_blocked)
+        logger.exception("evaluate_desk_decision failed for %s", pair)
+        return "STAND_ASIDE", None
+    action = desk_action_from_result(result, news_blocked=news_blocked)
+    direction = result.get("direction") if isinstance(result, dict) else None
+    if action != "ENTER_ONLY_IF" or direction not in {"BUY", "SELL"}:
+        return action, None
+    return action, str(direction)
+
+
+def evaluate_desk_action(
+    pair: str,
+    frames: dict[str, Any] | None,
+    *,
+    news_blocked: bool,
+    now_utc: datetime | None = None,
+    active_signal_state: dict[str, Any] | None = None,
+    alignment_state: dict[str, Any] | None = None,
+    settings: Any | None = None,
+) -> DeskAction:
+    """Run the same evaluate_entry contract as the 15-minute scan."""
+    action, _direction = evaluate_desk_decision(
+        pair,
+        frames,
+        news_blocked=news_blocked,
+        now_utc=now_utc,
+        active_signal_state=active_signal_state,
+        alignment_state=alignment_state,
+        settings=settings,
+    )
+    return action

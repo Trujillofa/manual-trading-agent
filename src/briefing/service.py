@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING, Protocol
 
 import pandas as pd
 
-from src.briefing.actions import DeskAction, evaluate_desk_action
+from src.briefing.actions import DeskAction, evaluate_desk_decision
+from src.briefing.avoids import build_instrument_avoids, build_session_avoids
 from src.briefing.formatter import format_pre_ny_briefing
 from src.briefing.fundamental import (
     build_fundamental_pillar,
@@ -273,6 +274,7 @@ def build_instrument_briefing(
     btc_funding: FundingSnapshot | None = None,
     funding_error: str | None = None,
     extra_technical_lines: tuple[str, ...] = (),
+    avoids: tuple[str, ...] = (),
 ) -> InstrumentBriefing:
     spec = get_instrument_optional(instrument.id)
     point_size = spec.point_size if spec is not None else 0.01
@@ -338,6 +340,7 @@ def build_instrument_briefing(
         sentiment=sentiment,
         data_as_of=as_of,
         data_freshness=bar_freshness(as_of, now),
+        avoids=avoids,
     )
 
 
@@ -395,6 +398,15 @@ async def build_briefing(
 
     selected = _resolve_briefing_instruments(cfg, instrument_ids)
     alignment_state = _alignment_cache()
+    ny_open = ny_open_at(current.astimezone(UTC).date(), cfg.ny_open_utc)
+    session_avoids, session_avoid_detail = build_session_avoids(
+        loaded_events,
+        now=current,
+        ny_open=ny_open,
+        lockout_before=settings.news.lockout_minutes_before,
+        lockout_after=settings.news.lockout_minutes_after,
+        importance_threshold=settings.news.importance_threshold,
+    )
 
     fetcher = fetch_mtf or _default_fetcher
     items: list[InstrumentBriefing] = []
@@ -416,7 +428,7 @@ async def build_briefing(
             )
         )
         news_blocked = _news_blocked_for(instrument, loaded_events, current, settings)
-        actions[instrument.id] = evaluate_desk_action(
+        action, v2_direction = evaluate_desk_decision(
             instrument.id,
             frames,
             news_blocked=news_blocked,
@@ -425,7 +437,20 @@ async def build_briefing(
             alignment_state=alignment_state,
             settings=settings,
         )
+        actions[instrument.id] = action
         etr_key = (instrument.etr_asset or "").lower()
+        etr_report = cached_reports.get(etr_key)
+        avoids = build_instrument_avoids(
+            instrument.id,
+            currencies=_currencies_for(instrument),
+            session_codes=session_avoids,
+            frames=frames,
+            etr_report=etr_report,
+            action=action,
+            v2_direction=v2_direction,
+            lookback=settings.strategy.lookback_bars,
+            rsi_period=settings.strategy.rsi_period,
+        )
         items.append(
             build_instrument_briefing(
                 instrument,
@@ -433,17 +458,17 @@ async def build_briefing(
                 frame_error=frame_error,
                 events=loaded_events,
                 news_error=loaded_error,
-                etr_report=cached_reports.get(etr_key),
+                etr_report=etr_report,
                 etr_polled_at=cached_polled.get(etr_key),
                 now=current,
                 settings=settings,
                 btc_funding=funding,
                 funding_error=funding_error,
                 extra_technical_lines=tuple(extra),
+                avoids=avoids,
             )
         )
 
-    ny_open = ny_open_at(current.astimezone(UTC).date(), cfg.ny_open_utc)
     shared = build_shared_fundamental_pillar(
         events=loaded_events,
         now=current,
@@ -470,6 +495,8 @@ async def build_briefing(
         news_source_status=status,
         shared_fundamental=shared,
         synthesis=synthesis,
+        session_avoids=session_avoids,
+        session_avoid_detail=session_avoid_detail,
     )
     hermes_cfg = cfg.hermes
     if not attach_hermes:

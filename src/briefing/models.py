@@ -52,6 +52,7 @@ class InstrumentBriefing:
     data_as_of: datetime | None = None
     data_freshness: str | None = None
     ny_plan: NyPlan | None = None
+    avoids: tuple[str, ...] = ()
 
 
 @dataclass
@@ -65,3 +66,5 @@ class PreNyBriefing:
     news_source_status: str | None = None
     shared_fundamental: Pillar | None = None
     synthesis: str | None = None
+    session_avoids: tuple[str, ...] = ()
+    session_avoid_detail: str = ""

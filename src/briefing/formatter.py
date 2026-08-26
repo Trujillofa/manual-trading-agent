@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from src.briefing.avoids import INSTRUMENT_MAX, SESSION_MAX, format_avoid
 from src.briefing.hermes import format_ny_plan
 from src.briefing.models import InstrumentBriefing, Pillar, PreNyBriefing
 
@@ -34,6 +35,15 @@ _EMOJI = {
 
 def _esc(text: str) -> str:
     return text.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
+
+
+def _avoid_labels(codes: tuple[str, ...], *, detail: str = "", limit: int) -> list[str]:
+    labels: list[str] = []
+    for code in codes[: max(0, limit)]:
+        label = format_avoid(code, detail=detail)
+        if label:
+            labels.append(label)
+    return labels
 
 
 def _short_news_status(status: str | None) -> str | None:
@@ -77,6 +87,10 @@ def _instrument_block(item: InstrumentBriefing) -> str:
         parts.append("")
         for line in format_ny_plan(item.ny_plan):
             parts.append(line if line.startswith("*") else _esc(line))
+    if item.avoids:
+        labels = _avoid_labels(item.avoids, limit=INSTRUMENT_MAX)
+        if labels:
+            parts.append("*Evitar* " + " · ".join(_esc(label) for label in labels))
     return "\n".join(parts)
 
 
@@ -94,6 +108,14 @@ def format_pre_ny_briefing(briefing: PreNyBriefing) -> str:
     ]
     if briefing.synthesis:
         lines.append(_esc(briefing.synthesis))
+    if briefing.session_avoids:
+        session_labels = _avoid_labels(
+            briefing.session_avoids,
+            detail=briefing.session_avoid_detail,
+            limit=SESSION_MAX,
+        )
+        if session_labels:
+            lines.append("*Evitar sesión* " + _esc(session_labels[0]))
     lines.append("_No es señal de entrada ni autorización para operar._")
     news = _short_news_status(briefing.news_source_status)
     if news:

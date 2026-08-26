@@ -241,6 +241,7 @@ def build_decision_prompt(briefing: PreNyBriefing) -> str:
         "Oro / Nasdaq / Petróleo: futuros continuos — niveles aproximados.",
         "Usa SOLO los hechos de abajo. Si ETR está viejo o faltan datos, bájale la confianza.",
         "NO des BUY/SELL ni compra/venta. Eso lo decide solo el scanner V2.",
+        "No inventes evitares. El card ya los trae.",
         "Recomendación contextual (no es la acción): wait | stand_aside.",
         "Responde SOLO un JSON (sin markdown, sin herramientas) con esta forma:",
         "{",

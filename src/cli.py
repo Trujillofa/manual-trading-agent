@@ -259,6 +259,12 @@ async def run_enhanced_backtest(
     """
     require_backtest_supported(pair)
     from src.backtest.enhanced_engine import EnhancedBacktestEngine
+    from src.backtest.windows import (
+        WindowMetrics,
+        cutoff_at,
+        format_window_line,
+        split_trade_metrics,
+    )
 
     fetcher = DataFetcher()
 
@@ -314,25 +320,30 @@ async def run_enhanced_backtest(
             f"  Costs: spread {costs.spread_pips:g} pips, slip {costs.slippage_pips:g} pips, "
             f"${costs.commission_usd_per_lot_side:g}/lot/side, size {costs.lot_size:g} lot"
         )
-        cutoff_idx = int(len(data) * 0.65)
-        cutoff = engine._index_to_datetime(data.index[cutoff_idx]) if len(data) else None
-        develop_n = sum(
-            1 for trade in result.trades if cutoff is not None and trade.entry_time <= cutoff
-        )
-        holdout_n = sum(
-            1 for trade in result.trades if cutoff is not None and trade.entry_time > cutoff
-        )
+        cutoff = cutoff_at(data.index)
+        develop: WindowMetrics | None = None
+        holdout: WindowMetrics | None = None
+        if cutoff is not None:
+            develop, holdout = split_trade_metrics(
+                result.trades, cutoff, initial_balance=engine.initial_balance
+            )
 
         print(f"\n  Period: {result.start_date.date()} to {result.end_date.date()}")
         print(f"  Total trades: {result.total_trades}")
-        print(f"  Develop (first 65%): {develop_n} trades")
-        print(f"  Holdout (last 35%, unused for selection): {holdout_n} trades")
-        print(f"  Win rate: {result.win_rate:.1%}")
-        print(f"  Total PnL: ${result.total_pnl:.2f} ({result.total_pnl_pct:.2f}%)")
+        if develop is not None and holdout is not None:
+            print(format_window_line("Develop (first 65%)", develop))
+            print(
+                format_window_line(
+                    "Holdout (last 35%, unused for selection)",
+                    holdout,
+                )
+            )
+        print(f"  All-period (not a rank key) win rate: {result.win_rate:.1%}")
+        print(f"  All-period PnL: ${result.total_pnl:.2f} ({result.total_pnl_pct:.2f}%)")
         print(f"  Max drawdown: {result.max_drawdown_pct:.2f}%")
         print(f"  Avg win: ${result.avg_win:.2f}")
         print(f"  Avg loss: ${result.avg_loss:.2f}")
-        print(f"  Profit factor: {result.profit_factor:.2f}")
+        print(f"  All-period profit factor: {result.profit_factor:.2f}")
         print(f"  Sharpe ratio: {result.sharpe_ratio:.2f}")
 
         if use_patterns:

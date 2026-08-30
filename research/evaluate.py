@@ -46,6 +46,7 @@ from scripts.run_donchian_backtest import (  # noqa: E402
     fetch_pair,
     run_config,
 )
+from src.backtest.exits import same_bar_exit  # noqa: E402
 from src.scanner.evaluator import (  # noqa: E402  # the pure live entry (R2)
     evaluate_entry,
     evaluate_session_breakout,
@@ -407,24 +408,17 @@ def backtest_live_entry(
                 hit = False
                 exit_price = None
                 ex_reason = None
-                if direc == "BUY":
-                    if bar_h >= tp:
-                        hit = True
-                        exit_price = tp
-                        ex_reason = "tp"
-                    elif bar_l <= sl:
-                        hit = True
-                        exit_price = sl
-                        ex_reason = "sl"
-                else:
-                    if bar_l <= tp:
-                        hit = True
-                        exit_price = tp
-                        ex_reason = "tp"
-                    elif bar_h >= sl:
-                        hit = True
-                        exit_price = sl
-                        ex_reason = "sl"
+                # Stop-first on the same bar (pessimistic). KEEP gates below
+                # are unchanged; this only matches the #49 fill contract.
+                hit_kind = same_bar_exit(str(direc), bar_h, bar_l, tp, sl)
+                if hit_kind == "tp":
+                    hit = True
+                    exit_price = tp
+                    ex_reason = "tp"
+                elif hit_kind == "sl":
+                    hit = True
+                    exit_price = sl
+                    ex_reason = "sl"
                 if hit and exit_price is not None:
                     # Realistic P&L: risk-based sizing + spread/slippage/commission (parity with
                     # the Donchian engine run_config so harness PF/PnL are financially meaningful).

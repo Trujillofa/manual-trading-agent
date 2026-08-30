@@ -18,7 +18,7 @@ own their own walk loops.
 | RSI+MA+HH/LL | `python scripts/run_rsi_ma_hh_ll_backtest.py --pairs EUR/USD --days 58` | Close signal, next-bar open | Same CostBook | 65/35; grid rank uses develop only | Optional UTC hour filter (`use_session`) |
 | Donchian | `python scripts/run_donchian_backtest.py --pairs EUR/USD --days 365 --sweep baseline` | Close signal, next-bar open | Same CostBook | 65/35; sweep rank uses develop only | Optional UTC hour filter |
 | Pivot | `python scripts/run_pivot_backtest.py --pairs EUR/USD --days 365 --entry-types WEEKLY` | Close signal, next-bar open | Same CostBook | 65/35; sweep rank uses develop only | SESSION uses UTC 07–17 / 13–22 |
-| Enhanced engine | `python -m src.cli backtest-enhanced --pair EUR/USD` | Close signal, next-bar open, stop-first | Same CostBook | Replay-only (no grid). CLI prints 65/35 counts; holdout unused | Not session-aware |
+| Enhanced engine | `python -m src.cli backtest-enhanced --pair EUR/USD` | Close signal, next-bar open, stop-first | Same CostBook | Replay-only (no grid). CLI prints 65/35 WR/PnL/PF; holdout unused for selection | Not session-aware |
 
 Related scripts left alone: `optimize_htf_fib_backtest.py` (already IS-only rank),
 `evaluate_htf_fib_accounts.py`, `research/evaluate.py` / autosearch (already

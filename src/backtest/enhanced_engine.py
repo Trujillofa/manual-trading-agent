@@ -29,6 +29,7 @@ from typing import Literal, cast
 import pandas as pd
 
 from src.backtest.cost_book import CostBook, pip_size_for_pair
+from src.backtest.exits import same_bar_exit
 from src.indicators.adx import calculate_adx
 from src.indicators.atr import calculate_atr
 from src.indicators.candlestick import (
@@ -222,17 +223,7 @@ class EnhancedBacktestEngine:
         ``entry_price`` is unused for the hit test; kept for call-site stability.
         """
         del entry_price
-        if side == "buy":
-            if low <= sl_price:
-                return "sl"
-            if high >= tp_price:
-                return "tp"
-        else:
-            if high >= sl_price:
-                return "sl"
-            if low <= tp_price:
-                return "tp"
-        return None
+        return same_bar_exit(side, high, low, tp_price, sl_price)
 
     def _fill_cash_pnl(
         self,

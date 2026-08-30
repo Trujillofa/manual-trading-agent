@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, dataclass
+from datetime import datetime
 
 import pandas as pd
 import pytest
@@ -305,3 +306,65 @@ def test_pivot_develop_wr_ignores_holdout_trades() -> None:
     trades, _pnl, _pf, wr = develop_metrics([result], {"EUR/USD": cutoff}, holdout=False)
     assert trades == 1
     assert wr == pytest.approx(1.0)
+
+
+def test_same_bar_exit_is_stop_first() -> None:
+    from src.backtest.exits import same_bar_exit
+
+    assert same_bar_exit("buy", high=1.03, low=0.97, tp=1.02, sl=0.98) == "sl"
+    assert same_bar_exit("BUY", high=1.03, low=0.99, tp=1.02, sl=0.98) == "tp"
+    assert same_bar_exit("buy", high=1.01, low=0.97, tp=1.02, sl=0.98) == "sl"
+    assert same_bar_exit("sell", high=1.03, low=0.97, tp=0.98, sl=1.02) == "sl"
+    assert same_bar_exit("SELL", high=1.01, low=0.97, tp=0.98, sl=1.02) == "tp"
+    assert same_bar_exit("sell", high=1.03, low=0.99, tp=0.98, sl=1.02) == "sl"
+    assert same_bar_exit("buy", high=1.01, low=0.99, tp=1.02, sl=0.98) is None
+    with pytest.raises(ValueError, match="unknown side"):
+        same_bar_exit("flat", 1.0, 1.0, 1.0, 1.0)
+
+
+def test_cutoff_at_uses_bar_index_not_wall_clock() -> None:
+    from src.backtest.windows import cutoff_at
+
+    index = pd.date_range("2024-01-01", periods=100, freq="h")
+    cutoff = cutoff_at(index)
+    assert cutoff is not None
+    assert pd.Timestamp(cutoff) == pd.Timestamp(index[65])
+    assert cutoff_at(pd.Index([])) is None
+
+
+def test_window_metrics_ignore_holdout_pnls() -> None:
+    from src.backtest.windows import (
+        format_window_line,
+        metrics_from_pnls,
+        split_trade_metrics,
+    )
+
+    @dataclass
+    class _T:
+        entry_time: datetime
+        pnl: float
+
+    cutoff = datetime(2024, 6, 1)
+    develop_win = _T(datetime(2024, 1, 15), 100.0)
+    holdout_loss = _T(datetime(2024, 7, 15), -50_000.0)
+    juicy_holdout = _T(datetime(2024, 7, 15), 50_000.0)
+    develop, holdout = split_trade_metrics(
+        [develop_win, holdout_loss], cutoff, initial_balance=10_000.0
+    )
+    swapped_develop, swapped_holdout = split_trade_metrics(
+        [develop_win, juicy_holdout], cutoff, initial_balance=10_000.0
+    )
+    assert develop.trades == 1
+    assert develop.win_rate == pytest.approx(1.0)
+    assert develop.pnl == pytest.approx(100.0)
+    assert develop.pnl_pct == pytest.approx(1.0)
+    assert develop.profit_factor == float("inf")
+    assert holdout.trades == 1
+    assert holdout.profit_factor == pytest.approx(0.0)
+    assert develop == swapped_develop
+    assert swapped_holdout.profit_factor == float("inf")
+    empty = metrics_from_pnls([])
+    assert empty.trades == 0
+    assert empty.profit_factor == 0.0
+    assert format_window_line("Develop (first 65%)", empty) == "  Develop (first 65%): 0 trades"
+    assert "PF inf" in format_window_line("Develop (first 65%)", develop)

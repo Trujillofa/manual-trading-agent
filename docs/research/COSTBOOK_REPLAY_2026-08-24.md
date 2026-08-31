@@ -25,9 +25,10 @@ Nothing to implement. The overlay contract still does not exist.
 - Sparse runners (RSI V2_MA, Donchian baseline, WEEKLY pivot) do not have
   develop N ≥ 30. LightGBM is forbidden on those labels.
 - Enhanced has enough N and **fails** the same-book PF / PnL bar. All-period
-  PF is 0.35 on 330 trades (−87.39%); holdout N is 104 (holdout PF was not
-  printed separately). An overlay must beat that same book — and still is
-  not a promote path.
+  PF is 0.35 on 330 trades (−87.39%); holdout N is 104. The 2026-08-24 CLI
+  did not print holdout PF separately; later `backtest-enhanced` prints
+  per-window WR/PnL/PF. These recorded all-period numbers stay the book.
+  An overlay must beat that same book — and still is not a promote path.
 - Do not start `src/risk/vol.py`. Do not retune RSI 30/70, V2, ADX, or Fib
   to fatten N.
 

@@ -1,0 +1,6088 @@
+{
+  "generated_at_utc": "2026-08-29T19:13:42.281535+00:00",
+  "worktree": "/home/yderf/Projects/trading/.worktrees/manual-trading-agent/ny-1330",
+  "branch": "research/ny-1330-cash-open",
+  "base": "origin/main e1f9612",
+  "paper_only": true,
+  "clock_validation": {
+    "method": "hourly last close, log returns, candidate shifted \u22124..+4h; admit only when argmax is exactly lag 0 and corr >= pair floor",
+    "ambiguous_dst_policy": "server_wall_to_utc localizes America/New_York with ambiguous='NaT' and drops those bars; do not infer or fold",
+    "ambiguous_bars_dropped": 0,
+    "series": [
+      {
+        "series": "BTCUSDT_1H_2026",
+        "reference": null,
+        "kind": "ground_truth",
+        "best_lag_hours": 0,
+        "correlation": 1.0,
+        "threshold": null,
+        "invert_reference": false,
+        "n_hourly": null,
+        "pass": true,
+        "reason": "UTC-native yardstick (Dukascopy unix-ms or Binance time)."
+      },
+      {
+        "series": "BTCUSDT_1H_MACRO",
+        "reference": null,
+        "kind": "ground_truth",
+        "best_lag_hours": 0,
+        "correlation": 1.0,
+        "threshold": null,
+        "invert_reference": false,
+        "n_hourly": null,
+        "pass": true,
+        "reason": "UTC-native yardstick (Dukascopy unix-ms or Binance time)."
+      },
+      {
+        "series": "BTCUSD_H1",
+        "reference": "BTCUSDT_1H_MACRO",
+        "kind": "same_asset",
+        "best_lag_hours": 0,
+        "correlation": 0.9600641182108234,
+        "threshold": 0.95,
+        "invert_reference": false,
+        "n_hourly": 13146,
+        "corr_by_lag": {
+          "-4": -0.0010336969518183314,
+          "-3": 0.003488736147844739,
+          "-2": 0.004377909063379554,
+          "-1": 0.002395610556334784,
+          "0": 0.9600641182108234,
+          "1": 0.006594364488765028,
+          "2": 0.010215229732143963,
+          "3": 0.0027267957738916345,
+          "4": 0.0048273572846835875
+        },
+        "pass": true,
+        "reason": "Same BTC: FP H1 (ET+7) vs Binance UTC. MACRO overlap 2021-12\u21922024-01."
+      },
+      {
+        "series": "DXY_1H",
+        "reference": "EURUSD_DUKAS_H1",
+        "kind": "cross_asset",
+        "best_lag_hours": 0,
+        "correlation": 0.921350553979937,
+        "threshold": 0.8,
+        "invert_reference": true,
+        "n_hourly": 12467,
+        "corr_by_lag": {
+          "-4": 0.0009954603716098704,
+          "-3": -0.011266207858316321,
+          "-2": 0.008515721379731783,
+          "-1": 0.02091893798991635,
+          "0": 0.921350553979937,
+          "1": -0.015458595976901413,
+          "2": -0.003830063216088207,
+          "3": -0.0017290599356393,
+          "4": -0.0013809299690352643
+        },
+        "pass": true,
+        "reason": "No DXY UTC book. DXY vs EURUSD is the textbook inverse dollar pair; negate EURUSD log returns so the argmax stays at lag 0 (raw corr \u2248 \u22120.92)."
+      },
+      {
+        "series": "ETHUSDT_15M",
+        "reference": "BTCUSDT_1H_MACRO",
+        "kind": "cross_asset",
+        "best_lag_hours": 0,
+        "correlation": 0.7040078138190613,
+        "threshold": 0.5,
+        "invert_reference": false,
+        "n_hourly": 733,
+        "corr_by_lag": {
+          "-4": 0.04252861650404905,
+          "-3": -0.1320927877162982,
+          "-2": 0.05338994345107554,
+          "-1": 0.008287774040634435,
+          "0": 0.7040078138190613,
+          "1": 0.052144943848417724,
+          "2": -0.02454558240568268,
+          "3": -0.06389106203090368,
+          "4": 0.03513249472272669
+        },
+        "pass": true,
+        "reason": "No ETH UTC book. Binance BTCUSDT is same-venue UTC-native; hourly ETH/BTC logrets comove (~0.70 on the Jan-2024 overlap). Floor 0.50, not 0.95."
+      },
+      {
+        "series": "EURUSD_DUKAS_H1",
+        "reference": null,
+        "kind": "ground_truth",
+        "best_lag_hours": 0,
+        "correlation": 1.0,
+        "threshold": null,
+        "invert_reference": false,
+        "n_hourly": null,
+        "pass": true,
+        "reason": "UTC-native yardstick (Dukascopy unix-ms or Binance time)."
+      },
+      {
+        "series": "EURUSD_M5",
+        "reference": "EURUSD_DUKAS_H1",
+        "kind": "same_asset",
+        "best_lag_hours": 0,
+        "correlation": 0.9974358443837544,
+        "threshold": 0.95,
+        "invert_reference": false,
+        "n_hourly": 25871,
+        "corr_by_lag": {
+          "-4": -0.009168623481863486,
+          "-3": -0.007171411615654868,
+          "-2": 0.004886976239316138,
+          "-1": -0.022564078256493383,
+          "0": 0.9974358443837544,
+          "1": -0.02300197174435282,
+          "2": 0.005154596202902318,
+          "3": -0.007811944941843849,
+          "4": -0.0076474627661001025
+        },
+        "pass": true,
+        "reason": "Same EURUSD: Vantage M5 vs Dukas H1 UTC. C2 (Athens) peaked off lag 0 on EU/US shoulders."
+      },
+      {
+        "series": "QQQ_1H",
+        "reference": "US100_H1",
+        "kind": "cross_asset",
+        "best_lag_hours": 0,
+        "correlation": 0.4664187929261198,
+        "threshold": 0.35,
+        "invert_reference": false,
+        "n_hourly": 1128,
+        "corr_by_lag": {
+          "-4": 0.025038116094515936,
+          "-3": 0.004256719246762527,
+          "-2": -0.020574116379124145,
+          "-1": -0.002568346135468968,
+          "0": 0.4664187929261198,
+          "1": 0.30847014523028515,
+          "2": -0.016311801343438518,
+          "3": 0.013533999432139997,
+          "4": 0.014307631232086233
+        },
+        "pass": true,
+        "reason": "Same Nasdaq (QQQ ETF vs US100 CFD). US100 is ET+7 and is admitted only after the DXY check. QQQ is a :30 RTH grid vs US100 :00 H1, so hourly-last corr caps ~0.47 (lag+1 residual ~0.31 is grid phase, not a second clock). Floor 0.35."
+      },
+      {
+        "series": "US100_H1",
+        "reference": "DXY_1H",
+        "kind": "cross_asset",
+        "best_lag_hours": 0,
+        "correlation": 0.328007938339498,
+        "threshold": 0.2,
+        "invert_reference": true,
+        "n_hourly": 3692,
+        "corr_by_lag": {
+          "-4": 0.0063878454262782415,
+          "-3": -0.00938356097306323,
+          "-2": -0.02270594358860146,
+          "-1": 0.0025523255543834274,
+          "0": 0.328007938339498,
+          "1": 0.006725450969449885,
+          "2": 0.00379900318737498,
+          "3": -0.004602206340494847,
+          "4": -0.005264003449504939
+        },
+        "pass": true,
+        "reason": "Same as US100_M5: Nasdaq CFD vs confirmed Yahoo DXY (inverted). Floor 0.20."
+      },
+      {
+        "series": "US100_M5",
+        "reference": "DXY_1H",
+        "kind": "cross_asset",
+        "best_lag_hours": 0,
+        "correlation": 0.328007938339498,
+        "threshold": 0.2,
+        "invert_reference": true,
+        "n_hourly": 3692,
+        "corr_by_lag": {
+          "-4": 0.0063878454262782415,
+          "-3": -0.00938356097306323,
+          "-2": -0.02270594358860146,
+          "-1": 0.0025523255543834274,
+          "0": 0.328007938339498,
+          "1": 0.006725450969449885,
+          "2": 0.00379900318737498,
+          "3": -0.004602206340494847,
+          "4": -0.005264003449504939
+        },
+        "pass": true,
+        "reason": "No Nasdaq UTC book. After DXY is confirmed vs Dukas EURUSD, US100 vs \u2212DXY is the risk-on inverse (lag-0 ~0.33, off-lag ~0). Floor 0.20, not 0.95. Do not pair two FP index files \u2014 a shared broker offset would still look like lag 0."
+      },
+      {
+        "series": "US30_M5",
+        "reference": "DXY_1H",
+        "kind": "cross_asset",
+        "best_lag_hours": 0,
+        "correlation": 0.3917679883920343,
+        "threshold": 0.2,
+        "invert_reference": true,
+        "n_hourly": 3877,
+        "corr_by_lag": {
+          "-4": 0.018962817731074534,
+          "-3": 0.005475476435636639,
+          "-2": -0.030882126979048838,
+          "-1": -0.01174246158592449,
+          "0": 0.3917679883920343,
+          "1": 0.03564746792050059,
+          "2": -0.01566855076695819,
+          "3": -0.016663604123420862,
+          "4": -0.006727900110920821
+        },
+        "pass": true,
+        "reason": "No Dow UTC book. Same inverted-DXY contemporaneous check as US100. Floor 0.20."
+      },
+      {
+        "series": "XAUUSD_DUKAS_H1",
+        "reference": null,
+        "kind": "ground_truth",
+        "best_lag_hours": 0,
+        "correlation": 1.0,
+        "threshold": null,
+        "invert_reference": false,
+        "n_hourly": null,
+        "pass": true,
+        "reason": "UTC-native yardstick (Dukascopy unix-ms or Binance time)."
+      },
+      {
+        "series": "XAUUSD_H1",
+        "reference": "XAUUSD_DUKAS_H1",
+        "kind": "same_asset",
+        "best_lag_hours": 0,
+        "correlation": 0.9992028622291326,
+        "threshold": 0.95,
+        "invert_reference": false,
+        "n_hourly": 24588,
+        "corr_by_lag": {
+          "-4": 0.004338608463901598,
+          "-3": 0.0018804420525051102,
+          "-2": 0.003530493700089107,
+          "-1": -0.024741958704588982,
+          "0": 0.9992028622291326,
+          "1": -0.02502567548406194,
+          "2": 0.0031554196742610324,
+          "3": 0.001979122557325,
+          "4": 0.0036627883823905486
+        },
+        "pass": true,
+        "reason": "Same XAU: Vantage H1 vs Dukas H1 UTC."
+      },
+      {
+        "series": "XAUUSD_M15",
+        "reference": "XAUUSD_DUKAS_H1",
+        "kind": "same_asset",
+        "best_lag_hours": 0,
+        "correlation": 0.9991954383925256,
+        "threshold": 0.95,
+        "invert_reference": false,
+        "n_hourly": 22401,
+        "corr_by_lag": {
+          "-4": 0.00019756143345176042,
+          "-3": 0.00700874648553248,
+          "-2": 0.0018028188154182116,
+          "-1": -0.024548812025971943,
+          "0": 0.9991954383925256,
+          "1": -0.02473025368210225,
+          "2": 0.001443561747759848,
+          "3": 0.007032681836026547,
+          "4": -0.0005406952575251035
+        },
+        "pass": true,
+        "reason": "Same XAU: Vantage M15 vs Dukas H1 UTC. C1 (false +00:00) peaked at lag \u22123."
+      }
+    ]
+  },
+  "inventory": [
+    {
+      "key": "US100_M5",
+      "symbol": "US100",
+      "timeframe": "M5",
+      "source": "mt5-arch-integration FP Markets M5.hc export",
+      "path": "/home/yderf/Projects/trading/mt5-arch-integration/results/us_index_data/history_US100_M5.csv",
+      "used": true,
+      "n": 57820,
+      "tmin": "2025-10-22 22:00:00+00:00",
+      "tmax": "2026-08-18 15:25:00+00:00",
+      "years": 0.82,
+      "notes": "Nasdaq CFD. Prior ny_cash_* screens on this file all promote=no.",
+      "clock": "broker server wall via ET+7 \u2192 America/New_York \u2192 UTC (US DST; not Europe/Athens; not a single export offset)"
+    },
+    {
+      "key": "US30_M5",
+      "symbol": "US30",
+      "timeframe": "M5",
+      "source": "mt5-arch-integration FP Markets M5 export",
+      "path": "/home/yderf/Projects/trading/mt5-arch-integration/results/us_index_data/history_US30_M5.csv",
+      "used": true,
+      "n": 60034,
+      "tmin": "2025-10-12 22:00:00+00:00",
+      "tmax": "2026-08-18 15:25:00+00:00",
+      "years": 0.85,
+      "notes": "Dow CFD. Transfer-only in prior playbook.",
+      "clock": "broker server wall via ET+7 \u2192 America/New_York \u2192 UTC (US DST; not Europe/Athens; not a single export offset)"
+    },
+    {
+      "key": "US100_H1",
+      "symbol": "US100",
+      "timeframe": "H1",
+      "source": "mt5-arch-integration FP Markets H1.hc",
+      "path": "/home/yderf/Projects/trading/mt5-arch-integration/results/us_index_data/history_US100_H1.csv",
+      "used": true,
+      "n": 4826,
+      "tmin": "2025-10-22 22:00:00+00:00",
+      "tmax": "2026-08-18 17:00:00+00:00",
+      "years": 0.82,
+      "notes": "Hour-rank corroboration only; too coarse for scalp fills.",
+      "clock": "broker server wall via ET+7 \u2192 America/New_York \u2192 UTC (US DST; not Europe/Athens; not a single export offset)"
+    },
+    {
+      "key": "EURUSD_M5",
+      "symbol": "EURUSD",
+      "timeframe": "M5",
+      "source": "mt5-arch-integration Vantage Export EURUSD M5 (60 months)",
+      "path": "/home/yderf/Projects/trading/mt5-arch-integration/results/eurusd_data/history_EURUSD.csv",
+      "used": true,
+      "n": 368046,
+      "tmin": "2021-09-15 19:25:00+00:00",
+      "tmax": "2026-08-20 19:20:00+00:00",
+      "years": 4.93,
+      "notes": "Prior eurusd_ny_scalp_* promote=no. Server follows US DST, not Athens.",
+      "clock": "broker server wall via ET+7 \u2192 America/New_York \u2192 UTC (US DST; not Europe/Athens; not a single export offset)"
+    },
+    {
+      "key": "XAUUSD_M15",
+      "symbol": "XAUUSD",
+      "timeframe": "M15",
+      "source": "mt5-arch-integration Vantage xauusd_data.csv (Charts.MaxBars=100000)",
+      "path": "/home/yderf/Projects/trading/mt5-arch-integration/xauusd_data.csv",
+      "used": true,
+      "n": 99997,
+      "tmin": "2022-05-17 06:15:00+00:00",
+      "tmax": "2026-08-07 20:45:00+00:00",
+      "years": 4.23,
+      "notes": "False +00:00 on EET/EEST-US-DST wall. M15 hits 100k-bar cap; starts 2022-05.",
+      "clock": "broker server wall via ET+7 \u2192 America/New_York \u2192 UTC (US DST; not Europe/Athens; not a single export offset)"
+    },
+    {
+      "key": "XAUUSD_H1",
+      "symbol": "XAUUSD",
+      "timeframe": "H1",
+      "source": "mt5-arch-integration Vantage xauusd_data.csv",
+      "path": "/home/yderf/Projects/trading/mt5-arch-integration/xauusd_data.csv",
+      "used": true,
+      "n": 29133,
+      "tmin": "2021-09-03 16:00:00+00:00",
+      "tmax": "2026-08-07 20:00:00+00:00",
+      "years": 4.93,
+      "notes": "Same false +00:00 as M15. Used for hour-rank.",
+      "clock": "broker server wall via ET+7 \u2192 America/New_York \u2192 UTC (US DST; not Europe/Athens; not a single export offset)"
+    },
+    {
+      "key": "BTCUSD_H1",
+      "symbol": "BTCUSD",
+      "timeframe": "H1",
+      "source": "mt5-arch-integration FP Markets BTCUSD H1.hc",
+      "path": "/home/yderf/Projects/trading/mt5-arch-integration/results/btc_data/history_BTCUSD_H1.csv",
+      "used": true,
+      "n": 29035,
+      "tmin": "2021-12-20 22:00:00+00:00",
+      "tmax": "2026-08-18 15:00:00+00:00",
+      "years": 4.66,
+      "notes": "H1 only locally \u2014 no BTC M5. Hour-rank + dummy hour trade.",
+      "clock": "broker server wall via ET+7 \u2192 America/New_York \u2192 UTC (US DST; not Europe/Athens; not a single export offset)"
+    },
+    {
+      "key": "BTCUSDT_1H_MACRO",
+      "symbol": "BTCUSDT",
+      "timeframe": "1h",
+      "source": "TRADING/crypto-agent data/macro_events",
+      "path": "/home/yderf/Projects/trading/TRADING/crypto-agent/data/macro_events/BTCUSDT_1h_2021-01-01_2024-01-01.csv",
+      "used": true,
+      "n": 26998,
+      "tmin": "2021-01-01 05:00:00+00:00",
+      "tmax": "2024-01-31 18:00:00+00:00",
+      "years": 3.08,
+      "notes": "Stops 2024-01. Combined with 2026 snippet if present.",
+      "clock": "Binance UTC"
+    },
+    {
+      "key": "BTCUSDT_1H_2026",
+      "symbol": "BTCUSDT",
+      "timeframe": "1h",
+      "source": "TRADING/crypto-agent data",
+      "path": "/home/yderf/Projects/trading/TRADING/crypto-agent/data/BTCUSDT_1h_2026-02-01_2026-06-10.csv",
+      "used": true,
+      "n": 3106,
+      "tmin": "2026-02-01 05:00:00+00:00",
+      "tmax": "2026-06-10 14:00:00+00:00",
+      "years": 0.35,
+      "notes": "Gap 2024-01 \u2192 2026-02. Not stitched into one continuous book.",
+      "clock": "Binance UTC"
+    },
+    {
+      "key": "ETHUSDT_15M",
+      "symbol": "ETHUSDT",
+      "timeframe": "15m",
+      "source": "TRADING/crypto-agent data",
+      "path": "/home/yderf/Projects/trading/TRADING/crypto-agent/data/ETHUSDT_15m_2024-01-01_2026-03-01.csv",
+      "used": true,
+      "n": 76000,
+      "tmin": "2024-01-01 05:00:00+00:00",
+      "tmax": "2026-03-02 20:45:00+00:00",
+      "years": 2.17,
+      "notes": "Liquid crypto extra name. Clock guard vs BTCUSDT_1H_MACRO.",
+      "clock": "Binance UTC"
+    },
+    {
+      "key": "QQQ_1H",
+      "symbol": "QQQ",
+      "timeframe": "1h",
+      "source": "crypto-agent tradfi yfinance proxy (close only)",
+      "path": "/home/yderf/Projects/trading/TRADING/crypto-agent/data/tradfi/equity_risk_1h.csv",
+      "used": true,
+      "n": 5070,
+      "tmin": "2023-07-24 13:30:00+00:00",
+      "tmax": "2026-06-18 16:30:00+00:00",
+      "years": 2.9,
+      "notes": "Close-only RTH |\u0394close| proxy. Clock guard vs US100_H1.",
+      "clock": "Yahoo bar_open_utc (RTH)"
+    },
+    {
+      "key": "DXY_1H",
+      "symbol": "DX-Y.NYB",
+      "timeframe": "1h",
+      "source": "crypto-agent tradfi yfinance proxy (close only)",
+      "path": "/home/yderf/Projects/trading/TRADING/crypto-agent/data/tradfi/dxy_1h.csv",
+      "used": true,
+      "n": 14303,
+      "tmin": "2024-01-26 05:00:00+00:00",
+      "tmax": "2026-06-18 16:00:00+00:00",
+      "years": 2.39,
+      "notes": "Close-only USD index. Clock guard vs \u2212EURUSD_DUKAS_H1.",
+      "clock": "Yahoo bar_open_utc"
+    },
+    {
+      "key": "XAUUSD_DUKAS_H1",
+      "symbol": "XAUUSD",
+      "timeframe": "H1",
+      "source": "ctrader-trading-agent Dukascopy",
+      "path": "/home/yderf/Projects/trading/ctrader-trading-agent/data/dukascopy/xauusd_h1_2022-01-01_2026-03-01.csv",
+      "used": true,
+      "n": 24595,
+      "tmin": "2022-01-02 23:00:00+00:00",
+      "tmax": "2026-02-27 21:00:00+00:00",
+      "years": 4.15,
+      "notes": "UTC-native reference for Vantage XAU admission.",
+      "clock": "unix ms UTC"
+    },
+    {
+      "key": "EURUSD_DUKAS_H1",
+      "symbol": "EURUSD",
+      "timeframe": "H1",
+      "source": "ctrader-trading-agent Dukascopy",
+      "path": "/home/yderf/Projects/trading/ctrader-trading-agent/data/dukascopy/eurusd_h1_2022-01-01_2026-03-01.csv",
+      "used": true,
+      "n": 25925,
+      "tmin": "2022-01-02 22:00:00+00:00",
+      "tmax": "2026-02-27 21:00:00+00:00",
+      "years": 4.15,
+      "notes": "UTC-native reference for Vantage EURUSD admission.",
+      "clock": "unix ms UTC"
+    },
+    {
+      "key": "OIL_WTI",
+      "symbol": "OIL",
+      "timeframe": "any",
+      "source": "workspace search",
+      "path": "/home/yderf/Projects/trading/NO_LOCAL_WTI_OHLC",
+      "used": false,
+      "n": 0,
+      "tmin": "",
+      "tmax": "",
+      "years": 0.0,
+      "notes": "No WTI/CL/USOIL csv/parquet under live projects. Desk card lists OIL; data missing.",
+      "clock": ""
+    },
+    {
+      "key": "TICKS_US100",
+      "symbol": "US100",
+      "timeframe": "tick",
+      "source": "mt5-arch tick_data",
+      "path": "/home/yderf/Projects/trading/mt5-arch-integration/results/tick_data/ticks_US100_fpmarkets.csv",
+      "used": false,
+      "n": 0,
+      "tmin": "",
+      "tmax": "",
+      "years": 0.0,
+      "notes": "~36h around 2026-08-18. Too short for a 13:30 decade test.",
+      "clock": ""
+    },
+    {
+      "key": "OKX_CANDLES",
+      "symbol": "prediction-markets",
+      "timeframe": "mixed",
+      "source": "okx-outcomes sqlite",
+      "path": "/home/yderf/Projects/trading/okx-outcomes/data/okx_outcomes.sqlite",
+      "used": false,
+      "n": 0,
+      "tmin": "",
+      "tmax": "",
+      "years": 0.0,
+      "notes": "598k prediction-market candles, not BTC/NQ/XAU/Oil.",
+      "clock": ""
+    },
+    {
+      "key": "MTA_PARQUET_FX",
+      "symbol": "FX majors",
+      "timeframe": "~15m?",
+      "source": "manual-trading-agent/results/cache",
+      "path": "/home/yderf/Projects/trading/manual-trading-agent/results/cache",
+      "used": false,
+      "n": 0,
+      "tmin": "",
+      "tmax": "",
+      "years": 0.0,
+      "notes": "365d FX parquet present; not required (EURUSD M5 is longer). pyarrow missing on system python.",
+      "clock": ""
+    },
+    {
+      "key": "TRADING_EVIDENCE",
+      "symbol": "n/a",
+      "timeframe": "n/a",
+      "source": "trading-evidence",
+      "path": "/home/yderf/Projects/trading/trading-evidence",
+      "used": false,
+      "n": 0,
+      "tmin": "",
+      "tmax": "",
+      "years": 0.0,
+      "notes": "Envelope schema/validator, no OHLC history.",
+      "clock": ""
+    }
+  ],
+  "event_studies": {
+    "US100_M5": {
+      "bar_minutes": 5,
+      "window_minutes": 30,
+      "close_only": false,
+      "n_et_weekdays": 215,
+      "windows": {
+        "cash_0930_et": {
+          "n": 211,
+          "median": 0.006752085146745952,
+          "mean": 0.007073102707115137,
+          "p75": 0.008459301360352273,
+          "p90": 0.011012046359293724,
+          "median_EDT": 0.006824219060529068,
+          "n_EDT": 123,
+          "median_EST": 0.006667105499099834,
+          "n_EST": 88
+        },
+        "naive_1330_utc": {
+          "n": 211,
+          "median": 0.0047661210756659664,
+          "mean": 0.005239838020121035,
+          "p75": 0.007408198128983385,
+          "p90": 0.009694786251575735,
+          "median_EDT": 0.006824219060529068,
+          "n_EDT": 123,
+          "median_EST": 0.002289575790757007,
+          "n_EST": 88
+        },
+        "fx_ny_1200_utc": {
+          "n": 211,
+          "median": 0.0022026814748691433,
+          "mean": 0.002380540306664709,
+          "p75": 0.0029867346261797595,
+          "p90": 0.004024810281560862,
+          "median_EDT": 0.0024613256293921208,
+          "n_EDT": 124,
+          "median_EST": 0.0017136799483504833,
+          "n_EST": 87
+        },
+        "london_0800_local": {
+          "n": 211,
+          "median": 0.002007130038431619,
+          "mean": 0.0021944960070031123,
+          "p75": 0.0027522567678418394,
+          "p90": 0.0036333113080094137,
+          "median_EDT": 0.002056622282330901,
+          "n_EDT": 124,
+          "median_EST": 0.0019675621904460374,
+          "n_EST": 87
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 15,
+          "n": 211,
+          "median": 0.0038792189658118617,
+          "mean": 0.004527602997077351,
+          "p75": 0.005870615467190507,
+          "p90": 0.007848974728342964
+        },
+        {
+          "utc_hour": 14,
+          "n": 211,
+          "median": 0.0034170986051482964,
+          "mean": 0.004101347784971074,
+          "p75": 0.005357802790242484,
+          "p90": 0.007433219114228773
+        },
+        {
+          "utc_hour": 16,
+          "n": 210,
+          "median": 0.0030875011746774074,
+          "mean": 0.0035780857438895354,
+          "p75": 0.004485819672901299,
+          "p90": 0.0059407831362763884
+        },
+        {
+          "utc_hour": 17,
+          "n": 207,
+          "median": 0.0027395407628060526,
+          "mean": 0.0031574207669467992,
+          "p75": 0.003763952611683348,
+          "p90": 0.0054735246498318355
+        },
+        {
+          "utc_hour": 18,
+          "n": 204,
+          "median": 0.002439145251279501,
+          "mean": 0.0028034467869725134,
+          "p75": 0.0033482099961838828,
+          "p90": 0.00486901446321177
+        },
+        {
+          "utc_hour": 19,
+          "n": 202,
+          "median": 0.0023194697425817203,
+          "mean": 0.0029728464979637903,
+          "p75": 0.0037058107015785846,
+          "p90": 0.005166866260413319
+        },
+        {
+          "utc_hour": 0,
+          "n": 212,
+          "median": 0.0023005493948546323,
+          "mean": 0.002677156518861918,
+          "p75": 0.0034590747655335844,
+          "p90": 0.004865796892287796
+        },
+        {
+          "utc_hour": 20,
+          "n": 202,
+          "median": 0.0022252919714164853,
+          "mean": 0.00283556269238106,
+          "p75": 0.0031970660779147954,
+          "p90": 0.005684085882886555
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 6,
+          "n": 211,
+          "median": 0.001417363074302137,
+          "mean": 0.0017109758360397472,
+          "p75": 0.002216690628480559,
+          "p90": 0.0029700362759007876
+        },
+        {
+          "utc_hour": 5,
+          "n": 211,
+          "median": 0.0013696794949981704,
+          "mean": 0.0015858361339140424,
+          "p75": 0.0020837844680458607,
+          "p90": 0.0028524592861720634
+        },
+        {
+          "utc_hour": 3,
+          "n": 210,
+          "median": 0.001250698759914603,
+          "mean": 0.0015177858302600198,
+          "p75": 0.00194516038210137,
+          "p90": 0.0026896540922717723
+        },
+        {
+          "utc_hour": 4,
+          "n": 211,
+          "median": 0.0011652998244894915,
+          "mean": 0.0014889049713910638,
+          "p75": 0.001856391792422918,
+          "p90": 0.0027538629677787236
+        }
+      ],
+      "cash_in_daily_top3_share": 0.9241706161137441,
+      "cash_in_daily_top3_n": 211,
+      "cash_vs_same_day_median_ratio": {
+        "n": 211,
+        "median": 3.4666810932382526,
+        "mean": 3.6211633963013705,
+        "p75": 4.1583728390579235,
+        "p90": 5.481417735084702
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 212,
+          "median": 0.0022306455895935314,
+          "mean": 0.0024648379063855596,
+          "p75": 0.002918311876341682,
+          "p90": 0.003909679511190346
+        },
+        "naive_13utc_hour": {
+          "n": 211,
+          "median": 0.0020558161442897883,
+          "mean": 0.0022816962675457956,
+          "p75": 0.002804550279197603,
+          "p90": 0.003890715446140321
+        },
+        "fx_12utc_hour": {
+          "n": 211,
+          "median": 0.0022026814748691433,
+          "mean": 0.002380540306664709,
+          "p75": 0.0029867346261797595,
+          "p90": 0.004024810281560862
+        }
+      },
+      "structural_call": "structural_cash_open_dst_aware"
+    },
+    "US30_M5": {
+      "bar_minutes": 5,
+      "window_minutes": 30,
+      "close_only": false,
+      "n_et_weekdays": 222,
+      "windows": {
+        "cash_0930_et": {
+          "n": 219,
+          "median": 0.004839967945826324,
+          "mean": 0.005122105426456973,
+          "p75": 0.006170198649670283,
+          "p90": 0.007668646112814966,
+          "median_EDT": 0.004864263874733624,
+          "n_EDT": 131,
+          "median_EST": 0.004645621680732646,
+          "n_EST": 88
+        },
+        "naive_1330_utc": {
+          "n": 219,
+          "median": 0.003625023297669774,
+          "mean": 0.003702639138747966,
+          "p75": 0.005312253913287015,
+          "p90": 0.006467606762109454,
+          "median_EDT": 0.004864263874733624,
+          "n_EDT": 131,
+          "median_EST": 0.0014403533265162417,
+          "n_EST": 88
+        },
+        "fx_ny_1200_utc": {
+          "n": 219,
+          "median": 0.0013456277576550046,
+          "mean": 0.0016590056892331496,
+          "p75": 0.00199909372899931,
+          "p90": 0.0030592353799703265,
+          "median_EDT": 0.001500395180762708,
+          "n_EDT": 132,
+          "median_EST": 0.0010334187484843192,
+          "n_EST": 87
+        },
+        "london_0800_local": {
+          "n": 219,
+          "median": 0.00125312523369775,
+          "mean": 0.0014594724375332796,
+          "p75": 0.001773266593075343,
+          "p90": 0.002523637106793442,
+          "median_EDT": 0.0013345232422566256,
+          "n_EDT": 132,
+          "median_EST": 0.0011623916308651813,
+          "n_EST": 87
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 15,
+          "n": 219,
+          "median": 0.0028197328556692353,
+          "mean": 0.0032018024024611635,
+          "p75": 0.0038212347960128457,
+          "p90": 0.005705502864621564
+        },
+        {
+          "utc_hour": 14,
+          "n": 219,
+          "median": 0.0024161493062410315,
+          "mean": 0.002801695431787002,
+          "p75": 0.003460030450752118,
+          "p90": 0.005049884477857329
+        },
+        {
+          "utc_hour": 16,
+          "n": 217,
+          "median": 0.0021081255798297985,
+          "mean": 0.0024642530827983272,
+          "p75": 0.0029198293927464544,
+          "p90": 0.004242608375095944
+        },
+        {
+          "utc_hour": 17,
+          "n": 215,
+          "median": 0.001892930608990011,
+          "mean": 0.002315611201325462,
+          "p75": 0.002871762896972389,
+          "p90": 0.003892734224461427
+        },
+        {
+          "utc_hour": 18,
+          "n": 212,
+          "median": 0.0017831623420586427,
+          "mean": 0.0021212740300353894,
+          "p75": 0.0026355106578877276,
+          "p90": 0.0034940011443794793
+        },
+        {
+          "utc_hour": 19,
+          "n": 210,
+          "median": 0.0016236874752691326,
+          "mean": 0.002021994550185866,
+          "p75": 0.0023615699184051354,
+          "p90": 0.0034224822769524086
+        },
+        {
+          "utc_hour": 13,
+          "n": 219,
+          "median": 0.0015614380120809663,
+          "mean": 0.0017706718217804106,
+          "p75": 0.002220382751069253,
+          "p90": 0.0030261184768735666
+        },
+        {
+          "utc_hour": 20,
+          "n": 210,
+          "median": 0.0014410817543028748,
+          "mean": 0.001910772827267499,
+          "p75": 0.0022868682814598065,
+          "p90": 0.0036751303880843433
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 2,
+          "n": 220,
+          "median": 0.0007465032474297784,
+          "mean": 0.0008733928604235835,
+          "p75": 0.0010455369694373135,
+          "p90": 0.0014240299190138481
+        },
+        {
+          "utc_hour": 5,
+          "n": 219,
+          "median": 0.0006753334458889362,
+          "mean": 0.0007890943640675615,
+          "p75": 0.0009461238997817977,
+          "p90": 0.0013607332919883253
+        },
+        {
+          "utc_hour": 3,
+          "n": 219,
+          "median": 0.0006282541602205172,
+          "mean": 0.0007485126191272995,
+          "p75": 0.0009030721233911174,
+          "p90": 0.001264085976365614
+        },
+        {
+          "utc_hour": 4,
+          "n": 219,
+          "median": 0.0005729333985386106,
+          "mean": 0.0007297140974081667,
+          "p75": 0.0008992445681812897,
+          "p90": 0.001225998011827638
+        }
+      ],
+      "cash_in_daily_top3_share": 0.91324200913242,
+      "cash_in_daily_top3_n": 219,
+      "cash_vs_same_day_median_ratio": {
+        "n": 219,
+        "median": 3.8852081480054363,
+        "mean": 4.354992724351945,
+        "p75": 5.314444468695516,
+        "p90": 6.741610841162159
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 220,
+          "median": 0.0017905471671347127,
+          "mean": 0.0019391938304843801,
+          "p75": 0.0023246188152853666,
+          "p90": 0.003066192633846384
+        },
+        "naive_13utc_hour": {
+          "n": 219,
+          "median": 0.0015614380120809663,
+          "mean": 0.0017706718217804106,
+          "p75": 0.002220382751069253,
+          "p90": 0.0030261184768735666
+        },
+        "fx_12utc_hour": {
+          "n": 219,
+          "median": 0.0013456277576550046,
+          "mean": 0.0016590056892331496,
+          "p75": 0.00199909372899931,
+          "p90": 0.0030592353799703265
+        }
+      },
+      "structural_call": "structural_cash_open_dst_aware"
+    },
+    "US100_H1": {
+      "bar_minutes": 60,
+      "window_minutes": 60,
+      "close_only": false,
+      "n_et_weekdays": 215,
+      "windows": {
+        "cash_0930_et": {
+          "n": 212,
+          "median": 0.007244457179436765,
+          "mean": 0.007492577731722923,
+          "p75": 0.009263336691475483,
+          "p90": 0.011218610981262813,
+          "median_EDT": 0.007291753448678988,
+          "n_EDT": 124,
+          "median_EST": 0.007244457179436765,
+          "n_EST": 88
+        },
+        "naive_1330_utc": {
+          "n": 212,
+          "median": 0.005226344784525553,
+          "mean": 0.005733257029092727,
+          "p75": 0.0078306222493026,
+          "p90": 0.010224113846348816,
+          "median_EDT": 0.007291753448678988,
+          "n_EDT": 124,
+          "median_EST": 0.002910067413287827,
+          "n_EST": 88
+        },
+        "fx_ny_1200_utc": {
+          "n": 211,
+          "median": 0.003200927488257573,
+          "mean": 0.003609570715551949,
+          "p75": 0.004331409705635919,
+          "p90": 0.006270609435981429,
+          "median_EDT": 0.0036508039549187727,
+          "n_EDT": 124,
+          "median_EST": 0.002256714458212682,
+          "n_EST": 87
+        },
+        "london_0800_local": {
+          "n": 211,
+          "median": 0.002597839362905069,
+          "mean": 0.0028449756352138082,
+          "p75": 0.003582650922483081,
+          "p90": 0.004654506443232325,
+          "median_EDT": 0.0026736481289032768,
+          "n_EDT": 124,
+          "median_EST": 0.0024661474221331285,
+          "n_EST": 87
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 14,
+          "n": 211,
+          "median": 0.0067987042836912676,
+          "mean": 0.007392870972067661,
+          "p75": 0.00897963295540178,
+          "p90": 0.011672776656705325
+        },
+        {
+          "utc_hour": 15,
+          "n": 211,
+          "median": 0.005350316142399114,
+          "mean": 0.006006694833427551,
+          "p75": 0.007477761864784214,
+          "p90": 0.01002728260641366
+        },
+        {
+          "utc_hour": 13,
+          "n": 212,
+          "median": 0.005226344784525553,
+          "mean": 0.005733257029092727,
+          "p75": 0.0078306222493026,
+          "p90": 0.010224113846348816
+        },
+        {
+          "utc_hour": 16,
+          "n": 211,
+          "median": 0.004218686587867226,
+          "mean": 0.004767896941888137,
+          "p75": 0.005609819460595638,
+          "p90": 0.007880752949653246
+        },
+        {
+          "utc_hour": 19,
+          "n": 202,
+          "median": 0.003738090660009437,
+          "mean": 0.004333432888455413,
+          "p75": 0.00516575806002204,
+          "p90": 0.006952851732666691
+        },
+        {
+          "utc_hour": 17,
+          "n": 208,
+          "median": 0.0036942855366835833,
+          "mean": 0.004273957336672417,
+          "p75": 0.005332433251339282,
+          "p90": 0.006619756296387015
+        },
+        {
+          "utc_hour": 12,
+          "n": 211,
+          "median": 0.003200927488257573,
+          "mean": 0.003609570715551949,
+          "p75": 0.004331409705635919,
+          "p90": 0.006270609435981429
+        },
+        {
+          "utc_hour": 18,
+          "n": 204,
+          "median": 0.0031392584123475335,
+          "mean": 0.003979060601390714,
+          "p75": 0.005154525310659882,
+          "p90": 0.007077071506569881
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 2,
+          "n": 211,
+          "median": 0.001914697233133707,
+          "mean": 0.002368827710706507,
+          "p75": 0.002942791101478273,
+          "p90": 0.004629176262928466
+        },
+        {
+          "utc_hour": 5,
+          "n": 211,
+          "median": 0.001859672154877518,
+          "mean": 0.0023363823323696927,
+          "p75": 0.003039822582094185,
+          "p90": 0.0045171120740892835
+        },
+        {
+          "utc_hour": 3,
+          "n": 212,
+          "median": 0.0018101596003713668,
+          "mean": 0.0021143818587913213,
+          "p75": 0.0026714523590756507,
+          "p90": 0.003989408572129112
+        },
+        {
+          "utc_hour": 4,
+          "n": 211,
+          "median": 0.0016329661091053136,
+          "mean": 0.002017812986749192,
+          "p75": 0.002472094736047173,
+          "p90": 0.004020130430898425
+        }
+      ],
+      "cash_in_daily_top3_share": 0.7877358490566038,
+      "cash_in_daily_top3_n": 212,
+      "cash_vs_same_day_median_ratio": {
+        "n": 212,
+        "median": 2.643397777092861,
+        "mean": 2.783136694752034,
+        "p75": 3.3750576884133565,
+        "p90": 4.334327531157391
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 212,
+          "median": 0.007244457179436765,
+          "mean": 0.007492577731722923,
+          "p75": 0.009263336691475483,
+          "p90": 0.011218610981262813
+        },
+        "naive_13utc_hour": {
+          "n": 212,
+          "median": 0.005226344784525553,
+          "mean": 0.005733257029092727,
+          "p75": 0.0078306222493026,
+          "p90": 0.010224113846348816
+        },
+        "fx_12utc_hour": {
+          "n": 211,
+          "median": 0.003200927488257573,
+          "mean": 0.003609570715551949,
+          "p75": 0.004331409705635919,
+          "p90": 0.006270609435981429
+        }
+      },
+      "structural_call": "structural_cash_open_dst_aware"
+    },
+    "EURUSD_M5": {
+      "bar_minutes": 5,
+      "window_minutes": 30,
+      "close_only": false,
+      "n_et_weekdays": 1287,
+      "windows": {
+        "cash_0930_et": {
+          "n": 1279,
+          "median": 0.0012951601908656833,
+          "mean": 0.0015171148967994927,
+          "p75": 0.0018533835110809836,
+          "p90": 0.0025309083932051374,
+          "median_EDT": 0.0012849990822765454,
+          "n_EDT": 836,
+          "median_EST": 0.0013035531268743884,
+          "n_EST": 443
+        },
+        "naive_1330_utc": {
+          "n": 1279,
+          "median": 0.001330775479165478,
+          "mean": 0.0016734019805141214,
+          "p75": 0.0019187205677958087,
+          "p90": 0.002903590464135709,
+          "median_EDT": 0.0012849990822765454,
+          "n_EDT": 836,
+          "median_EST": 0.0014057764632855888,
+          "n_EST": 443
+        },
+        "fx_ny_1200_utc": {
+          "n": 1279,
+          "median": 0.0009618705759419563,
+          "mean": 0.0011403645338727505,
+          "p75": 0.0013500596746269223,
+          "p90": 0.0019198813625411247,
+          "median_EDT": 0.0010084898615769183,
+          "n_EDT": 836,
+          "median_EST": 0.000881457710689118,
+          "n_EST": 443
+        },
+        "london_0800_local": {
+          "n": 1279,
+          "median": 0.0011557130749672226,
+          "mean": 0.001386296090933646,
+          "p75": 0.0016943655088849565,
+          "p90": 0.0023175172380572023,
+          "median_EDT": 0.0011481309011679044,
+          "n_EDT": 836,
+          "median_EST": 0.0011646215911525779,
+          "n_EST": 443
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 14,
+          "n": 1279,
+          "median": 0.0014015896077257189,
+          "mean": 0.001638550946970843,
+          "p75": 0.0020386152723644267,
+          "p90": 0.00274368608350839
+        },
+        {
+          "utc_hour": 15,
+          "n": 1279,
+          "median": 0.0012434410688303128,
+          "mean": 0.0014718104762296684,
+          "p75": 0.0017998084009508875,
+          "p90": 0.0024743876742141717
+        },
+        {
+          "utc_hour": 13,
+          "n": 1279,
+          "median": 0.0011657779408907082,
+          "mean": 0.0013799484108666087,
+          "p75": 0.0016462724511654542,
+          "p90": 0.002304948664478815
+        },
+        {
+          "utc_hour": 8,
+          "n": 1279,
+          "median": 0.0010943384080592986,
+          "mean": 0.001273723437788501,
+          "p75": 0.0015703142201890616,
+          "p90": 0.002179740160093191
+        },
+        {
+          "utc_hour": 7,
+          "n": 1279,
+          "median": 0.0010281545954522328,
+          "mean": 0.001242933153365798,
+          "p75": 0.0015053049470072255,
+          "p90": 0.0021533179649292915
+        },
+        {
+          "utc_hour": 16,
+          "n": 1279,
+          "median": 0.0009765792314149423,
+          "mean": 0.0011427875320186211,
+          "p75": 0.00137696163950409,
+          "p90": 0.0019150987941314265
+        },
+        {
+          "utc_hour": 12,
+          "n": 1279,
+          "median": 0.0009618705759419563,
+          "mean": 0.0011403645338727505,
+          "p75": 0.0013500596746269223,
+          "p90": 0.0019198813625411247
+        },
+        {
+          "utc_hour": 9,
+          "n": 1279,
+          "median": 0.0009543100665678247,
+          "mean": 0.0011265054179589494,
+          "p75": 0.0013731004823494767,
+          "p90": 0.001919422381590015
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 5,
+          "n": 1279,
+          "median": 0.0004788913664866195,
+          "mean": 0.0005644503397259163,
+          "p75": 0.0006667437910664267,
+          "p90": 0.0009415076146345883
+        },
+        {
+          "utc_hour": 3,
+          "n": 1279,
+          "median": 0.0004679684430337966,
+          "mean": 0.0005609104762167956,
+          "p75": 0.0006689760973625136,
+          "p90": 0.0009427948447066462
+        },
+        {
+          "utc_hour": 4,
+          "n": 1279,
+          "median": 0.00042147304830390917,
+          "mean": 0.0004973908308856992,
+          "p75": 0.0005763701273029059,
+          "p90": 0.0008351969394031588
+        },
+        {
+          "utc_hour": 23,
+          "n": 1025,
+          "median": 0.00039259491215696966,
+          "mean": 0.0004895269737696782,
+          "p75": 0.0005939529928630498,
+          "p90": 0.0008452085102314681
+        }
+      ],
+      "cash_in_daily_top3_share": 0.3893666927286943,
+      "cash_in_daily_top3_n": 1279,
+      "cash_vs_same_day_median_ratio": {
+        "n": 1279,
+        "median": 1.7529082776883533,
+        "mean": 1.932012968382428,
+        "p75": 2.2817015992173224,
+        "p90": 2.9901740342048875
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 1279,
+          "median": 0.0012770479226529422,
+          "mean": 0.0014799036320168205,
+          "p75": 0.001782603083503405,
+          "p90": 0.0024503504648988516
+        },
+        "naive_13utc_hour": {
+          "n": 1279,
+          "median": 0.0011657779408907082,
+          "mean": 0.0013799484108666087,
+          "p75": 0.0016462724511654542,
+          "p90": 0.002304948664478815
+        },
+        "fx_12utc_hour": {
+          "n": 1279,
+          "median": 0.0009618705759419563,
+          "mean": 0.0011403645338727505,
+          "p75": 0.0013500596746269223,
+          "p90": 0.0019198813625411247
+        }
+      },
+      "structural_call": "weak_or_mixed"
+    },
+    "XAUUSD_M15": {
+      "bar_minutes": 15,
+      "window_minutes": 30,
+      "close_only": false,
+      "n_et_weekdays": 1100,
+      "windows": {
+        "cash_0930_et": {
+          "n": 1092,
+          "median": 0.0036267301511949714,
+          "mean": 0.004133529897766716,
+          "p75": 0.004895469631944769,
+          "p90": 0.006667876249561636,
+          "median_EDT": 0.003678155156944556,
+          "n_EDT": 740,
+          "median_EST": 0.0035041827786928357,
+          "n_EST": 352
+        },
+        "naive_1330_utc": {
+          "n": 1092,
+          "median": 0.0035124841083421796,
+          "mean": 0.004058641710348184,
+          "p75": 0.004906059889619514,
+          "p90": 0.006712264909360517,
+          "median_EDT": 0.003678155156944556,
+          "n_EDT": 740,
+          "median_EST": 0.00310839575993136,
+          "n_EST": 352
+        },
+        "fx_ny_1200_utc": {
+          "n": 1092,
+          "median": 0.0020607773242554478,
+          "mean": 0.0024869625245801485,
+          "p75": 0.0029821844195432414,
+          "p90": 0.004196076643963712,
+          "median_EDT": 0.0023389161106775846,
+          "n_EDT": 740,
+          "median_EST": 0.001555254375014152,
+          "n_EST": 352
+        },
+        "london_0800_local": {
+          "n": 1092,
+          "median": 0.0019800893985608297,
+          "mean": 0.0022872581242101334,
+          "p75": 0.002699719826737701,
+          "p90": 0.003708338074731877,
+          "median_EDT": 0.0020092393952218864,
+          "n_EDT": 740,
+          "median_EST": 0.001896811411352521,
+          "n_EST": 352
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 14,
+          "n": 1092,
+          "median": 0.0031646180407149714,
+          "mean": 0.00366793304337236,
+          "p75": 0.00451985944487135,
+          "p90": 0.006216772131306417
+        },
+        {
+          "utc_hour": 13,
+          "n": 1092,
+          "median": 0.002723760125533818,
+          "mean": 0.003127040611242153,
+          "p75": 0.003724395131133606,
+          "p90": 0.005024489518880743
+        },
+        {
+          "utc_hour": 15,
+          "n": 1092,
+          "median": 0.002679578830160126,
+          "mean": 0.0033064652755980368,
+          "p75": 0.0038762757322262486,
+          "p90": 0.005556986234934151
+        },
+        {
+          "utc_hour": 12,
+          "n": 1092,
+          "median": 0.0020607773242554478,
+          "mean": 0.0024869625245801485,
+          "p75": 0.0029821844195432414,
+          "p90": 0.004196076643963712
+        },
+        {
+          "utc_hour": 1,
+          "n": 1091,
+          "median": 0.0019843336855525627,
+          "mean": 0.0028121813932639288,
+          "p75": 0.003265893272358883,
+          "p90": 0.005547817183946993
+        },
+        {
+          "utc_hour": 16,
+          "n": 1092,
+          "median": 0.0019521884833103317,
+          "mean": 0.002445368269620982,
+          "p75": 0.0027763379272221634,
+          "p90": 0.0040546342376652925
+        },
+        {
+          "utc_hour": 8,
+          "n": 1092,
+          "median": 0.0018784734325968313,
+          "mean": 0.0022322750216487953,
+          "p75": 0.0025777478828534046,
+          "p90": 0.0037570215382915616
+        },
+        {
+          "utc_hour": 7,
+          "n": 1092,
+          "median": 0.0018616990800235454,
+          "mean": 0.002207994754403771,
+          "p75": 0.0025981147786820666,
+          "p90": 0.003582669368299333
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 4,
+          "n": 1091,
+          "median": 0.0010388393822208454,
+          "mean": 0.0013125613775552773,
+          "p75": 0.0015218519954771532,
+          "p90": 0.0023585202756193683
+        },
+        {
+          "utc_hour": 20,
+          "n": 1055,
+          "median": 0.000984992461484004,
+          "mean": 0.00141091773890447,
+          "p75": 0.0015865990532400371,
+          "p90": 0.0025915588863780125
+        },
+        {
+          "utc_hour": 23,
+          "n": 875,
+          "median": 0.0009107440475286959,
+          "mean": 0.001459967476383964,
+          "p75": 0.0015506300369693864,
+          "p90": 0.0029649274247985054
+        },
+        {
+          "utc_hour": 21,
+          "n": 334,
+          "median": 0.0008473285435325023,
+          "mean": 0.0012233718867729775,
+          "p75": 0.0012730513147423787,
+          "p90": 0.002367505940408873
+        }
+      ],
+      "cash_in_daily_top3_share": 0.6245421245421245,
+      "cash_in_daily_top3_n": 1092,
+      "cash_vs_same_day_median_ratio": {
+        "n": 1092,
+        "median": 2.1771822957960825,
+        "mean": 2.4087715404238197,
+        "p75": 2.9052030325786795,
+        "p90": 3.7409586221386317
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 1092,
+          "median": 0.0028053414648911944,
+          "mean": 0.003229150295352039,
+          "p75": 0.003849056630522661,
+          "p90": 0.005433417415954145
+        },
+        "naive_13utc_hour": {
+          "n": 1092,
+          "median": 0.002723760125533818,
+          "mean": 0.003127040611242153,
+          "p75": 0.003724395131133606,
+          "p90": 0.005024489518880743
+        },
+        "fx_12utc_hour": {
+          "n": 1092,
+          "median": 0.0020607773242554478,
+          "mean": 0.0024869625245801485,
+          "p75": 0.0029821844195432414,
+          "p90": 0.004196076643963712
+        }
+      },
+      "structural_call": "elevated_vs_typical_day"
+    },
+    "XAUUSD_H1": {
+      "bar_minutes": 60,
+      "window_minutes": 60,
+      "close_only": false,
+      "n_et_weekdays": 1280,
+      "windows": {
+        "cash_0930_et": {
+          "n": 1271,
+          "median": 0.0045698532671019235,
+          "mean": 0.00526415094676476,
+          "p75": 0.006276904142876374,
+          "p90": 0.008517611355825086,
+          "median_EDT": 0.0047463966792030965,
+          "n_EDT": 830,
+          "median_EST": 0.004364513540724523,
+          "n_EST": 441
+        },
+        "naive_1330_utc": {
+          "n": 1271,
+          "median": 0.004517262997626582,
+          "mean": 0.005214304682046252,
+          "p75": 0.006162020836437659,
+          "p90": 0.008475053980064734,
+          "median_EDT": 0.0047463966792030965,
+          "n_EDT": 830,
+          "median_EST": 0.004170018308601117,
+          "n_EST": 441
+        },
+        "fx_ny_1200_utc": {
+          "n": 1271,
+          "median": 0.0034595202513348073,
+          "mean": 0.004194385177757943,
+          "p75": 0.005075284575886578,
+          "p90": 0.007450216588439393,
+          "median_EDT": 0.004196909653854363,
+          "n_EDT": 830,
+          "median_EST": 0.0021625536758238854,
+          "n_EST": 441
+        },
+        "london_0800_local": {
+          "n": 1271,
+          "median": 0.0026929167212983215,
+          "mean": 0.0031068677428959146,
+          "p75": 0.0036105695513087414,
+          "p90": 0.00500460695407602,
+          "median_EDT": 0.0027517317902408032,
+          "n_EDT": 830,
+          "median_EST": 0.0025692961807266155,
+          "n_EST": 441
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 13,
+          "n": 1271,
+          "median": 0.004517262997626582,
+          "mean": 0.005214304682046252,
+          "p75": 0.006162020836437659,
+          "p90": 0.008475053980064734
+        },
+        {
+          "utc_hour": 14,
+          "n": 1271,
+          "median": 0.0044146699482379955,
+          "mean": 0.005125072541159731,
+          "p75": 0.006194728253703768,
+          "p90": 0.008356663685407462
+        },
+        {
+          "utc_hour": 15,
+          "n": 1271,
+          "median": 0.003518840141961796,
+          "mean": 0.004215574857723103,
+          "p75": 0.004986551636050128,
+          "p90": 0.006805746850478346
+        },
+        {
+          "utc_hour": 12,
+          "n": 1271,
+          "median": 0.0034595202513348073,
+          "mean": 0.004194385177757943,
+          "p75": 0.005075284575886578,
+          "p90": 0.007450216588439393
+        },
+        {
+          "utc_hour": 1,
+          "n": 1271,
+          "median": 0.0025968325957353568,
+          "mean": 0.003534728099942818,
+          "p75": 0.003992395750863769,
+          "p90": 0.006574737954037245
+        },
+        {
+          "utc_hour": 7,
+          "n": 1271,
+          "median": 0.0025835313617874685,
+          "mean": 0.0029686777029653733,
+          "p75": 0.003495745009743355,
+          "p90": 0.004736456228843145
+        },
+        {
+          "utc_hour": 16,
+          "n": 1272,
+          "median": 0.002582468705929983,
+          "mean": 0.003184771206266983,
+          "p75": 0.003663431120595912,
+          "p90": 0.00531405441316847
+        },
+        {
+          "utc_hour": 8,
+          "n": 1271,
+          "median": 0.002526756547006743,
+          "mean": 0.002956860942211988,
+          "p75": 0.0034118954396767805,
+          "p90": 0.004802154942373013
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 4,
+          "n": 1271,
+          "median": 0.0014226905977275512,
+          "mean": 0.0017775574634397366,
+          "p75": 0.0021097330902571476,
+          "p90": 0.0032119965983058345
+        },
+        {
+          "utc_hour": 22,
+          "n": 663,
+          "median": 0.0012342067814725816,
+          "mean": 0.0019394234284247822,
+          "p75": 0.0020632679251202644,
+          "p90": 0.003936325395334789
+        },
+        {
+          "utc_hour": 23,
+          "n": 1018,
+          "median": 0.0012338980216747663,
+          "mean": 0.001909931647499095,
+          "p75": 0.002022753606498496,
+          "p90": 0.003976084566996274
+        },
+        {
+          "utc_hour": 21,
+          "n": 419,
+          "median": 0.001121197093512233,
+          "mean": 0.001582471366910338,
+          "p75": 0.0017504920725370757,
+          "p90": 0.002865514402244332
+        }
+      ],
+      "cash_in_daily_top3_share": 0.6199842643587726,
+      "cash_in_daily_top3_n": 1271,
+      "cash_vs_same_day_median_ratio": {
+        "n": 1271,
+        "median": 2.0266600339773237,
+        "mean": 2.263087856487675,
+        "p75": 2.7159658633937074,
+        "p90": 3.5137958818171504
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 1271,
+          "median": 0.0045698532671019235,
+          "mean": 0.00526415094676476,
+          "p75": 0.006276904142876374,
+          "p90": 0.008517611355825086
+        },
+        "naive_13utc_hour": {
+          "n": 1271,
+          "median": 0.004517262997626582,
+          "mean": 0.005214304682046252,
+          "p75": 0.006162020836437659,
+          "p90": 0.008475053980064734
+        },
+        "fx_12utc_hour": {
+          "n": 1271,
+          "median": 0.0034595202513348073,
+          "mean": 0.004194385177757943,
+          "p75": 0.005075284575886578,
+          "p90": 0.007450216588439393
+        }
+      },
+      "structural_call": "elevated_vs_typical_day"
+    },
+    "BTCUSD_H1": {
+      "bar_minutes": 60,
+      "window_minutes": 60,
+      "close_only": false,
+      "n_et_weekdays": 1216,
+      "windows": {
+        "cash_0930_et": {
+          "n": 1210,
+          "median": 0.010395291483560354,
+          "mean": 0.012042921472093635,
+          "p75": 0.014530288971663028,
+          "p90": 0.020749349606633202,
+          "median_EDT": 0.009643621753296607,
+          "n_EDT": 797,
+          "median_EST": 0.012036655720140354,
+          "n_EST": 413
+        },
+        "naive_1330_utc": {
+          "n": 1210,
+          "median": 0.009109203226178631,
+          "mean": 0.010725664873011373,
+          "p75": 0.012873887986341164,
+          "p90": 0.018072194836085576,
+          "median_EDT": 0.009643621753296607,
+          "n_EDT": 797,
+          "median_EST": 0.00806426907447038,
+          "n_EST": 413
+        },
+        "fx_ny_1200_utc": {
+          "n": 1210,
+          "median": 0.006698076125122243,
+          "mean": 0.008434875628555738,
+          "p75": 0.009814440839728935,
+          "p90": 0.014890239997781043,
+          "median_EDT": 0.006951913094449765,
+          "n_EDT": 797,
+          "median_EST": 0.006245195241605047,
+          "n_EST": 413
+        },
+        "london_0800_local": {
+          "n": 1210,
+          "median": 0.0055975046624699735,
+          "mean": 0.006921072274220044,
+          "p75": 0.007931429925403646,
+          "p90": 0.012244964758972207,
+          "median_EDT": 0.005370614155451205,
+          "n_EDT": 797,
+          "median_EST": 0.005878990638975023,
+          "n_EST": 413
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 14,
+          "n": 1210,
+          "median": 0.011299733942603186,
+          "mean": 0.012924014432502894,
+          "p75": 0.015706964235504113,
+          "p90": 0.022224444291279358
+        },
+        {
+          "utc_hour": 15,
+          "n": 1210,
+          "median": 0.009720482252105932,
+          "mean": 0.011728075101083837,
+          "p75": 0.01453340422063358,
+          "p90": 0.02083636973138873
+        },
+        {
+          "utc_hour": 13,
+          "n": 1210,
+          "median": 0.009109203226178631,
+          "mean": 0.010725664873011373,
+          "p75": 0.012873887986341164,
+          "p90": 0.018072194836085576
+        },
+        {
+          "utc_hour": 16,
+          "n": 1209,
+          "median": 0.008739967853244088,
+          "mean": 0.01026616589072462,
+          "p75": 0.01231485653829044,
+          "p90": 0.017836534265342464
+        },
+        {
+          "utc_hour": 17,
+          "n": 1209,
+          "median": 0.007920932878270762,
+          "mean": 0.009754806062759152,
+          "p75": 0.011647518911434899,
+          "p90": 0.016919165090307206
+        },
+        {
+          "utc_hour": 19,
+          "n": 1209,
+          "median": 0.007620675944334019,
+          "mean": 0.009247160091471888,
+          "p75": 0.01130889137933544,
+          "p90": 0.015935661877265552
+        },
+        {
+          "utc_hour": 18,
+          "n": 1209,
+          "median": 0.007540873376583021,
+          "mean": 0.00932960940089459,
+          "p75": 0.011074848725376002,
+          "p90": 0.016688207967648264
+        },
+        {
+          "utc_hour": 20,
+          "n": 1209,
+          "median": 0.006823986885745873,
+          "mean": 0.008680187687380145,
+          "p75": 0.010449095661189723,
+          "p90": 0.015452083385870946
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 6,
+          "n": 1210,
+          "median": 0.005041882528813797,
+          "mean": 0.006455552897680667,
+          "p75": 0.007241109939508815,
+          "p90": 0.010973888808228912
+        },
+        {
+          "utc_hour": 10,
+          "n": 1210,
+          "median": 0.0050282281032172724,
+          "mean": 0.006338635363987987,
+          "p75": 0.007394815210080137,
+          "p90": 0.011103488193465778
+        },
+        {
+          "utc_hour": 5,
+          "n": 1210,
+          "median": 0.004761745114815363,
+          "mean": 0.006020479802444331,
+          "p75": 0.0068765942741482585,
+          "p90": 0.010707535036406389
+        },
+        {
+          "utc_hour": 4,
+          "n": 1210,
+          "median": 0.004757964341545915,
+          "mean": 0.006031156019545518,
+          "p75": 0.007049065651218893,
+          "p90": 0.010508691996473933
+        }
+      ],
+      "cash_in_daily_top3_share": 0.359504132231405,
+      "cash_in_daily_top3_n": 1210,
+      "cash_vs_same_day_median_ratio": {
+        "n": 1210,
+        "median": 1.5906947048586508,
+        "mean": 1.7832760604108346,
+        "p75": 2.0965561915924553,
+        "p90": 2.7693969263852236
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 1210,
+          "median": 0.010395291483560354,
+          "mean": 0.012042921472093635,
+          "p75": 0.014530288971663028,
+          "p90": 0.020749349606633202
+        },
+        "naive_13utc_hour": {
+          "n": 1210,
+          "median": 0.009109203226178631,
+          "mean": 0.010725664873011373,
+          "p75": 0.012873887986341164,
+          "p90": 0.018072194836085576
+        },
+        "fx_12utc_hour": {
+          "n": 1210,
+          "median": 0.006698076125122243,
+          "mean": 0.008434875628555738,
+          "p75": 0.009814440839728935,
+          "p90": 0.014890239997781043
+        }
+      },
+      "structural_call": "weak_or_mixed"
+    },
+    "BTCUSDT_1H_MACRO": {
+      "bar_minutes": 60,
+      "window_minutes": 60,
+      "close_only": false,
+      "n_et_weekdays": 804,
+      "windows": {
+        "cash_0930_et": {
+          "n": 803,
+          "median": 0.010882066662922834,
+          "mean": 0.013445404566881187,
+          "p75": 0.015771625028754517,
+          "p90": 0.023432317972068885,
+          "median_EDT": 0.010465387831891044,
+          "n_EDT": 509,
+          "median_EST": 0.011350383648044813,
+          "n_EST": 294
+        },
+        "naive_1330_utc": {
+          "n": 803,
+          "median": 0.010135865182512506,
+          "mean": 0.012731885987432353,
+          "p75": 0.014984091378166219,
+          "p90": 0.022513122972356955,
+          "median_EDT": 0.010465387831891044,
+          "n_EDT": 509,
+          "median_EST": 0.00930677606762945,
+          "n_EST": 294
+        },
+        "fx_ny_1200_utc": {
+          "n": 803,
+          "median": 0.008995164861475433,
+          "mean": 0.011803294000981476,
+          "p75": 0.013947583540774463,
+          "p90": 0.021853030549237457,
+          "median_EDT": 0.009115717500664384,
+          "n_EDT": 509,
+          "median_EST": 0.008301498447346654,
+          "n_EST": 294
+        },
+        "london_0800_local": {
+          "n": 803,
+          "median": 0.007053412808784609,
+          "mean": 0.00952387421669622,
+          "p75": 0.011723387014500142,
+          "p90": 0.018334364018674994,
+          "median_EDT": 0.007030668725706891,
+          "n_EDT": 509,
+          "median_EST": 0.0072032731268135315,
+          "n_EST": 294
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 14,
+          "n": 804,
+          "median": 0.011270920202797505,
+          "mean": 0.013909178508417195,
+          "p75": 0.016411449581720458,
+          "p90": 0.023957557139294285
+        },
+        {
+          "utc_hour": 15,
+          "n": 804,
+          "median": 0.010253271692024595,
+          "mean": 0.01279646100417714,
+          "p75": 0.015673710077889154,
+          "p90": 0.02231559350259248
+        },
+        {
+          "utc_hour": 13,
+          "n": 803,
+          "median": 0.010135865182512506,
+          "mean": 0.012731885987432353,
+          "p75": 0.014984091378166219,
+          "p90": 0.022513122972356955
+        },
+        {
+          "utc_hour": 16,
+          "n": 804,
+          "median": 0.009970290823557854,
+          "mean": 0.012341455017251883,
+          "p75": 0.014954813982328589,
+          "p90": 0.022656128631565124
+        },
+        {
+          "utc_hour": 0,
+          "n": 803,
+          "median": 0.009056455252343996,
+          "mean": 0.011800069888495726,
+          "p75": 0.014808727585014801,
+          "p90": 0.02228844133030316
+        },
+        {
+          "utc_hour": 20,
+          "n": 803,
+          "median": 0.009005606760766323,
+          "mean": 0.011219205218302528,
+          "p75": 0.01346030196838327,
+          "p90": 0.020505190083029118
+        },
+        {
+          "utc_hour": 12,
+          "n": 803,
+          "median": 0.008995164861475433,
+          "mean": 0.011803294000981476,
+          "p75": 0.013947583540774463,
+          "p90": 0.021853030549237457
+        },
+        {
+          "utc_hour": 19,
+          "n": 803,
+          "median": 0.008864327958968243,
+          "mean": 0.011061353131055985,
+          "p75": 0.013407362618448389,
+          "p90": 0.021065880164436654
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 6,
+          "n": 804,
+          "median": 0.00624898242938705,
+          "mean": 0.008571655721380923,
+          "p75": 0.010499156748017324,
+          "p90": 0.016471242276649815
+        },
+        {
+          "utc_hour": 3,
+          "n": 800,
+          "median": 0.006204110439250574,
+          "mean": 0.008421552564676617,
+          "p75": 0.010408001282504749,
+          "p90": 0.01710011211584389
+        },
+        {
+          "utc_hour": 4,
+          "n": 801,
+          "median": 0.005998965763520523,
+          "mean": 0.00798280963050045,
+          "p75": 0.009584693033704446,
+          "p90": 0.015670452822479402
+        },
+        {
+          "utc_hour": 5,
+          "n": 803,
+          "median": 0.005789257128912629,
+          "mean": 0.007878741569156597,
+          "p75": 0.009756879844543391,
+          "p90": 0.015261482728980582
+        }
+      ],
+      "cash_in_daily_top3_share": 0.2640099626400996,
+      "cash_in_daily_top3_n": 803,
+      "cash_vs_same_day_median_ratio": {
+        "n": 803,
+        "median": 1.3577604438192872,
+        "mean": 1.5989444059805553,
+        "p75": 1.8593571922991978,
+        "p90": 2.6002755149231542
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 803,
+          "median": 0.010882066662922834,
+          "mean": 0.013445404566881187,
+          "p75": 0.015771625028754517,
+          "p90": 0.023432317972068885
+        },
+        "naive_13utc_hour": {
+          "n": 803,
+          "median": 0.010135865182512506,
+          "mean": 0.012731885987432353,
+          "p75": 0.014984091378166219,
+          "p90": 0.022513122972356955
+        },
+        "fx_12utc_hour": {
+          "n": 803,
+          "median": 0.008995164861475433,
+          "mean": 0.011803294000981476,
+          "p75": 0.013947583540774463,
+          "p90": 0.021853030549237457
+        }
+      },
+      "structural_call": "weak_or_mixed"
+    },
+    "BTCUSDT_1H_2026": {
+      "bar_minutes": 60,
+      "window_minutes": 60,
+      "close_only": false,
+      "n_et_weekdays": 93,
+      "windows": {
+        "cash_0930_et": {
+          "n": 93,
+          "median": 0.011134957864145305,
+          "mean": 0.012557955169483697,
+          "p75": 0.01612818999524504,
+          "p90": 0.021568318376125828,
+          "median_EDT": 0.009597482075127183,
+          "n_EDT": 68,
+          "median_EST": 0.01644112004672139,
+          "n_EST": 25
+        },
+        "naive_1330_utc": {
+          "n": 93,
+          "median": 0.01000401194397103,
+          "mean": 0.010770948022843107,
+          "p75": 0.012320277967386061,
+          "p90": 0.017623411831724643,
+          "median_EDT": 0.009597482075127183,
+          "n_EDT": 68,
+          "median_EST": 0.010360124345885787,
+          "n_EST": 25
+        },
+        "fx_ny_1200_utc": {
+          "n": 93,
+          "median": 0.0062402055264673024,
+          "mean": 0.007364746184005364,
+          "p75": 0.00921756770211064,
+          "p90": 0.012106087489092861,
+          "median_EDT": 0.00616099074752551,
+          "n_EDT": 68,
+          "median_EST": 0.006924241948875301,
+          "n_EST": 25
+        },
+        "london_0800_local": {
+          "n": 93,
+          "median": 0.005982959071602206,
+          "mean": 0.006752748660521248,
+          "p75": 0.007331802113375258,
+          "p90": 0.010516078160594435,
+          "median_EDT": 0.00560140509069312,
+          "n_EDT": 68,
+          "median_EST": 0.006940621637036196,
+          "n_EST": 25
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 14,
+          "n": 93,
+          "median": 0.011464795513986565,
+          "mean": 0.013184669830069102,
+          "p75": 0.01612818999524504,
+          "p90": 0.021364843793776882
+        },
+        {
+          "utc_hour": 15,
+          "n": 92,
+          "median": 0.011197046972781795,
+          "mean": 0.012195278237557474,
+          "p75": 0.015258626808344156,
+          "p90": 0.020626586452965688
+        },
+        {
+          "utc_hour": 13,
+          "n": 93,
+          "median": 0.01000401194397103,
+          "mean": 0.010770948022843107,
+          "p75": 0.012320277967386061,
+          "p90": 0.017623411831724643
+        },
+        {
+          "utc_hour": 16,
+          "n": 92,
+          "median": 0.008850475148391572,
+          "mean": 0.009937698003045742,
+          "p75": 0.012209650458050862,
+          "p90": 0.016691431196053794
+        },
+        {
+          "utc_hour": 17,
+          "n": 92,
+          "median": 0.00883311866762973,
+          "mean": 0.009734242791521429,
+          "p75": 0.011908009876878884,
+          "p90": 0.015533590677264385
+        },
+        {
+          "utc_hour": 0,
+          "n": 93,
+          "median": 0.007143995439081463,
+          "mean": 0.008378436230016136,
+          "p75": 0.009250404522356731,
+          "p90": 0.012988893348769747
+        },
+        {
+          "utc_hour": 18,
+          "n": 92,
+          "median": 0.006751582998958466,
+          "mean": 0.008507560296940383,
+          "p75": 0.010490360601814167,
+          "p90": 0.01616569357241935
+        },
+        {
+          "utc_hour": 2,
+          "n": 93,
+          "median": 0.006683182562664395,
+          "mean": 0.007798112126072658,
+          "p75": 0.009117578030134351,
+          "p90": 0.012313392643295278
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 11,
+          "n": 93,
+          "median": 0.005274197804226616,
+          "mean": 0.006572173018939534,
+          "p75": 0.007951785927322418,
+          "p90": 0.010219548116473588
+        },
+        {
+          "utc_hour": 6,
+          "n": 93,
+          "median": 0.005233279697093518,
+          "mean": 0.006362241638717725,
+          "p75": 0.006999469194613767,
+          "p90": 0.010309812749976329
+        },
+        {
+          "utc_hour": 10,
+          "n": 93,
+          "median": 0.005177354074959884,
+          "mean": 0.00620663547215162,
+          "p75": 0.00690253476451359,
+          "p90": 0.010402344351337982
+        },
+        {
+          "utc_hour": 23,
+          "n": 92,
+          "median": 0.004943370547327172,
+          "mean": 0.006234261750508263,
+          "p75": 0.007147078257337173,
+          "p90": 0.010529312813561259
+        }
+      ],
+      "cash_in_daily_top3_share": 0.3870967741935484,
+      "cash_in_daily_top3_n": 93,
+      "cash_vs_same_day_median_ratio": {
+        "n": 93,
+        "median": 1.7263999382617063,
+        "mean": 1.866893079718379,
+        "p75": 2.1927124209525686,
+        "p90": 2.8630447496864826
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 93,
+          "median": 0.011134957864145305,
+          "mean": 0.012557955169483697,
+          "p75": 0.01612818999524504,
+          "p90": 0.021568318376125828
+        },
+        "naive_13utc_hour": {
+          "n": 93,
+          "median": 0.01000401194397103,
+          "mean": 0.010770948022843107,
+          "p75": 0.012320277967386061,
+          "p90": 0.017623411831724643
+        },
+        "fx_12utc_hour": {
+          "n": 93,
+          "median": 0.0062402055264673024,
+          "mean": 0.007364746184005364,
+          "p75": 0.00921756770211064,
+          "p90": 0.012106087489092861
+        }
+      },
+      "structural_call": "weak_or_mixed"
+    },
+    "ETHUSDT_15M": {
+      "bar_minutes": 15,
+      "window_minutes": 30,
+      "close_only": false,
+      "n_et_weekdays": 566,
+      "windows": {
+        "cash_0930_et": {
+          "n": 566,
+          "median": 0.011705423503516907,
+          "mean": 0.013666481078470153,
+          "p75": 0.017188219509029202,
+          "p90": 0.022702165794572522,
+          "median_EDT": 0.010497225924514481,
+          "n_EDT": 340,
+          "median_EST": 0.01443153458788661,
+          "n_EST": 226
+        },
+        "naive_1330_utc": {
+          "n": 566,
+          "median": 0.00933965526016271,
+          "mean": 0.010970108600648796,
+          "p75": 0.013358270649967738,
+          "p90": 0.01930823496402299,
+          "median_EDT": 0.010497225924514481,
+          "n_EDT": 340,
+          "median_EST": 0.007370716868944599,
+          "n_EST": 226
+        },
+        "fx_ny_1200_utc": {
+          "n": 566,
+          "median": 0.005679134958648465,
+          "mean": 0.007175103971606914,
+          "p75": 0.008419023416576788,
+          "p90": 0.01171685628121847,
+          "median_EDT": 0.005714500546185921,
+          "n_EDT": 340,
+          "median_EST": 0.0055852359075978224,
+          "n_EST": 226
+        },
+        "london_0800_local": {
+          "n": 566,
+          "median": 0.005533746402506757,
+          "mean": 0.006978538829105366,
+          "p75": 0.008188865710765205,
+          "p90": 0.01152007137583955,
+          "median_EDT": 0.0052483549108269896,
+          "n_EDT": 340,
+          "median_EST": 0.0059670597361388186,
+          "n_EST": 226
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 15,
+          "n": 566,
+          "median": 0.009973232081286518,
+          "mean": 0.01152771682968775,
+          "p75": 0.014060132921784013,
+          "p90": 0.01932872371006914
+        },
+        {
+          "utc_hour": 14,
+          "n": 566,
+          "median": 0.009328652743471902,
+          "mean": 0.010923585369826742,
+          "p75": 0.013008240392587382,
+          "p90": 0.018192480806775487
+        },
+        {
+          "utc_hour": 16,
+          "n": 566,
+          "median": 0.008763900267971232,
+          "mean": 0.010040522031680257,
+          "p75": 0.012058479969046436,
+          "p90": 0.015974368317454593
+        },
+        {
+          "utc_hour": 17,
+          "n": 566,
+          "median": 0.007769295759802921,
+          "mean": 0.009327143747631706,
+          "p75": 0.010677866472895927,
+          "p90": 0.01551911207607045
+        },
+        {
+          "utc_hour": 18,
+          "n": 566,
+          "median": 0.00704334062966437,
+          "mean": 0.008593716802984038,
+          "p75": 0.010027831951524175,
+          "p90": 0.014952768165192585
+        },
+        {
+          "utc_hour": 1,
+          "n": 565,
+          "median": 0.007007796963288069,
+          "mean": 0.008756910517909295,
+          "p75": 0.00963810238139877,
+          "p90": 0.014739872757380491
+        },
+        {
+          "utc_hour": 19,
+          "n": 566,
+          "median": 0.006837486619750661,
+          "mean": 0.008247492537326576,
+          "p75": 0.010299352547947314,
+          "p90": 0.014132727537420505
+        },
+        {
+          "utc_hour": 20,
+          "n": 566,
+          "median": 0.006658971554858551,
+          "mean": 0.008474677182741759,
+          "p75": 0.009740552088328795,
+          "p90": 0.014769539667055638
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 6,
+          "n": 566,
+          "median": 0.005206234503196561,
+          "mean": 0.006228160720398868,
+          "p75": 0.007517091324840344,
+          "p90": 0.010742304646061485
+        },
+        {
+          "utc_hour": 4,
+          "n": 565,
+          "median": 0.004970370457753768,
+          "mean": 0.006037132945103154,
+          "p75": 0.0072811362752093585,
+          "p90": 0.00993025290317951
+        },
+        {
+          "utc_hour": 5,
+          "n": 566,
+          "median": 0.004966233438843276,
+          "mean": 0.006086542993255364,
+          "p75": 0.0068497703007559295,
+          "p90": 0.010204425185513757
+        },
+        {
+          "utc_hour": 11,
+          "n": 566,
+          "median": 0.004929623730292826,
+          "mean": 0.006272134104609464,
+          "p75": 0.007429562405988541,
+          "p90": 0.010901432627935026
+        }
+      ],
+      "cash_in_daily_top3_share": 0.4929328621908127,
+      "cash_in_daily_top3_n": 566,
+      "cash_vs_same_day_median_ratio": {
+        "n": 566,
+        "median": 1.8770447912070687,
+        "mean": 2.100298676873942,
+        "p75": 2.536062477411585,
+        "p90": 3.2872917276379727
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 566,
+          "median": 0.006919824199828625,
+          "mean": 0.007989070201633296,
+          "p75": 0.009751828152461638,
+          "p90": 0.012712296978095353
+        },
+        "naive_13utc_hour": {
+          "n": 566,
+          "median": 0.006325445644780235,
+          "mean": 0.007482920091553467,
+          "p75": 0.008993503159711142,
+          "p90": 0.012288438080009338
+        },
+        "fx_12utc_hour": {
+          "n": 566,
+          "median": 0.005679134958648465,
+          "mean": 0.007175103971606914,
+          "p75": 0.008419023416576788,
+          "p90": 0.01171685628121847
+        }
+      },
+      "structural_call": "structural_cash_open_dst_aware"
+    },
+    "QQQ_1H": {
+      "bar_minutes": 60,
+      "window_minutes": 60,
+      "close_only": true,
+      "n_et_weekdays": 730,
+      "windows": {
+        "cash_0930_et": {
+          "n": 729,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0,
+          "median_EDT": 0.0,
+          "n_EDT": 476,
+          "median_EST": 0.0,
+          "n_EST": 253
+        },
+        "naive_1330_utc": {
+          "n": 476,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0,
+          "median_EDT": 0.0,
+          "n_EDT": 476
+        },
+        "fx_ny_1200_utc": {
+          "n": 0,
+          "median": null,
+          "mean": null,
+          "p75": null,
+          "p90": null
+        },
+        "london_0800_local": {
+          "n": 0,
+          "median": null,
+          "mean": null,
+          "p75": null,
+          "p90": null
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 14,
+          "n": 476,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 15,
+          "n": 729,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 16,
+          "n": 729,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 17,
+          "n": 726,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 18,
+          "n": 720,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 19,
+          "n": 721,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 20,
+          "n": 721,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 21,
+          "n": 248,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 18,
+          "n": 720,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 19,
+          "n": 721,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 20,
+          "n": 721,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 21,
+          "n": 248,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        }
+      ],
+      "cash_in_daily_top3_share": null,
+      "cash_in_daily_top3_n": 0,
+      "cash_vs_same_day_median_ratio": {
+        "n": 0,
+        "median": null,
+        "mean": null,
+        "p75": null,
+        "p90": null
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 0,
+          "median": null,
+          "mean": null,
+          "p75": null,
+          "p90": null
+        },
+        "naive_13utc_hour": {
+          "n": 0,
+          "median": null,
+          "mean": null,
+          "p75": null,
+          "p90": null
+        },
+        "fx_12utc_hour": {
+          "n": 0,
+          "median": null,
+          "mean": null,
+          "p75": null,
+          "p90": null
+        }
+      },
+      "structural_call": "not_special"
+    },
+    "DXY_1H": {
+      "bar_minutes": 60,
+      "window_minutes": 60,
+      "close_only": true,
+      "n_et_weekdays": 605,
+      "windows": {
+        "cash_0930_et": {
+          "n": 604,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0,
+          "median_EDT": 0.0,
+          "n_EDT": 405,
+          "median_EST": 0.0,
+          "n_EST": 199
+        },
+        "naive_1330_utc": {
+          "n": 597,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0,
+          "median_EDT": 0.0,
+          "n_EDT": 405,
+          "median_EST": 0.0,
+          "n_EST": 192
+        },
+        "fx_ny_1200_utc": {
+          "n": 595,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0,
+          "median_EDT": 0.0,
+          "n_EDT": 403,
+          "median_EST": 0.0,
+          "n_EST": 192
+        },
+        "london_0800_local": {
+          "n": 597,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0,
+          "median_EDT": 0.0,
+          "n_EDT": 402,
+          "median_EST": 0.0,
+          "n_EST": 195
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 0,
+          "n": 600,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 1,
+          "n": 599,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 2,
+          "n": 600,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 3,
+          "n": 600,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 4,
+          "n": 596,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 5,
+          "n": 597,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 6,
+          "n": 597,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 7,
+          "n": 597,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 20,
+          "n": 597,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 21,
+          "n": 518,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 22,
+          "n": 478,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        {
+          "utc_hour": 23,
+          "n": 476,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        }
+      ],
+      "cash_in_daily_top3_share": 1.0,
+      "cash_in_daily_top3_n": 602,
+      "cash_vs_same_day_median_ratio": {
+        "n": 0,
+        "median": null,
+        "mean": null,
+        "p75": null,
+        "p90": null
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 598,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        "naive_13utc_hour": {
+          "n": 595,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        },
+        "fx_12utc_hour": {
+          "n": 595,
+          "median": 0.0,
+          "mean": 0.0,
+          "p75": 0.0,
+          "p90": 0.0
+        }
+      },
+      "structural_call": "not_special"
+    },
+    "XAUUSD_DUKAS_H1": {
+      "bar_minutes": 60,
+      "window_minutes": 60,
+      "close_only": false,
+      "n_et_weekdays": 1081,
+      "windows": {
+        "cash_0930_et": {
+          "n": 1073,
+          "median": 0.00447822239064983,
+          "mean": 0.005032970640158936,
+          "p75": 0.006014115898959805,
+          "p90": 0.008098372894524006,
+          "median_EDT": 0.004545714774794134,
+          "n_EDT": 676,
+          "median_EST": 0.004364274373260116,
+          "n_EST": 397
+        },
+        "naive_1330_utc": {
+          "n": 1073,
+          "median": 0.004399517242962527,
+          "mean": 0.0049946484450366846,
+          "p75": 0.005904630705471185,
+          "p90": 0.008167480102116991,
+          "median_EDT": 0.004545714774794134,
+          "n_EDT": 676,
+          "median_EST": 0.004172825710264359,
+          "n_EST": 397
+        },
+        "fx_ny_1200_utc": {
+          "n": 1073,
+          "median": 0.0032609322577099244,
+          "mean": 0.003956752695794247,
+          "p75": 0.004842928812356981,
+          "p90": 0.007112224777052274,
+          "median_EDT": 0.0038995473655455293,
+          "n_EDT": 676,
+          "median_EST": 0.0021996818046492632,
+          "n_EST": 397
+        },
+        "london_0800_local": {
+          "n": 1073,
+          "median": 0.002610071449446274,
+          "mean": 0.0030196335347413405,
+          "p75": 0.003536440658162217,
+          "p90": 0.004794700771226142,
+          "median_EDT": 0.0026352206995465983,
+          "n_EDT": 676,
+          "median_EST": 0.002576155458443097,
+          "n_EST": 397
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 13,
+          "n": 1073,
+          "median": 0.004399517242962527,
+          "mean": 0.0049946484450366846,
+          "p75": 0.005904630705471185,
+          "p90": 0.008167480102116991
+        },
+        {
+          "utc_hour": 14,
+          "n": 1073,
+          "median": 0.004328942166213493,
+          "mean": 0.004943539893904821,
+          "p75": 0.005998782833811546,
+          "p90": 0.007773519910952773
+        },
+        {
+          "utc_hour": 15,
+          "n": 1073,
+          "median": 0.0034726602702433405,
+          "mean": 0.004117562913454691,
+          "p75": 0.004822217778911582,
+          "p90": 0.006589224926195424
+        },
+        {
+          "utc_hour": 12,
+          "n": 1073,
+          "median": 0.0032609322577099244,
+          "mean": 0.003956752695794247,
+          "p75": 0.004842928812356981,
+          "p90": 0.007112224777052274
+        },
+        {
+          "utc_hour": 16,
+          "n": 1073,
+          "median": 0.002529835381740689,
+          "mean": 0.003121171494127401,
+          "p75": 0.0036120965541194144,
+          "p90": 0.005091327087637123
+        },
+        {
+          "utc_hour": 7,
+          "n": 1073,
+          "median": 0.002508965625559861,
+          "mean": 0.0028782097757832636,
+          "p75": 0.003403230237237819,
+          "p90": 0.004574049616457558
+        },
+        {
+          "utc_hour": 1,
+          "n": 1073,
+          "median": 0.0024938535771487475,
+          "mean": 0.003290263858026351,
+          "p75": 0.0037229489767240326,
+          "p90": 0.005949125525072559
+        },
+        {
+          "utc_hour": 8,
+          "n": 1073,
+          "median": 0.002454839629542406,
+          "mean": 0.0028460536283377294,
+          "p75": 0.003303678768934788,
+          "p90": 0.004503956617383895
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 4,
+          "n": 1073,
+          "median": 0.0013608432475983989,
+          "mean": 0.0016974320791097956,
+          "p75": 0.0019714252063382964,
+          "p90": 0.0029535748931782575
+        },
+        {
+          "utc_hour": 23,
+          "n": 860,
+          "median": 0.0012045353151853887,
+          "mean": 0.0018132575935206467,
+          "p75": 0.0018890478319919897,
+          "p90": 0.0033996233706288024
+        },
+        {
+          "utc_hour": 22,
+          "n": 540,
+          "median": 0.0011991653432136898,
+          "mean": 0.0017224100214056277,
+          "p75": 0.0017880228626929234,
+          "p90": 0.003078261834310742
+        },
+        {
+          "utc_hour": 21,
+          "n": 377,
+          "median": 0.001169078387898945,
+          "mean": 0.0016641864901373168,
+          "p75": 0.0018114298114100854,
+          "p90": 0.0030647626849509063
+        }
+      ],
+      "cash_in_daily_top3_share": 0.6262814538676608,
+      "cash_in_daily_top3_n": 1073,
+      "cash_vs_same_day_median_ratio": {
+        "n": 1073,
+        "median": 2.034038503761898,
+        "mean": 2.2606212190466017,
+        "p75": 2.7181135564732424,
+        "p90": 3.4333196557607586
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 1073,
+          "median": 0.00447822239064983,
+          "mean": 0.005032970640158936,
+          "p75": 0.006014115898959805,
+          "p90": 0.008098372894524006
+        },
+        "naive_13utc_hour": {
+          "n": 1073,
+          "median": 0.004399517242962527,
+          "mean": 0.0049946484450366846,
+          "p75": 0.005904630705471185,
+          "p90": 0.008167480102116991
+        },
+        "fx_12utc_hour": {
+          "n": 1073,
+          "median": 0.0032609322577099244,
+          "mean": 0.003956752695794247,
+          "p75": 0.004842928812356981,
+          "p90": 0.007112224777052274
+        }
+      },
+      "structural_call": "elevated_vs_typical_day"
+    },
+    "EURUSD_DUKAS_H1": {
+      "bar_minutes": 60,
+      "window_minutes": 60,
+      "close_only": false,
+      "n_et_weekdays": 1085,
+      "windows": {
+        "cash_0930_et": {
+          "n": 1079,
+          "median": 0.0019260843812453317,
+          "mean": 0.0022082705959491477,
+          "p75": 0.0026389589121119886,
+          "p90": 0.0036932377445396593,
+          "median_EDT": 0.0019531710129847097,
+          "n_EDT": 680,
+          "median_EST": 0.0018734407315692484,
+          "n_EST": 399
+        },
+        "naive_1330_utc": {
+          "n": 1079,
+          "median": 0.0019468180106060875,
+          "mean": 0.002323958241467774,
+          "p75": 0.0026912784433477917,
+          "p90": 0.0038964995847594595,
+          "median_EDT": 0.0019531710129847097,
+          "n_EDT": 680,
+          "median_EST": 0.0019054528291167795,
+          "n_EST": 399
+        },
+        "fx_ny_1200_utc": {
+          "n": 1079,
+          "median": 0.0016385258387843517,
+          "mean": 0.0021282912778729365,
+          "p75": 0.0025099141189047483,
+          "p90": 0.0039743491515636924,
+          "median_EDT": 0.0019999816123963013,
+          "n_EDT": 680,
+          "median_EST": 0.0013084261704060377,
+          "n_EST": 399
+        },
+        "london_0800_local": {
+          "n": 1079,
+          "median": 0.0016695999414779858,
+          "mean": 0.0019713789922714115,
+          "p75": 0.0023191607527091856,
+          "p90": 0.0033030800175159174,
+          "median_EDT": 0.001714256843158192,
+          "n_EDT": 680,
+          "median_EST": 0.0015716917885764197,
+          "n_EST": 399
+        }
+      },
+      "hour_rank_top8": [
+        {
+          "utc_hour": 14,
+          "n": 1079,
+          "median": 0.0020708910378492503,
+          "mean": 0.002369468475225133,
+          "p75": 0.0029107838128588194,
+          "p90": 0.004028719650936329
+        },
+        {
+          "utc_hour": 13,
+          "n": 1079,
+          "median": 0.0019468180106060875,
+          "mean": 0.002323958241467774,
+          "p75": 0.0026912784433477917,
+          "p90": 0.0038964995847594595
+        },
+        {
+          "utc_hour": 15,
+          "n": 1079,
+          "median": 0.0017601539450704173,
+          "mean": 0.002065706175752001,
+          "p75": 0.0025167140732623157,
+          "p90": 0.003522726780311508
+        },
+        {
+          "utc_hour": 12,
+          "n": 1079,
+          "median": 0.0016385258387843517,
+          "mean": 0.0021282912778729365,
+          "p75": 0.0025099141189047483,
+          "p90": 0.0039743491515636924
+        },
+        {
+          "utc_hour": 8,
+          "n": 1079,
+          "median": 0.0015404544340582274,
+          "mean": 0.0017849861469127761,
+          "p75": 0.0021730054510708807,
+          "p90": 0.0028807105546408964
+        },
+        {
+          "utc_hour": 7,
+          "n": 1082,
+          "median": 0.0015403893123567061,
+          "mean": 0.0018537734877025478,
+          "p75": 0.0022113703487006207,
+          "p90": 0.003227502901753112
+        },
+        {
+          "utc_hour": 9,
+          "n": 1079,
+          "median": 0.0013718903427376889,
+          "mean": 0.0015941083811859401,
+          "p75": 0.001942684140522449,
+          "p90": 0.0026170481991470342
+        },
+        {
+          "utc_hour": 16,
+          "n": 1079,
+          "median": 0.0013514972054978584,
+          "mean": 0.0015586737793689524,
+          "p75": 0.001915350642452315,
+          "p90": 0.0025779997230080897
+        }
+      ],
+      "hour_rank_bottom4": [
+        {
+          "utc_hour": 4,
+          "n": 1082,
+          "median": 0.0006308155909390426,
+          "mean": 0.0007418830288233066,
+          "p75": 0.0008823350289186745,
+          "p90": 0.0011934073419086438
+        },
+        {
+          "utc_hour": 23,
+          "n": 866,
+          "median": 0.0005453262117966864,
+          "mean": 0.0006886467961257757,
+          "p75": 0.0007720769855590172,
+          "p90": 0.0011898263817574895
+        },
+        {
+          "utc_hour": 22,
+          "n": 866,
+          "median": 0.0005112929131861424,
+          "mean": 0.0006179961366345548,
+          "p75": 0.0006991783126466069,
+          "p90": 0.0010337284831154995
+        },
+        {
+          "utc_hour": 21,
+          "n": 943,
+          "median": 0.0005082127175149871,
+          "mean": 0.0006084700269027254,
+          "p75": 0.0007155462260118547,
+          "p90": 0.0009647789850310558
+        }
+      ],
+      "cash_in_daily_top3_share": 0.4263206672845227,
+      "cash_in_daily_top3_n": 1079,
+      "cash_vs_same_day_median_ratio": {
+        "n": 1079,
+        "median": 1.7588784677479188,
+        "mean": 1.9701505482421187,
+        "p75": 2.361158946165036,
+        "p90": 3.056814742807937
+      },
+      "hour_buckets": {
+        "cash_containing_hour": {
+          "n": 1079,
+          "median": 0.0019260843812453317,
+          "mean": 0.0022082705959491477,
+          "p75": 0.0026389589121119886,
+          "p90": 0.0036932377445396593
+        },
+        "naive_13utc_hour": {
+          "n": 1079,
+          "median": 0.0019468180106060875,
+          "mean": 0.002323958241467774,
+          "p75": 0.0026912784433477917,
+          "p90": 0.0038964995847594595
+        },
+        "fx_12utc_hour": {
+          "n": 1079,
+          "median": 0.0016385258387843517,
+          "mean": 0.0021282912778729365,
+          "p75": 0.0025099141189047483,
+          "p90": 0.0039743491515636924
+        }
+      },
+      "structural_call": "elevated_vs_typical_day"
+    }
+  },
+  "scalp_matrix": [
+    {
+      "symbol": "US100",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 215,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 140.0
+      },
+      "all": {
+        "n": 202,
+        "wins": 105,
+        "win_rate": 0.5198019801980198,
+        "pf": 0.9828512621697102,
+        "sum": -157.47000000042317,
+        "expectancy": -0.7795544554476395,
+        "max_dd": -2789.7200000002304
+      },
+      "all_R": {
+        "n": 202,
+        "wins": 105,
+        "win_rate": 0.5198019801980198,
+        "pf": 0.9509156452188805,
+        "sum": -2.9319266435003843,
+        "expectancy": -0.014514488334160318,
+        "max_dd": -15.52009885324522
+      },
+      "develop": {
+        "n": 147,
+        "wins": 77,
+        "win_rate": 0.5238095238095238,
+        "pf": 1.1814153166903496,
+        "sum": 996.0099999997219,
+        "expectancy": 6.775578231290625,
+        "max_dd": -918.4200000001329
+      },
+      "holdout": {
+        "n": 55,
+        "wins": 28,
+        "win_rate": 0.509090909090909,
+        "pf": 0.6876052843964815,
+        "sum": -1153.480000000145,
+        "expectancy": -20.972363636366275,
+        "max_dd": -1782.9500000000917
+      },
+      "exits": {
+        "time": 131,
+        "sl": 37,
+        "tp": 34
+      },
+      "verdict": "coin_flip",
+      "series": "US100_M5",
+      "approach": "orb15_break"
+    },
+    {
+      "symbol": "US100",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "fade_or",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 215,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 140.0
+      },
+      "all": {
+        "n": 209,
+        "wins": 62,
+        "win_rate": 0.2966507177033493,
+        "pf": 0.7134802910305106,
+        "sum": -1138.8700000003992,
+        "expectancy": -5.449138755982771,
+        "max_dd": -1313.1200000003955
+      },
+      "all_R": {
+        "n": 209,
+        "wins": 62,
+        "win_rate": 0.2966507177033493,
+        "pf": 0.3836438285106247,
+        "sum": -96.56591397762014,
+        "expectancy": -0.4620378659216275,
+        "max_dd": -96.90492294869327
+      },
+      "develop": {
+        "n": 152,
+        "wins": 47,
+        "win_rate": 0.3092105263157895,
+        "pf": 0.7645256890476168,
+        "sum": -614.1900000002752,
+        "expectancy": -4.040723684212336,
+        "max_dd": -1002.1600000002509
+      },
+      "holdout": {
+        "n": 57,
+        "wins": 15,
+        "win_rate": 0.2631578947368421,
+        "pf": 0.6160494098189744,
+        "sum": -524.680000000124,
+        "expectancy": -9.20491228070393,
+        "max_dd": -553.4100000001199
+      },
+      "exits": {
+        "sl": 79,
+        "sl_both": 68,
+        "tp": 61,
+        "time": 1
+      },
+      "verdict": "fails",
+      "series": "US100_M5",
+      "approach": "fade_or15"
+    },
+    {
+      "symbol": "US100",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "fade_break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 215,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 140.0
+      },
+      "all": {
+        "n": 201,
+        "wins": 37,
+        "win_rate": 0.18407960199004975,
+        "pf": 0.35740715295218156,
+        "sum": -1309.4500000004373,
+        "expectancy": -6.5146766169175985,
+        "max_dd": -1327.520000000426
+      },
+      "all_R": {
+        "n": 201,
+        "wins": 37,
+        "win_rate": 0.18407960199004975,
+        "pf": 0.19144217315687867,
+        "sum": -149.02834206418504,
+        "expectancy": -0.7414345376327613,
+        "max_dd": -148.42009282550046
+      },
+      "develop": {
+        "n": 146,
+        "wins": 28,
+        "win_rate": 0.1917808219178082,
+        "pf": 0.4896535129931361,
+        "sum": -615.0900000003057,
+        "expectancy": -4.212945205481546,
+        "max_dd": -628.1400000003014
+      },
+      "holdout": {
+        "n": 55,
+        "wins": 9,
+        "win_rate": 0.16363636363636364,
+        "pf": 0.16595397107573995,
+        "sum": -694.3600000001315,
+        "expectancy": -12.624727272729665,
+        "max_dd": -715.430000000124
+      },
+      "exits": {
+        "sl_both": 114,
+        "sl": 50,
+        "tp": 37
+      },
+      "verdict": "fails",
+      "series": "US100_M5",
+      "approach": "fade_break15"
+    },
+    {
+      "symbol": "US100",
+      "event": "cash",
+      "or_minutes": 5,
+      "mode": "break",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 215,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 140.0
+      },
+      "all": {
+        "n": 207,
+        "wins": 100,
+        "win_rate": 0.4830917874396135,
+        "pf": 1.0207664256924838,
+        "sum": 178.5299999995732,
+        "expectancy": 0.8624637681138801,
+        "max_dd": -1807.3800000003575
+      },
+      "all_R": {
+        "n": 207,
+        "wins": 100,
+        "win_rate": 0.4830917874396135,
+        "pf": 0.962375981033332,
+        "sum": -2.719289651731496,
+        "expectancy": -0.013136664984210126,
+        "max_dd": -16.64472405359309
+      },
+      "develop": {
+        "n": 150,
+        "wins": 74,
+        "win_rate": 0.49333333333333335,
+        "pf": 1.0312052859950787,
+        "sum": 160.9499999997024,
+        "expectancy": 1.072999999998016,
+        "max_dd": -1152.4400000001078
+      },
+      "holdout": {
+        "n": 57,
+        "wins": 26,
+        "win_rate": 0.45614035087719296,
+        "pf": 1.0051115498346657,
+        "sum": 17.57999999987078,
+        "expectancy": 0.3084210526293119,
+        "max_dd": -1128.5200000000805
+      },
+      "exits": {
+        "time": 101,
+        "sl": 55,
+        "tp": 51
+      },
+      "verdict": "coin_flip",
+      "series": "US100_M5",
+      "approach": "orb5_break"
+    },
+    {
+      "symbol": "US100",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "always_long",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 215,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 140.0
+      },
+      "all": {
+        "n": 211,
+        "wins": 75,
+        "win_rate": 0.35545023696682465,
+        "pf": 0.8442014407415068,
+        "sum": -805.4100000003928,
+        "expectancy": -3.817109004741198,
+        "max_dd": -1256.570000000309
+      },
+      "all_R": {
+        "n": 211,
+        "wins": 75,
+        "win_rate": 0.35545023696682465,
+        "pf": 0.480519842677043,
+        "sum": -73.24633512710935,
+        "expectancy": -0.3471390290384329,
+        "max_dd": -75.3444951932764
+      },
+      "develop": {
+        "n": 154,
+        "wins": 52,
+        "win_rate": 0.33766233766233766,
+        "pf": 0.7454194014906524,
+        "sum": -915.3700000002755,
+        "expectancy": -5.9439610389628275,
+        "max_dd": -1085.510000000264
+      },
+      "holdout": {
+        "n": 57,
+        "wins": 23,
+        "win_rate": 0.40350877192982454,
+        "pf": 1.069862004116925,
+        "sum": 109.95999999988271,
+        "expectancy": 1.9291228070154862,
+        "max_dd": -368.0800000000345
+      },
+      "exits": {
+        "sl": 80,
+        "tp": 66,
+        "sl_both": 53,
+        "time": 12
+      },
+      "verdict": "fails",
+      "series": "US100_M5",
+      "approach": "always_long_or15"
+    },
+    {
+      "symbol": "US100",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "always_short",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 215,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 140.0
+      },
+      "all": {
+        "n": 207,
+        "wins": 76,
+        "win_rate": 0.3671497584541063,
+        "pf": 0.8517089993078102,
+        "sum": -737.0300000003444,
+        "expectancy": -3.5605314009678475,
+        "max_dd": -1539.0800000001254
+      },
+      "all_R": {
+        "n": 207,
+        "wins": 76,
+        "win_rate": 0.3671497584541063,
+        "pf": 0.5499284687804274,
+        "sum": -60.57633042341119,
+        "expectancy": -0.29263927740778356,
+        "max_dd": -62.188528684426096
+      },
+      "develop": {
+        "n": 150,
+        "wins": 61,
+        "win_rate": 0.4066666666666667,
+        "pf": 1.0960024711608267,
+        "sum": 270.3899999997775,
+        "expectancy": 1.8025999999985167,
+        "max_dd": -289.99000000006345
+      },
+      "holdout": {
+        "n": 57,
+        "wins": 15,
+        "win_rate": 0.2631578947368421,
+        "pf": 0.5322310288948339,
+        "sum": -1007.420000000122,
+        "expectancy": -17.67403508772144,
+        "max_dd": -1252.270000000055
+      },
+      "exits": {
+        "sl": 77,
+        "tp": 75,
+        "sl_both": 48,
+        "time": 7
+      },
+      "verdict": "coin_flip",
+      "series": "US100_M5",
+      "approach": "always_short_or15"
+    },
+    {
+      "symbol": "US100",
+      "event": "naive1330",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 215,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 140.0
+      },
+      "all": {
+        "n": 205,
+        "wins": 94,
+        "win_rate": 0.4585365853658537,
+        "pf": 0.6602633472909111,
+        "sum": -3242.980000000389,
+        "expectancy": -15.819414634148238,
+        "max_dd": -4011.65000000034
+      },
+      "all_R": {
+        "n": 205,
+        "wins": 94,
+        "win_rate": 0.4585365853658537,
+        "pf": 0.7157326316959312,
+        "sum": -24.796372547834746,
+        "expectancy": -0.12095791486748657,
+        "max_dd": -27.632019646425015
+      },
+      "develop": {
+        "n": 150,
+        "wins": 66,
+        "win_rate": 0.44,
+        "pf": 0.6430151763397094,
+        "sum": -2089.5000000002437,
+        "expectancy": -13.930000000001625,
+        "max_dd": -2140.3500000002423
+      },
+      "holdout": {
+        "n": 55,
+        "wins": 28,
+        "win_rate": 0.509090909090909,
+        "pf": 0.6876052843964815,
+        "sum": -1153.480000000145,
+        "expectancy": -20.972363636366275,
+        "max_dd": -1782.9500000000917
+      },
+      "exits": {
+        "time": 87,
+        "sl": 69,
+        "tp": 49
+      },
+      "verdict": "fails",
+      "series": "US100_M5",
+      "approach": "orb15_break_naive1330"
+    },
+    {
+      "symbol": "US100",
+      "event": "fx12",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 215,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 140.0
+      },
+      "all": {
+        "n": 197,
+        "wins": 99,
+        "win_rate": 0.5025380710659898,
+        "pf": 1.076849055163517,
+        "sum": 281.9099999996579,
+        "expectancy": 1.4310152284246593,
+        "max_dd": -551.3000000000684
+      },
+      "all_R": {
+        "n": 197,
+        "wins": 99,
+        "win_rate": 0.5025380710659898,
+        "pf": 1.022622395844728,
+        "sum": 1.6258340681907288,
+        "expectancy": 0.008252964813150908,
+        "max_dd": -10.999231774281947
+      },
+      "develop": {
+        "n": 145,
+        "wins": 71,
+        "win_rate": 0.4896551724137931,
+        "pf": 0.9540165936962379,
+        "sum": -114.06000000023778,
+        "expectancy": -0.7866206896568123,
+        "max_dd": -551.3000000000684
+      },
+      "holdout": {
+        "n": 52,
+        "wins": 28,
+        "win_rate": 0.5384615384615384,
+        "pf": 1.3333361394055663,
+        "sum": 395.96999999989566,
+        "expectancy": 7.6148076923056855,
+        "max_dd": -230.65000000004147
+      },
+      "exits": {
+        "time": 77,
+        "tp": 62,
+        "sl": 57,
+        "sl_both": 1
+      },
+      "verdict": "coin_flip",
+      "series": "US100_M5",
+      "approach": "orb15_break_fx12"
+    },
+    {
+      "symbol": "US100",
+      "event": "cash",
+      "or_minutes": 30,
+      "mode": "break",
+      "time_stop_min": 120,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 215,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 140.0
+      },
+      "all": {
+        "n": 185,
+        "wins": 103,
+        "win_rate": 0.5567567567567567,
+        "pf": 0.9084129177884496,
+        "sum": -766.0600000004451,
+        "expectancy": -4.140864864867271,
+        "max_dd": -1534.3500000003369
+      },
+      "all_R": {
+        "n": 185,
+        "wins": 103,
+        "win_rate": 0.5567567567567567,
+        "pf": 0.9159394841954939,
+        "sum": -3.513772311185118,
+        "expectancy": -0.018993363844243882,
+        "max_dd": -6.909231518589087
+      },
+      "develop": {
+        "n": 136,
+        "wins": 74,
+        "win_rate": 0.5441176470588235,
+        "pf": 1.0072833297228325,
+        "sum": 37.31999999968684,
+        "expectancy": 0.27441176470357975,
+        "max_dd": -1194.200000000059
+      },
+      "holdout": {
+        "n": 49,
+        "wins": 29,
+        "win_rate": 0.5918367346938775,
+        "pf": 0.7520623408687236,
+        "sum": -803.380000000132,
+        "expectancy": -16.395510204084328,
+        "max_dd": -1234.2500000000327
+      },
+      "exits": {
+        "time": 148,
+        "sl": 21,
+        "tp": 16
+      },
+      "verdict": "coin_flip",
+      "series": "US100_M5",
+      "approach": "orb30_break"
+    },
+    {
+      "symbol": "US30",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 222,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 120.0
+      },
+      "all": {
+        "n": 193,
+        "wins": 92,
+        "win_rate": 0.47668393782383417,
+        "pf": 0.848431300364027,
+        "sum": -1852.7000000003463,
+        "expectancy": -9.59948186528677,
+        "max_dd": -2565.9000000002634
+      },
+      "all_R": {
+        "n": 193,
+        "wins": 92,
+        "win_rate": 0.47668393782383417,
+        "pf": 0.8715133483175467,
+        "sum": -7.276002962642264,
+        "expectancy": -0.037699497215763024,
+        "max_dd": -9.972018188150383
+      },
+      "develop": {
+        "n": 146,
+        "wins": 71,
+        "win_rate": 0.4863013698630137,
+        "pf": 0.957766493943096,
+        "sum": -365.55000000023574,
+        "expectancy": -2.5037671232892857,
+        "max_dd": -2059.4500000000626
+      },
+      "holdout": {
+        "n": 47,
+        "wins": 21,
+        "win_rate": 0.44680851063829785,
+        "pf": 0.5832037107103081,
+        "sum": -1487.1500000001106,
+        "expectancy": -31.64148936170448,
+        "max_dd": -1433.2500000001019
+      },
+      "exits": {
+        "time": 128,
+        "sl": 34,
+        "tp": 31
+      },
+      "verdict": "fails",
+      "series": "US30_M5",
+      "approach": "orb15_break"
+    },
+    {
+      "symbol": "US30",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "fade_or",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 222,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 120.0
+      },
+      "all": {
+        "n": 218,
+        "wins": 76,
+        "win_rate": 0.3486238532110092,
+        "pf": 0.8564259506062806,
+        "sum": -872.6000000002459,
+        "expectancy": -4.0027522935791096,
+        "max_dd": -1356.600000000166
+      },
+      "all_R": {
+        "n": 218,
+        "wins": 76,
+        "win_rate": 0.3486238532110092,
+        "pf": 0.49812825122122284,
+        "sum": -73.91327347865675,
+        "expectancy": -0.33905171320484745,
+        "max_dd": -73.22583193386653
+      },
+      "develop": {
+        "n": 161,
+        "wins": 54,
+        "win_rate": 0.33540372670807456,
+        "pf": 0.8575293259246443,
+        "sum": -634.6000000001804,
+        "expectancy": -3.941614906833419,
+        "max_dd": -1003.4000000001179
+      },
+      "holdout": {
+        "n": 57,
+        "wins": 22,
+        "win_rate": 0.38596491228070173,
+        "pf": 0.8533986263820535,
+        "sum": -238.00000000006548,
+        "expectancy": -4.175438596492377,
+        "max_dd": -565.3000000000393
+      },
+      "exits": {
+        "sl": 84,
+        "tp": 74,
+        "sl_both": 55,
+        "time": 5
+      },
+      "verdict": "coin_flip",
+      "series": "US30_M5",
+      "approach": "fade_or15"
+    },
+    {
+      "symbol": "US30",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "fade_break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 222,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 120.0
+      },
+      "all": {
+        "n": 193,
+        "wins": 41,
+        "win_rate": 0.21243523316062177,
+        "pf": 0.4565232263801754,
+        "sum": -1191.600000000326,
+        "expectancy": -6.174093264250393,
+        "max_dd": -1276.0000000003056
+      },
+      "all_R": {
+        "n": 193,
+        "wins": 41,
+        "win_rate": 0.21243523316062177,
+        "pf": 0.21941409262602357,
+        "sum": -137.7555788471571,
+        "expectancy": -0.7137594758920057,
+        "max_dd": -140.41867409112143
+      },
+      "develop": {
+        "n": 146,
+        "wins": 28,
+        "win_rate": 0.1917808219178082,
+        "pf": 0.4505869669381261,
+        "sum": -917.3000000002357,
+        "expectancy": -6.282876712330382,
+        "max_dd": -944.5500000002285
+      },
+      "holdout": {
+        "n": 47,
+        "wins": 13,
+        "win_rate": 0.2765957446808511,
+        "pf": 0.47547566688967946,
+        "sum": -274.3000000000902,
+        "expectancy": -5.836170212767877,
+        "max_dd": -396.90000000006694
+      },
+      "exits": {
+        "sl_both": 100,
+        "sl": 52,
+        "tp": 41
+      },
+      "verdict": "fails",
+      "series": "US30_M5",
+      "approach": "fade_break15"
+    },
+    {
+      "symbol": "US30",
+      "event": "cash",
+      "or_minutes": 5,
+      "mode": "break",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 222,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 120.0
+      },
+      "all": {
+        "n": 205,
+        "wins": 106,
+        "win_rate": 0.5170731707317073,
+        "pf": 1.0971725454844663,
+        "sum": 1002.4999999996144,
+        "expectancy": 4.890243902437144,
+        "max_dd": -1098.4000000001543
+      },
+      "all_R": {
+        "n": 205,
+        "wins": 106,
+        "win_rate": 0.5170731707317073,
+        "pf": 1.0417505914010705,
+        "sum": 2.5240562027601143,
+        "expectancy": 0.012312469281756656,
+        "max_dd": -7.168610742266681
+      },
+      "develop": {
+        "n": 155,
+        "wins": 83,
+        "win_rate": 0.535483870967742,
+        "pf": 1.0900070871721812,
+        "sum": 704.8499999997221,
+        "expectancy": 4.547419354836917,
+        "max_dd": -1098.4000000001543
+      },
+      "holdout": {
+        "n": 50,
+        "wins": 23,
+        "win_rate": 0.46,
+        "pf": 1.119747349787735,
+        "sum": 297.6499999998923,
+        "expectancy": 5.9529999999978465,
+        "max_dd": -420.0500000000029
+      },
+      "exits": {
+        "time": 121,
+        "sl": 43,
+        "tp": 41
+      },
+      "verdict": "coin_flip",
+      "series": "US30_M5",
+      "approach": "orb5_break"
+    },
+    {
+      "symbol": "US30",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "always_long",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 222,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 120.0
+      },
+      "all": {
+        "n": 218,
+        "wins": 76,
+        "win_rate": 0.3486238532110092,
+        "pf": 0.7796411838327717,
+        "sum": -1894.460000000283,
+        "expectancy": -8.69018348623983,
+        "max_dd": -2741.150000000227
+      },
+      "all_R": {
+        "n": 218,
+        "wins": 76,
+        "win_rate": 0.3486238532110092,
+        "pf": 0.5054750336500702,
+        "sum": -69.90888370005003,
+        "expectancy": -0.32068295275252306,
+        "max_dd": -74.28911709922086
+      },
+      "develop": {
+        "n": 161,
+        "wins": 59,
+        "win_rate": 0.36645962732919257,
+        "pf": 0.90815242989373,
+        "sum": -544.0600000002014,
+        "expectancy": -3.379254658386344,
+        "max_dd": -1426.9000000001179
+      },
+      "holdout": {
+        "n": 57,
+        "wins": 17,
+        "win_rate": 0.2982456140350877,
+        "pf": 0.4949226712546299,
+        "sum": -1350.4000000000815,
+        "expectancy": -23.69122807017687,
+        "max_dd": -1696.6500000000378
+      },
+      "exits": {
+        "sl": 88,
+        "tp": 70,
+        "sl_both": 45,
+        "time": 15
+      },
+      "verdict": "fails",
+      "series": "US30_M5",
+      "approach": "always_long_or15"
+    },
+    {
+      "symbol": "US30",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "always_short",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 222,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 120.0
+      },
+      "all": {
+        "n": 218,
+        "wins": 91,
+        "win_rate": 0.41743119266055045,
+        "pf": 0.7493798539468877,
+        "sum": -2162.1000000002896,
+        "expectancy": -9.917889908258209,
+        "max_dd": -2424.3000000002503
+      },
+      "all_R": {
+        "n": 218,
+        "wins": 91,
+        "win_rate": 0.41743119266055045,
+        "pf": 0.6673660699656319,
+        "sum": -42.6454726799764,
+        "expectancy": -0.19562143431181836,
+        "max_dd": -44.69039034952771
+      },
+      "develop": {
+        "n": 161,
+        "wins": 69,
+        "win_rate": 0.42857142857142855,
+        "pf": 0.7899308427914131,
+        "sum": -1269.7000000001863,
+        "expectancy": -7.886335403727865,
+        "max_dd": -1569.1000000001513
+      },
+      "holdout": {
+        "n": 57,
+        "wins": 22,
+        "win_rate": 0.38596491228070173,
+        "pf": 0.6544835062722415,
+        "sum": -892.4000000001033,
+        "expectancy": -15.656140350879006,
+        "max_dd": -1110.400000000096
+      },
+      "exits": {
+        "sl": 86,
+        "tp": 85,
+        "sl_both": 32,
+        "time": 15
+      },
+      "verdict": "fails",
+      "series": "US30_M5",
+      "approach": "always_short_or15"
+    },
+    {
+      "symbol": "US30",
+      "event": "naive1330",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 222,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 120.0
+      },
+      "all": {
+        "n": 201,
+        "wins": 96,
+        "win_rate": 0.47761194029850745,
+        "pf": 0.8462497583606834,
+        "sum": -1590.700000000419,
+        "expectancy": -7.9139303482607914,
+        "max_dd": -2249.150000000256
+      },
+      "all_R": {
+        "n": 201,
+        "wins": 96,
+        "win_rate": 0.47761194029850745,
+        "pf": 0.9223912986191902,
+        "sum": -5.786908817801699,
+        "expectancy": -0.028790591133341786,
+        "max_dd": -15.048528587072742
+      },
+      "develop": {
+        "n": 154,
+        "wins": 75,
+        "win_rate": 0.487012987012987,
+        "pf": 0.9847225193457749,
+        "sum": -103.5500000003085,
+        "expectancy": -0.6724025974046006,
+        "max_dd": -1742.7000000000553
+      },
+      "holdout": {
+        "n": 47,
+        "wins": 21,
+        "win_rate": 0.44680851063829785,
+        "pf": 0.5832037107103081,
+        "sum": -1487.1500000001106,
+        "expectancy": -31.64148936170448,
+        "max_dd": -1433.2500000001019
+      },
+      "exits": {
+        "time": 85,
+        "tp": 60,
+        "sl": 49,
+        "sl_both": 7
+      },
+      "verdict": "fails",
+      "series": "US30_M5",
+      "approach": "orb15_break_naive1330"
+    },
+    {
+      "symbol": "US30",
+      "event": "fx12",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 222,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 120.0
+      },
+      "all": {
+        "n": 209,
+        "wins": 111,
+        "win_rate": 0.5311004784688995,
+        "pf": 1.1346555211866458,
+        "sum": 629.0499999995227,
+        "expectancy": 3.0098086124379075,
+        "max_dd": -632.7500000000582
+      },
+      "all_R": {
+        "n": 209,
+        "wins": 111,
+        "win_rate": 0.5311004784688995,
+        "pf": 1.1383572696228368,
+        "sum": 9.93122568365441,
+        "expectancy": 0.04751782623758091,
+        "max_dd": -8.895363824316657
+      },
+      "develop": {
+        "n": 154,
+        "wins": 78,
+        "win_rate": 0.5064935064935064,
+        "pf": 0.9437056294369718,
+        "sum": -197.0500000003085,
+        "expectancy": -1.2795454545474578,
+        "max_dd": -632.7500000000582
+      },
+      "holdout": {
+        "n": 55,
+        "wins": 33,
+        "win_rate": 0.6,
+        "pf": 1.70534494535497,
+        "sum": 826.0999999998312,
+        "expectancy": 15.01999999999693,
+        "max_dd": -286.0000000000291
+      },
+      "exits": {
+        "time": 80,
+        "tp": 72,
+        "sl": 56,
+        "sl_both": 1
+      },
+      "verdict": "coin_flip",
+      "series": "US30_M5",
+      "approach": "orb15_break_fx12"
+    },
+    {
+      "symbol": "US30",
+      "event": "cash",
+      "or_minutes": 30,
+      "mode": "break",
+      "time_stop_min": 120,
+      "tp_r": 1.0,
+      "holdout_start": "2026-06-01",
+      "n_session_days": 222,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 10.0,
+        "fallback_spread_points": 120.0
+      },
+      "all": {
+        "n": 179,
+        "wins": 88,
+        "win_rate": 0.49162011173184356,
+        "pf": 1.0577000526657827,
+        "sum": 558.7499999996508,
+        "expectancy": 3.121508379886317,
+        "max_dd": -1026.0500000001339
+      },
+      "all_R": {
+        "n": 179,
+        "wins": 88,
+        "win_rate": 0.49162011173184356,
+        "pf": 0.9832290223028678,
+        "sum": -0.6769972075633528,
+        "expectancy": -0.0037821073048232,
+        "max_dd": -5.127498649497626
+      },
+      "develop": {
+        "n": 135,
+        "wins": 66,
+        "win_rate": 0.4888888888888889,
+        "pf": 0.9836987438943556,
+        "sum": -124.65000000022701,
+        "expectancy": -0.9233333333350149,
+        "max_dd": -1026.0500000001339
+      },
+      "holdout": {
+        "n": 44,
+        "wins": 22,
+        "win_rate": 0.5,
+        "pf": 1.335485137821779,
+        "sum": 683.3999999998778,
+        "expectancy": 15.531818181815403,
+        "max_dd": -424.7000000000262
+      },
+      "exits": {
+        "time": 143,
+        "tp": 19,
+        "sl": 17
+      },
+      "verdict": "coin_flip",
+      "series": "US30_M5",
+      "approach": "orb30_break"
+    },
+    {
+      "symbol": "EURUSD",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-03-01",
+      "n_session_days": 1287,
+      "costs": {
+        "point": 1e-05,
+        "slip_points": 10.0,
+        "fallback_spread_points": 10.0
+      },
+      "all": {
+        "n": 1247,
+        "wins": 495,
+        "win_rate": 0.39695268644747395,
+        "pf": 0.5727072354804619,
+        "sum": -0.38190999999987485,
+        "expectancy": -0.00030626303127495976,
+        "max_dd": -0.38449999999987516
+      },
+      "all_R": {
+        "n": 1247,
+        "wins": 495,
+        "win_rate": 0.39695268644747395,
+        "pf": 0.5426129147537195,
+        "sum": -276.00192815767537,
+        "expectancy": -0.22133274110479179,
+        "max_dd": -278.8945196517749
+      },
+      "develop": {
+        "n": 878,
+        "wins": 365,
+        "win_rate": 0.4157175398633257,
+        "pf": 0.608446592799633,
+        "sum": -0.24948999999989818,
+        "expectancy": -0.00028415717539851727,
+        "max_dd": -0.2520799999998985
+      },
+      "holdout": {
+        "n": 369,
+        "wins": 130,
+        "win_rate": 0.3523035230352303,
+        "pf": 0.4839639920502432,
+        "sum": -0.13241999999997667,
+        "expectancy": -0.00035886178861782293,
+        "max_dd": -0.13261999999997665
+      },
+      "exits": {
+        "time": 520,
+        "sl": 418,
+        "tp": 308,
+        "sl_both": 1
+      },
+      "verdict": "fails",
+      "series": "EURUSD_M5",
+      "approach": "orb15_break"
+    },
+    {
+      "symbol": "EURUSD",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "fade_or",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-03-01",
+      "n_session_days": 1287,
+      "costs": {
+        "point": 1e-05,
+        "slip_points": 10.0,
+        "fallback_spread_points": 10.0
+      },
+      "all": {
+        "n": 1267,
+        "wins": 351,
+        "win_rate": 0.2770323599052881,
+        "pf": 0.25562536119765455,
+        "sum": -0.3992899999998766,
+        "expectancy": -0.0003151460142066903,
+        "max_dd": -0.39987999999987667
+      },
+      "all_R": {
+        "n": 1267,
+        "wins": 351,
+        "win_rate": 0.2770323599052881,
+        "pf": 0.16490171559166375,
+        "sum": -1139.8975730595469,
+        "expectancy": -0.899682378105404,
+        "max_dd": -1140.6948703568455
+      },
+      "develop": {
+        "n": 886,
+        "wins": 257,
+        "win_rate": 0.29006772009029347,
+        "pf": 0.2649684302199773,
+        "sum": -0.27007999999990184,
+        "expectancy": -0.0003048306997741556,
+        "max_dd": -0.27066999999990193
+      },
+      "holdout": {
+        "n": 381,
+        "wins": 94,
+        "win_rate": 0.24671916010498687,
+        "pf": 0.23530804284787707,
+        "sum": -0.12920999999997473,
+        "expectancy": -0.00033913385826765024,
+        "max_dd": -0.1300599999999752
+      },
+      "exits": {
+        "sl": 796,
+        "tp": 350,
+        "sl_both": 115,
+        "time": 6
+      },
+      "verdict": "fails",
+      "series": "EURUSD_M5",
+      "approach": "fade_or15"
+    },
+    {
+      "symbol": "EURUSD",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "fade_break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-03-01",
+      "n_session_days": 1287,
+      "costs": {
+        "point": 1e-05,
+        "slip_points": 10.0,
+        "fallback_spread_points": 10.0
+      },
+      "all": {
+        "n": 1246,
+        "wins": 229,
+        "win_rate": 0.18378812199036917,
+        "pf": 0.12433919284827992,
+        "sum": -0.4074799999998687,
+        "expectancy": -0.00032703049759218996,
+        "max_dd": -0.40717999999986854
+      },
+      "all_R": {
+        "n": 1246,
+        "wins": 229,
+        "win_rate": 0.18378812199036917,
+        "pf": 0.07039686881100302,
+        "sum": -1567.013505602494,
+        "expectancy": -1.257635237241167,
+        "max_dd": -1565.013505602493
+      },
+      "develop": {
+        "n": 878,
+        "wins": 171,
+        "win_rate": 0.1947608200455581,
+        "pf": 0.14116683353058748,
+        "sum": -0.28307999999989397,
+        "expectancy": -0.00032241457858757854,
+        "max_dd": -0.2827799999998938
+      },
+      "holdout": {
+        "n": 368,
+        "wins": 58,
+        "win_rate": 0.15760869565217392,
+        "pf": 0.08347454505269555,
+        "sum": -0.12439999999997475,
+        "expectancy": -0.000338043478260801,
+        "max_dd": -0.12468999999997488
+      },
+      "exits": {
+        "sl": 799,
+        "tp": 228,
+        "sl_both": 215,
+        "time": 4
+      },
+      "verdict": "fails",
+      "series": "EURUSD_M5",
+      "approach": "fade_break15"
+    },
+    {
+      "symbol": "EURUSD",
+      "event": "cash",
+      "or_minutes": 5,
+      "mode": "break",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-03-01",
+      "n_session_days": 1287,
+      "costs": {
+        "point": 1e-05,
+        "slip_points": 10.0,
+        "fallback_spread_points": 10.0
+      },
+      "all": {
+        "n": 1267,
+        "wins": 471,
+        "win_rate": 0.3717442778216259,
+        "pf": 0.4663086060913223,
+        "sum": -0.4223099999998803,
+        "expectancy": -0.0003333149171269773,
+        "max_dd": -0.4220499999998799
+      },
+      "all_R": {
+        "n": 1267,
+        "wins": 471,
+        "win_rate": 0.3717442778216259,
+        "pf": 0.4284048788719277,
+        "sum": -434.8395956302196,
+        "expectancy": -0.34320410073419066,
+        "max_dd": -434.5060976065042
+      },
+      "develop": {
+        "n": 888,
+        "wins": 335,
+        "win_rate": 0.37725225225225223,
+        "pf": 0.4720918745370147,
+        "sum": -0.299249999999903,
+        "expectancy": -0.00033699324324313397,
+        "max_dd": -0.2989899999999026
+      },
+      "holdout": {
+        "n": 379,
+        "wins": 136,
+        "win_rate": 0.35883905013192613,
+        "pf": 0.451702013901316,
+        "sum": -0.1230599999999773,
+        "expectancy": -0.0003246965699207844,
+        "max_dd": -0.12315999999997729
+      },
+      "exits": {
+        "sl": 560,
+        "time": 358,
+        "tp": 347,
+        "sl_both": 2
+      },
+      "verdict": "fails",
+      "series": "EURUSD_M5",
+      "approach": "orb5_break"
+    },
+    {
+      "symbol": "EURUSD",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "always_long",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-03-01",
+      "n_session_days": 1287,
+      "costs": {
+        "point": 1e-05,
+        "slip_points": 10.0,
+        "fallback_spread_points": 10.0
+      },
+      "all": {
+        "n": 1279,
+        "wins": 343,
+        "win_rate": 0.26817826426896013,
+        "pf": 0.23699124162807902,
+        "sum": -0.444299999999872,
+        "expectancy": -0.00034738076622351215,
+        "max_dd": -0.4437099999998717
+      },
+      "all_R": {
+        "n": 1279,
+        "wins": 343,
+        "win_rate": 0.26817826426896013,
+        "pf": 0.16141639895815493,
+        "sum": -1133.4495638459707,
+        "expectancy": -0.8861998153604149,
+        "max_dd": -1132.1086547550613
+      },
+      "develop": {
+        "n": 897,
+        "wins": 229,
+        "win_rate": 0.2552954292084727,
+        "pf": 0.22940114926158384,
+        "sum": -0.32452999999989673,
+        "expectancy": -0.0003617948717947567,
+        "max_dd": -0.3239399999998964
+      },
+      "holdout": {
+        "n": 382,
+        "wins": 114,
+        "win_rate": 0.29842931937172773,
+        "pf": 0.2568255150161746,
+        "sum": -0.11976999999997529,
+        "expectancy": -0.0003135340314135479,
+        "max_dd": -0.1204999999999754
+      },
+      "exits": {
+        "sl": 826,
+        "tp": 332,
+        "sl_both": 94,
+        "time": 27
+      },
+      "verdict": "fails",
+      "series": "EURUSD_M5",
+      "approach": "always_long_or15"
+    },
+    {
+      "symbol": "EURUSD",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "always_short",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-03-01",
+      "n_session_days": 1287,
+      "costs": {
+        "point": 1e-05,
+        "slip_points": 10.0,
+        "fallback_spread_points": 10.0
+      },
+      "all": {
+        "n": 1279,
+        "wins": 357,
+        "win_rate": 0.27912431587177483,
+        "pf": 0.2631118725128603,
+        "sum": -0.412929999999879,
+        "expectancy": -0.00032285379202492493,
+        "max_dd": -0.4138599999998789
+      },
+      "all_R": {
+        "n": 1279,
+        "wins": 357,
+        "win_rate": 0.27912431587177483,
+        "pf": 0.16694616936251666,
+        "sum": -1121.9132522729114,
+        "expectancy": -0.8771800252329253,
+        "max_dd": -1123.8135053927601
+      },
+      "develop": {
+        "n": 897,
+        "wins": 266,
+        "win_rate": 0.29654403567447046,
+        "pf": 0.28875185507401546,
+        "sum": -0.277969999999905,
+        "expectancy": -0.0003098885172797157,
+        "max_dd": -0.278749999999905
+      },
+      "holdout": {
+        "n": 382,
+        "wins": 91,
+        "win_rate": 0.23821989528795812,
+        "pf": 0.20401061633739756,
+        "sum": -0.134959999999974,
+        "expectancy": -0.0003532984293193036,
+        "max_dd": -0.13572999999997415
+      },
+      "exits": {
+        "sl": 818,
+        "tp": 348,
+        "sl_both": 90,
+        "time": 23
+      },
+      "verdict": "fails",
+      "series": "EURUSD_M5",
+      "approach": "always_short_or15"
+    },
+    {
+      "symbol": "EURUSD",
+      "event": "naive1330",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-03-01",
+      "n_session_days": 1287,
+      "costs": {
+        "point": 1e-05,
+        "slip_points": 10.0,
+        "fallback_spread_points": 10.0
+      },
+      "all": {
+        "n": 1218,
+        "wins": 459,
+        "win_rate": 0.3768472906403941,
+        "pf": 0.5379009771072032,
+        "sum": -0.3944199999998711,
+        "expectancy": -0.00032382594417066594,
+        "max_dd": -0.3970099999998714
+      },
+      "all_R": {
+        "n": 1218,
+        "wins": 459,
+        "win_rate": 0.3768472906403941,
+        "pf": 0.513906727246047,
+        "sum": -275.88600927234677,
+        "expectancy": -0.22650739677532575,
+        "max_dd": -278.77860076644646
+      },
+      "develop": {
+        "n": 860,
+        "wins": 338,
+        "win_rate": 0.3930232558139535,
+        "pf": 0.5702427821523458,
+        "sum": -0.2619799999998952,
+        "expectancy": -0.0003046279069766223,
+        "max_dd": -0.26840999999989756
+      },
+      "holdout": {
+        "n": 358,
+        "wins": 121,
+        "win_rate": 0.33798882681564246,
+        "pf": 0.4570796097401544,
+        "sum": -0.1324399999999759,
+        "expectancy": -0.000369944134078145,
+        "max_dd": -0.13905999999997887
+      },
+      "exits": {
+        "time": 575,
+        "sl": 377,
+        "tp": 266
+      },
+      "verdict": "fails",
+      "series": "EURUSD_M5",
+      "approach": "orb15_break_naive1330"
+    },
+    {
+      "symbol": "EURUSD",
+      "event": "fx12",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-03-01",
+      "n_session_days": 1287,
+      "costs": {
+        "point": 1e-05,
+        "slip_points": 10.0,
+        "fallback_spread_points": 10.0
+      },
+      "all": {
+        "n": 1251,
+        "wins": 460,
+        "win_rate": 0.3677058353317346,
+        "pf": 0.4804838431817367,
+        "sum": -0.42218999999987417,
+        "expectancy": -0.0003374820143883886,
+        "max_dd": -0.42345999999987405
+      },
+      "all_R": {
+        "n": 1251,
+        "wins": 460,
+        "win_rate": 0.3677058353317346,
+        "pf": 0.43225955063516497,
+        "sum": -399.9666221282295,
+        "expectancy": -0.3197175236836367,
+        "max_dd": -401.3696679923448
+      },
+      "develop": {
+        "n": 878,
+        "wins": 319,
+        "win_rate": 0.36332574031890663,
+        "pf": 0.46562281464813443,
+        "sum": -0.3132999999999,
+        "expectancy": -0.00035683371298394074,
+        "max_dd": -0.31500999999989987
+      },
+      "holdout": {
+        "n": 373,
+        "wins": 141,
+        "win_rate": 0.3780160857908847,
+        "pf": 0.5189733621947035,
+        "sum": -0.10888999999997417,
+        "expectancy": -0.00029193029490609697,
+        "max_dd": -0.10857999999997414
+      },
+      "exits": {
+        "sl": 493,
+        "time": 435,
+        "tp": 315,
+        "sl_both": 8
+      },
+      "verdict": "fails",
+      "series": "EURUSD_M5",
+      "approach": "orb15_break_fx12"
+    },
+    {
+      "symbol": "EURUSD",
+      "event": "cash",
+      "or_minutes": 30,
+      "mode": "break",
+      "time_stop_min": 120,
+      "tp_r": 1.0,
+      "holdout_start": "2025-03-01",
+      "n_session_days": 1287,
+      "costs": {
+        "point": 1e-05,
+        "slip_points": 10.0,
+        "fallback_spread_points": 10.0
+      },
+      "all": {
+        "n": 1206,
+        "wins": 493,
+        "win_rate": 0.4087893864013267,
+        "pf": 0.6123586735946467,
+        "sum": -0.34765999999986885,
+        "expectancy": -0.00028827529021547996,
+        "max_dd": -0.3503199999998692
+      },
+      "all_R": {
+        "n": 1206,
+        "wins": 493,
+        "win_rate": 0.4087893864013267,
+        "pf": 0.5792186013125427,
+        "sum": -195.90318956806405,
+        "expectancy": -0.16244045569491214,
+        "max_dd": -197.62682445655392
+      },
+      "develop": {
+        "n": 840,
+        "wins": 345,
+        "win_rate": 0.4107142857142857,
+        "pf": 0.6263686416819088,
+        "sum": -0.23886999999989378,
+        "expectancy": -0.00028436904761892115,
+        "max_dd": -0.2415299999998941
+      },
+      "holdout": {
+        "n": 366,
+        "wins": 148,
+        "win_rate": 0.40437158469945356,
+        "pf": 0.5775801817194121,
+        "sum": -0.10878999999997507,
+        "expectancy": -0.00029724043715840187,
+        "max_dd": -0.11017999999997508
+      },
+      "exits": {
+        "time": 735,
+        "sl": 267,
+        "tp": 204
+      },
+      "verdict": "fails",
+      "series": "EURUSD_M5",
+      "approach": "orb30_break"
+    },
+    {
+      "symbol": "XAUUSD",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 1100,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 20.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 933,
+        "wins": 410,
+        "win_rate": 0.43944265809217575,
+        "pf": 0.8777138711850476,
+        "sum": -377.59999999995875,
+        "expectancy": -0.4047159699892377,
+        "max_dd": -600.179999999996
+      },
+      "all_R": {
+        "n": 933,
+        "wins": 410,
+        "win_rate": 0.43944265809217575,
+        "pf": 0.7996233984009845,
+        "sum": -58.295303071987924,
+        "expectancy": -0.06248156813717891,
+        "max_dd": -72.25615608058911
+      },
+      "develop": {
+        "n": 691,
+        "wins": 284,
+        "win_rate": 0.4109985528219971,
+        "pf": 0.726096963733333,
+        "sum": -484.33999999997945,
+        "expectancy": -0.7009261939218226,
+        "max_dd": -516.4399999999857
+      },
+      "holdout": {
+        "n": 242,
+        "wins": 126,
+        "win_rate": 0.5206611570247934,
+        "pf": 1.0808912129135098,
+        "sum": 106.7400000000207,
+        "expectancy": 0.4410743801653748,
+        "max_dd": -199.78000000000566
+      },
+      "exits": {
+        "time": 602,
+        "sl": 167,
+        "tp": 164
+      },
+      "verdict": "coin_flip",
+      "series": "XAUUSD_M15",
+      "approach": "orb15_break"
+    },
+    {
+      "symbol": "XAUUSD",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "fade_or",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 1100,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 20.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 1086,
+        "wins": 339,
+        "win_rate": 0.31215469613259667,
+        "pf": 0.5981390745403524,
+        "sum": -738.9699999999657,
+        "expectancy": -0.6804511970533754,
+        "max_dd": -755.739999999965
+      },
+      "all_R": {
+        "n": 1086,
+        "wins": 339,
+        "win_rate": 0.31215469613259667,
+        "pf": 0.2971527050149599,
+        "sum": -674.7502563341376,
+        "expectancy": -0.6213169947828154,
+        "max_dd": -677.3151755121088
+      },
+      "develop": {
+        "n": 800,
+        "wins": 240,
+        "win_rate": 0.3,
+        "pf": 0.45133487288995905,
+        "sum": -567.8299999999854,
+        "expectancy": -0.7097874999999817,
+        "max_dd": -571.0499999999854
+      },
+      "holdout": {
+        "n": 286,
+        "wins": 99,
+        "win_rate": 0.34615384615384615,
+        "pf": 0.7871234171704538,
+        "sum": -171.13999999998032,
+        "expectancy": -0.5983916083915396,
+        "max_dd": -182.97999999997955
+      },
+      "exits": {
+        "sl": 410,
+        "tp": 337,
+        "sl_both": 332,
+        "time": 7
+      },
+      "verdict": "fails",
+      "series": "XAUUSD_M15",
+      "approach": "fade_or15"
+    },
+    {
+      "symbol": "XAUUSD",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "fade_break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 1100,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 20.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 929,
+        "wins": 242,
+        "win_rate": 0.2604951560818084,
+        "pf": 0.41155519322139295,
+        "sum": -880.5899999999547,
+        "expectancy": -0.9478902045209415,
+        "max_dd": -881.3099999999547
+      },
+      "all_R": {
+        "n": 929,
+        "wins": 242,
+        "win_rate": 0.2604951560818084,
+        "pf": 0.21848787876623108,
+        "sum": -688.640578412077,
+        "expectancy": -0.7412708056104166,
+        "max_dd": -689.1290443059612
+      },
+      "develop": {
+        "n": 687,
+        "wins": 188,
+        "win_rate": 0.27365356622998543,
+        "pf": 0.3910482213058669,
+        "sum": -506.5199999999827,
+        "expectancy": -0.7372925764191888,
+        "max_dd": -507.23999999998273
+      },
+      "holdout": {
+        "n": 242,
+        "wins": 54,
+        "win_rate": 0.2231404958677686,
+        "pf": 0.4372179093699394,
+        "sum": -374.06999999997197,
+        "expectancy": -1.5457438016527767,
+        "max_dd": -372.6499999999719
+      },
+      "exits": {
+        "sl": 342,
+        "sl_both": 328,
+        "tp": 230,
+        "time": 29
+      },
+      "verdict": "fails",
+      "series": "XAUUSD_M15",
+      "approach": "fade_break15"
+    },
+    {
+      "symbol": "XAUUSD",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "always_long",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 1100,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 20.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 1088,
+        "wins": 405,
+        "win_rate": 0.37224264705882354,
+        "pf": 0.6362068778927021,
+        "sum": -1008.4599999999634,
+        "expectancy": -0.9268933823529075,
+        "max_dd": -1021.7699999999622
+      },
+      "all_R": {
+        "n": 1088,
+        "wins": 405,
+        "win_rate": 0.37224264705882354,
+        "pf": 0.43460954751672254,
+        "sum": -423.5123061670943,
+        "expectancy": -0.3892576343447558,
+        "max_dd": -422.4390667304743
+      },
+      "develop": {
+        "n": 802,
+        "wins": 297,
+        "win_rate": 0.37032418952618457,
+        "pf": 0.6277623956225455,
+        "sum": -509.5299999999845,
+        "expectancy": -0.6353241895261652,
+        "max_dd": -519.4299999999848
+      },
+      "holdout": {
+        "n": 286,
+        "wins": 108,
+        "win_rate": 0.3776223776223776,
+        "pf": 0.6444442860807944,
+        "sum": -498.9299999999789,
+        "expectancy": -1.7445104895104158,
+        "max_dd": -511.64999999997644
+      },
+      "exits": {
+        "sl": 421,
+        "tp": 338,
+        "sl_both": 176,
+        "time": 153
+      },
+      "verdict": "fails",
+      "series": "XAUUSD_M15",
+      "approach": "always_long_or15"
+    },
+    {
+      "symbol": "XAUUSD",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "always_short",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 1100,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 20.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 1089,
+        "wins": 394,
+        "win_rate": 0.36179981634527086,
+        "pf": 0.739882951089724,
+        "sum": -656.9099999999571,
+        "expectancy": -0.6032231404958284,
+        "max_dd": -697.5099999999882
+      },
+      "all_R": {
+        "n": 1089,
+        "wins": 394,
+        "win_rate": 0.36179981634527086,
+        "pf": 0.408493051085249,
+        "sum": -463.1948298087852,
+        "expectancy": -0.4253396049667449,
+        "max_dd": -466.95996589732715
+      },
+      "develop": {
+        "n": 803,
+        "wins": 282,
+        "win_rate": 0.35118306351183065,
+        "pf": 0.5679280682502108,
+        "sum": -610.2799999999829,
+        "expectancy": -0.7599999999999787,
+        "max_dd": -665.7599999999873
+      },
+      "holdout": {
+        "n": 286,
+        "wins": 112,
+        "win_rate": 0.3916083916083916,
+        "pf": 0.9581038463957671,
+        "sum": -46.62999999997419,
+        "expectancy": -0.1630419580418678,
+        "max_dd": -237.06999999996788
+      },
+      "exits": {
+        "sl": 424,
+        "tp": 343,
+        "sl_both": 189,
+        "time": 133
+      },
+      "verdict": "fails",
+      "series": "XAUUSD_M15",
+      "approach": "always_short_or15"
+    },
+    {
+      "symbol": "XAUUSD",
+      "event": "naive1330",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 1100,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 20.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 932,
+        "wins": 439,
+        "win_rate": 0.47103004291845496,
+        "pf": 0.9905287099531135,
+        "sum": -28.14999999995257,
+        "expectancy": -0.030203862660893314,
+        "max_dd": -318.86999999999466
+      },
+      "all_R": {
+        "n": 932,
+        "wins": 439,
+        "win_rate": 0.47103004291845496,
+        "pf": 0.9192422205365335,
+        "sum": -23.191297322362157,
+        "expectancy": -0.024883366225710468,
+        "max_dd": -45.26681748171183
+      },
+      "develop": {
+        "n": 685,
+        "wins": 307,
+        "win_rate": 0.4481751824817518,
+        "pf": 0.8445256317514077,
+        "sum": -255.75999999997907,
+        "expectancy": -0.37337226277369207,
+        "max_dd": -287.85999999998535
+      },
+      "holdout": {
+        "n": 247,
+        "wins": 132,
+        "win_rate": 0.5344129554655871,
+        "pf": 1.1715080136537512,
+        "sum": 227.6100000000265,
+        "expectancy": 0.9214979757086094,
+        "max_dd": -171.11000000000695
+      },
+      "exits": {
+        "time": 557,
+        "tp": 194,
+        "sl": 181
+      },
+      "verdict": "coin_flip",
+      "series": "XAUUSD_M15",
+      "approach": "orb15_break_naive1330"
+    },
+    {
+      "symbol": "XAUUSD",
+      "event": "fx12",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 1100,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 20.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 1017,
+        "wins": 414,
+        "win_rate": 0.40707964601769914,
+        "pf": 0.6862157073256762,
+        "sum": -961.5699999999699,
+        "expectancy": -0.9454965585053785,
+        "max_dd": -974.1599999999751
+      },
+      "all_R": {
+        "n": 1017,
+        "wins": 414,
+        "win_rate": 0.40707964601769914,
+        "pf": 0.63247427590178,
+        "sum": -169.79544665557287,
+        "expectancy": -0.16695717468591237,
+        "max_dd": -171.3027311670164
+      },
+      "develop": {
+        "n": 752,
+        "wins": 303,
+        "win_rate": 0.4029255319148936,
+        "pf": 0.6443538012613383,
+        "sum": -566.7399999999891,
+        "expectancy": -0.7536436170212621,
+        "max_dd": -585.1899999999921
+      },
+      "holdout": {
+        "n": 265,
+        "wins": 111,
+        "win_rate": 0.4188679245283019,
+        "pf": 0.7315688567388341,
+        "sum": -394.8299999999808,
+        "expectancy": -1.4899245283018145,
+        "max_dd": -429.9199999999828
+      },
+      "exits": {
+        "time": 408,
+        "sl": 324,
+        "tp": 267,
+        "sl_both": 18
+      },
+      "verdict": "fails",
+      "series": "XAUUSD_M15",
+      "approach": "orb15_break_fx12"
+    },
+    {
+      "symbol": "XAUUSD",
+      "event": "cash",
+      "or_minutes": 30,
+      "mode": "break",
+      "time_stop_min": 120,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 1100,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 20.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 851,
+        "wins": 386,
+        "win_rate": 0.4535840188014101,
+        "pf": 0.9755340333757211,
+        "sum": -66.58999999996422,
+        "expectancy": -0.07824911868385925,
+        "max_dd": -300.3299999999974
+      },
+      "all_R": {
+        "n": 851,
+        "wins": 386,
+        "win_rate": 0.4535840188014101,
+        "pf": 0.8629964711846885,
+        "sum": -27.40677076462941,
+        "expectancy": -0.0322053710512684,
+        "max_dd": -32.301095018521536
+      },
+      "develop": {
+        "n": 626,
+        "wins": 274,
+        "win_rate": 0.43769968051118213,
+        "pf": 0.8672226016318708,
+        "sum": -184.6999999999848,
+        "expectancy": -0.29504792332265944,
+        "max_dd": -287.39999999999395
+      },
+      "holdout": {
+        "n": 225,
+        "wins": 112,
+        "win_rate": 0.49777777777777776,
+        "pf": 1.0887584636542111,
+        "sum": 118.11000000002059,
+        "expectancy": 0.5249333333334248,
+        "max_dd": -179.50999999997248
+      },
+      "exits": {
+        "time": 676,
+        "tp": 95,
+        "sl": 80
+      },
+      "verdict": "coin_flip",
+      "series": "XAUUSD_M15",
+      "approach": "orb30_break"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 566,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 80.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 487,
+        "wins": 230,
+        "win_rate": 0.4722792607802875,
+        "pf": 0.7834135060945945,
+        "sum": -1226.9300000000399,
+        "expectancy": -2.5193634496920736,
+        "max_dd": -1645.5300000000207
+      },
+      "all_R": {
+        "n": 487,
+        "wins": 230,
+        "win_rate": 0.4722792607802875,
+        "pf": 0.8344549831125464,
+        "sum": -25.766302926474804,
+        "expectancy": -0.0529082195615499,
+        "max_dd": -41.29043921650811
+      },
+      "develop": {
+        "n": 340,
+        "wins": 158,
+        "win_rate": 0.4647058823529412,
+        "pf": 0.7636727619089693,
+        "sum": -853.5100000000507,
+        "expectancy": -2.510323529411914,
+        "max_dd": -1015.1100000000301
+      },
+      "holdout": {
+        "n": 147,
+        "wins": 72,
+        "win_rate": 0.4897959183673469,
+        "pf": 0.8181357723458494,
+        "sum": -373.41999999998916,
+        "expectancy": -2.540272108843464,
+        "max_dd": -676.0099999999811
+      },
+      "exits": {
+        "time": 285,
+        "tp": 102,
+        "sl": 100
+      },
+      "verdict": "fails",
+      "series": "ETHUSDT_15M",
+      "approach": "orb15_break"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "fade_or",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 566,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 80.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 566,
+        "wins": 168,
+        "win_rate": 0.2968197879858657,
+        "pf": 0.4759603448664922,
+        "sum": -1857.4900000000516,
+        "expectancy": -3.281784452296911,
+        "max_dd": -1868.2100000000473
+      },
+      "all_R": {
+        "n": 566,
+        "wins": 168,
+        "win_rate": 0.2968197879858657,
+        "pf": 0.29391348268713763,
+        "sum": -345.9465299502974,
+        "expectancy": -0.6112129504422216,
+        "max_dd": -346.5963353977685
+      },
+      "develop": {
+        "n": 391,
+        "wins": 118,
+        "win_rate": 0.30179028132992325,
+        "pf": 0.41196651165930026,
+        "sum": -1393.5100000000546,
+        "expectancy": -3.563964194373541,
+        "max_dd": -1409.78000000005
+      },
+      "holdout": {
+        "n": 175,
+        "wins": 50,
+        "win_rate": 0.2857142857142857,
+        "pf": 0.6050494560683712,
+        "sum": -463.97999999999706,
+        "expectancy": -2.651314285714269,
+        "max_dd": -473.77999999999724
+      },
+      "exits": {
+        "sl": 235,
+        "tp": 163,
+        "sl_both": 163,
+        "time": 5
+      },
+      "verdict": "fails",
+      "series": "ETHUSDT_15M",
+      "approach": "fade_or15"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "fade_break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 566,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 80.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 487,
+        "wins": 134,
+        "win_rate": 0.2751540041067762,
+        "pf": 0.45984100375529124,
+        "sum": -1475.7900000000377,
+        "expectancy": -3.0303696098563404,
+        "max_dd": -1471.1300000000374
+      },
+      "all_R": {
+        "n": 487,
+        "wins": 134,
+        "win_rate": 0.2751540041067762,
+        "pf": 0.26276660631167187,
+        "sum": -318.11818690135203,
+        "expectancy": -0.6532200963066777,
+        "max_dd": -316.8788251992244
+      },
+      "develop": {
+        "n": 340,
+        "wins": 88,
+        "win_rate": 0.25882352941176473,
+        "pf": 0.4285325709523478,
+        "sum": -987.4500000000439,
+        "expectancy": -2.904264705882482,
+        "max_dd": -982.7900000000436
+      },
+      "holdout": {
+        "n": 147,
+        "wins": 46,
+        "win_rate": 0.3129251700680272,
+        "pf": 0.5137121347911835,
+        "sum": -488.3399999999938,
+        "expectancy": -3.3220408163264885,
+        "max_dd": -510.30999999999176
+      },
+      "exits": {
+        "sl_both": 188,
+        "sl": 153,
+        "tp": 128,
+        "time": 18
+      },
+      "verdict": "fails",
+      "series": "ETHUSDT_15M",
+      "approach": "fade_break15"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "always_long",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 566,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 80.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 566,
+        "wins": 203,
+        "win_rate": 0.3586572438162544,
+        "pf": 0.6793721560453942,
+        "sum": -1393.7500000000489,
+        "expectancy": -2.462455830388779,
+        "max_dd": -1495.6800000000462
+      },
+      "all_R": {
+        "n": 566,
+        "wins": 203,
+        "win_rate": 0.3586572438162544,
+        "pf": 0.4203752156323802,
+        "sum": -226.26481505285687,
+        "expectancy": -0.39976115733720297,
+        "max_dd": -226.04340324228852
+      },
+      "develop": {
+        "n": 391,
+        "wins": 127,
+        "win_rate": 0.3248081841432225,
+        "pf": 0.5221072592986792,
+        "sum": -1436.4500000000544,
+        "expectancy": -3.6737851662405485,
+        "max_dd": -1460.0800000000536
+      },
+      "holdout": {
+        "n": 175,
+        "wins": 76,
+        "win_rate": 0.4342857142857143,
+        "pf": 1.0318385850843355,
+        "sum": 42.7000000000055,
+        "expectancy": 0.24400000000003144,
+        "max_dd": -352.7500000000082
+      },
+      "exits": {
+        "sl": 225,
+        "tp": 168,
+        "sl_both": 96,
+        "time": 77
+      },
+      "verdict": "fails",
+      "series": "ETHUSDT_15M",
+      "approach": "always_long_or15"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "event": "cash",
+      "or_minutes": 15,
+      "mode": "always_short",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 566,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 80.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 566,
+        "wins": 245,
+        "win_rate": 0.43286219081272087,
+        "pf": 0.9547185283456305,
+        "sum": -173.39000000004717,
+        "expectancy": -0.3063427561838289,
+        "max_dd": -469.86000000001945
+      },
+      "all_R": {
+        "n": 566,
+        "wins": 245,
+        "win_rate": 0.43286219081272087,
+        "pf": 0.5722008346223552,
+        "sum": -150.65611989909394,
+        "expectancy": -0.2661768902810847,
+        "max_dd": -152.8420904849339
+      },
+      "develop": {
+        "n": 391,
+        "wins": 175,
+        "win_rate": 0.4475703324808184,
+        "pf": 0.9873770858805689,
+        "sum": -29.320000000050413,
+        "expectancy": -0.07498721227634376,
+        "max_dd": -318.28000000001475
+      },
+      "holdout": {
+        "n": 175,
+        "wins": 70,
+        "win_rate": 0.4,
+        "pf": 0.9043613913967095,
+        "sum": -144.06999999999675,
+        "expectancy": -0.8232571428571243,
+        "max_dd": -363.8899999999958
+      },
+      "exits": {
+        "tp": 209,
+        "sl": 192,
+        "sl_both": 90,
+        "time": 75
+      },
+      "verdict": "coin_flip",
+      "series": "ETHUSDT_15M",
+      "approach": "always_short_or15"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "event": "naive1330",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 566,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 80.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 496,
+        "wins": 228,
+        "win_rate": 0.4596774193548387,
+        "pf": 0.7453078084843275,
+        "sum": -1413.1800000000367,
+        "expectancy": -2.8491532258065257,
+        "max_dd": -1706.5600000000293
+      },
+      "all_R": {
+        "n": 496,
+        "wins": 228,
+        "win_rate": 0.4596774193548387,
+        "pf": 0.7948654006217519,
+        "sum": -37.516870400124674,
+        "expectancy": -0.07563885161315459,
+        "max_dd": -43.39756838563442
+      },
+      "develop": {
+        "n": 337,
+        "wins": 164,
+        "win_rate": 0.486646884272997,
+        "pf": 0.8492110610585972,
+        "sum": -492.73000000004777,
+        "expectancy": -1.4621068249259577,
+        "max_dd": -919.2700000000295
+      },
+      "holdout": {
+        "n": 159,
+        "wins": 64,
+        "win_rate": 0.4025157232704403,
+        "pf": 0.596453154456578,
+        "sum": -920.4499999999889,
+        "expectancy": -5.788993710691754,
+        "max_dd": -933.3799999999885
+      },
+      "exits": {
+        "time": 244,
+        "sl": 126,
+        "tp": 121,
+        "sl_both": 5
+      },
+      "verdict": "fails",
+      "series": "ETHUSDT_15M",
+      "approach": "orb15_break_naive1330"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "event": "fx12",
+      "or_minutes": 15,
+      "mode": "break",
+      "time_stop_min": 90,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 566,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 80.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 497,
+        "wins": 188,
+        "win_rate": 0.3782696177062374,
+        "pf": 0.5475901892704357,
+        "sum": -1709.5300000000266,
+        "expectancy": -3.4396981891348624,
+        "max_dd": -1762.3800000000188
+      },
+      "all_R": {
+        "n": 497,
+        "wins": 188,
+        "win_rate": 0.3782696177062374,
+        "pf": 0.5460267292033165,
+        "sum": -92.97474751247553,
+        "expectancy": -0.18707192658445781,
+        "max_dd": -93.75278798724406
+      },
+      "develop": {
+        "n": 343,
+        "wins": 131,
+        "win_rate": 0.3819241982507289,
+        "pf": 0.6135833772952235,
+        "sum": -908.2800000000443,
+        "expectancy": -2.64804664723045,
+        "max_dd": -903.8000000000393
+      },
+      "holdout": {
+        "n": 154,
+        "wins": 57,
+        "win_rate": 0.37012987012987014,
+        "pf": 0.43897913457499516,
+        "sum": -801.2499999999823,
+        "expectancy": -5.202922077921963,
+        "max_dd": -855.5699999999792
+      },
+      "exits": {
+        "time": 267,
+        "sl": 133,
+        "tp": 93,
+        "sl_both": 4
+      },
+      "verdict": "fails",
+      "series": "ETHUSDT_15M",
+      "approach": "orb15_break_fx12"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "event": "cash",
+      "or_minutes": 30,
+      "mode": "break",
+      "time_stop_min": 120,
+      "tp_r": 1.0,
+      "holdout_start": "2025-07-01",
+      "n_session_days": 566,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 80.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 436,
+        "wins": 197,
+        "win_rate": 0.4518348623853211,
+        "pf": 0.8212175569613509,
+        "sum": -915.9400000000442,
+        "expectancy": -2.100779816513863,
+        "max_dd": -1017.6900000000328
+      },
+      "all_R": {
+        "n": 436,
+        "wins": 197,
+        "win_rate": 0.4518348623853211,
+        "pf": 0.9196578113383154,
+        "sum": -8.930420634991833,
+        "expectancy": -0.02048261613530237,
+        "max_dd": -17.551651873754746
+      },
+      "develop": {
+        "n": 299,
+        "wins": 139,
+        "win_rate": 0.46488294314381273,
+        "pf": 0.776554913429962,
+        "sum": -764.3900000000463,
+        "expectancy": -2.556488294314536,
+        "max_dd": -832.7900000000432
+      },
+      "holdout": {
+        "n": 137,
+        "wins": 58,
+        "win_rate": 0.4233576642335766,
+        "pf": 0.9109723429753048,
+        "sum": -151.5499999999979,
+        "expectancy": -1.1062043795620284,
+        "max_dd": -263.08000000000493
+      },
+      "exits": {
+        "time": 311,
+        "tp": 68,
+        "sl": 57
+      },
+      "verdict": "fails",
+      "series": "ETHUSDT_15M",
+      "approach": "orb30_break"
+    }
+  ],
+  "h1_dummy": [
+    {
+      "symbol": "XAUUSD",
+      "event": "cash",
+      "or_minutes": 60,
+      "mode": "always_long",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-01-01",
+      "n_session_days": 1280,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 20.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 1269,
+        "wins": 470,
+        "win_rate": 0.37037037037037035,
+        "pf": 0.6689112099207873,
+        "sum": -1242.0199999999368,
+        "expectancy": -0.9787391646965616,
+        "max_dd": -1266.759999999934
+      },
+      "all_R": {
+        "n": 1269,
+        "wins": 470,
+        "win_rate": 0.37037037037037035,
+        "pf": 0.4232421328810524,
+        "sum": -429.8381323051733,
+        "expectancy": -0.33872193247058574,
+        "max_dd": -429.02959117534994
+      },
+      "develop": {
+        "n": 856,
+        "wins": 313,
+        "win_rate": 0.36565420560747663,
+        "pf": 0.6637936440074197,
+        "sum": -589.78999999998,
+        "expectancy": -0.689007009345771,
+        "max_dd": -611.089999999979
+      },
+      "holdout": {
+        "n": 413,
+        "wins": 157,
+        "win_rate": 0.3801452784503632,
+        "pf": 0.6734065405819686,
+        "sum": -652.2299999999568,
+        "expectancy": -1.5792493946730188,
+        "max_dd": -679.9899999999561
+      },
+      "exits": {
+        "time": 420,
+        "sl": 338,
+        "tp": 270,
+        "sl_both": 241
+      },
+      "verdict": "fails",
+      "series": "XAUUSD_H1",
+      "approach": "h1_always_long_cash_hour"
+    },
+    {
+      "symbol": "XAUUSD",
+      "event": "cash",
+      "or_minutes": 60,
+      "mode": "always_short",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-01-01",
+      "n_session_days": 1280,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 20.0,
+        "fallback_spread_points": 20.0
+      },
+      "all": {
+        "n": 1269,
+        "wins": 459,
+        "win_rate": 0.3617021276595745,
+        "pf": 0.7346145558589329,
+        "sum": -972.9799999999393,
+        "expectancy": -0.7667297084317882,
+        "max_dd": -998.9799999999386
+      },
+      "all_R": {
+        "n": 1269,
+        "wins": 459,
+        "win_rate": 0.3617021276595745,
+        "pf": 0.43744368438479014,
+        "sum": -416.3683534254171,
+        "expectancy": -0.3281074495078149,
+        "max_dd": -419.0840011805433
+      },
+      "develop": {
+        "n": 856,
+        "wins": 319,
+        "win_rate": 0.3726635514018692,
+        "pf": 0.6640477556840114,
+        "sum": -567.8499999999806,
+        "expectancy": -0.6633761682242764,
+        "max_dd": -595.1299999999833
+      },
+      "holdout": {
+        "n": 413,
+        "wins": 140,
+        "win_rate": 0.3389830508474576,
+        "pf": 0.7949767714901845,
+        "sum": -405.1299999999587,
+        "expectancy": -0.9809443099272609,
+        "max_dd": -423.20999999995865
+      },
+      "exits": {
+        "time": 389,
+        "sl": 335,
+        "tp": 306,
+        "sl_both": 239
+      },
+      "verdict": "fails",
+      "series": "XAUUSD_H1",
+      "approach": "h1_always_short_cash_hour"
+    },
+    {
+      "symbol": "BTCUSD",
+      "event": "cash",
+      "or_minutes": 60,
+      "mode": "always_long",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-01-01",
+      "n_session_days": 1216,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 800.0,
+        "fallback_spread_points": 1050.0
+      },
+      "all": {
+        "n": 1210,
+        "wins": 425,
+        "win_rate": 0.3512396694214876,
+        "pf": 0.6630280420628334,
+        "sum": -65143.52000000059,
+        "expectancy": -53.837619834711234,
+        "max_dd": -66599.29000000056
+      },
+      "all_R": {
+        "n": 1210,
+        "wins": 425,
+        "win_rate": 0.3512396694214876,
+        "pf": 0.39528774622824947,
+        "sum": -465.8730066623011,
+        "expectancy": -0.3850190137704968,
+        "max_dd": -467.5702731697331
+      },
+      "develop": {
+        "n": 786,
+        "wins": 269,
+        "win_rate": 0.3422391857506361,
+        "pf": 0.6458709189799978,
+        "sum": -33997.44000000001,
+        "expectancy": -43.25374045801528,
+        "max_dd": -34544.57999999998
+      },
+      "holdout": {
+        "n": 424,
+        "wins": 156,
+        "win_rate": 0.36792452830188677,
+        "pf": 0.679953438924652,
+        "sum": -31146.080000000584,
+        "expectancy": -73.45773584905798,
+        "max_dd": -36343.61000000053
+      },
+      "exits": {
+        "sl": 348,
+        "time": 314,
+        "tp": 280,
+        "sl_both": 268
+      },
+      "verdict": "fails",
+      "series": "BTCUSD_H1",
+      "approach": "h1_always_long_cash_hour"
+    },
+    {
+      "symbol": "BTCUSD",
+      "event": "cash",
+      "or_minutes": 60,
+      "mode": "always_short",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-01-01",
+      "n_session_days": 1216,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 800.0,
+        "fallback_spread_points": 1050.0
+      },
+      "all": {
+        "n": 1210,
+        "wins": 429,
+        "win_rate": 0.35454545454545455,
+        "pf": 0.6545760205709765,
+        "sum": -60009.90000000066,
+        "expectancy": -49.5949586776865,
+        "max_dd": -60638.75000000067
+      },
+      "all_R": {
+        "n": 1210,
+        "wins": 429,
+        "win_rate": 0.35454545454545455,
+        "pf": 0.40795036221291914,
+        "sum": -443.02120838622346,
+        "expectancy": -0.3661332300712591,
+        "max_dd": -444.4962592016368
+      },
+      "develop": {
+        "n": 786,
+        "wins": 274,
+        "win_rate": 0.3486005089058524,
+        "pf": 0.6521136167749949,
+        "sum": -29267.01000000011,
+        "expectancy": -37.235381679389455,
+        "max_dd": -31108.34000000007
+      },
+      "holdout": {
+        "n": 424,
+        "wins": 155,
+        "win_rate": 0.36556603773584906,
+        "pf": 0.6568880393865276,
+        "sum": -30742.890000000552,
+        "expectancy": -72.50681603773715,
+        "max_dd": -31164.660000000556
+      },
+      "exits": {
+        "time": 349,
+        "sl": 317,
+        "tp": 290,
+        "sl_both": 254
+      },
+      "verdict": "fails",
+      "series": "BTCUSD_H1",
+      "approach": "h1_always_short_cash_hour"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "event": "cash",
+      "or_minutes": 60,
+      "mode": "always_long",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-01-01",
+      "n_session_days": 804,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 800.0,
+        "fallback_spread_points": 200.0
+      },
+      "all": {
+        "n": 803,
+        "wins": 267,
+        "win_rate": 0.33250311332503113,
+        "pf": 0.5686700336463699,
+        "sum": -36822.75999999998,
+        "expectancy": -45.85648816936486,
+        "max_dd": -37093.93999999997
+      },
+      "all_R": {
+        "n": 803,
+        "wins": 267,
+        "win_rate": 0.33250311332503113,
+        "pf": 0.36355121318496564,
+        "sum": -324.8275594630878,
+        "expectancy": -0.40451750867134223,
+        "max_dd": -326.0282805519284
+      },
+      "develop": {
+        "n": 803,
+        "wins": 267,
+        "win_rate": 0.33250311332503113,
+        "pf": 0.5686700336463699,
+        "sum": -36822.75999999998,
+        "expectancy": -45.85648816936486,
+        "max_dd": -37093.93999999997
+      },
+      "holdout": {
+        "n": 0,
+        "wins": 0,
+        "win_rate": null,
+        "pf": null,
+        "sum": 0.0,
+        "expectancy": null,
+        "max_dd": 0.0
+      },
+      "exits": {
+        "sl": 234,
+        "time": 222,
+        "sl_both": 176,
+        "tp": 171
+      },
+      "verdict": "fails",
+      "series": "BTCUSDT_1H_MACRO",
+      "approach": "h1_always_long_cash_hour"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "event": "cash",
+      "or_minutes": 60,
+      "mode": "always_short",
+      "time_stop_min": 60,
+      "tp_r": 1.0,
+      "holdout_start": "2025-01-01",
+      "n_session_days": 804,
+      "costs": {
+        "point": 0.01,
+        "slip_points": 800.0,
+        "fallback_spread_points": 200.0
+      },
+      "all": {
+        "n": 803,
+        "wins": 295,
+        "win_rate": 0.36737235367372356,
+        "pf": 0.6902411639073373,
+        "sum": -23265.05999999999,
+        "expectancy": -28.972677459526764,
+        "max_dd": -23758.91999999999
+      },
+      "all_R": {
+        "n": 803,
+        "wins": 295,
+        "win_rate": 0.36737235367372356,
+        "pf": 0.45151058591862153,
+        "sum": -256.2281116341111,
+        "expectancy": -0.3190885574521931,
+        "max_dd": -257.18549194381416
+      },
+      "develop": {
+        "n": 803,
+        "wins": 295,
+        "win_rate": 0.36737235367372356,
+        "pf": 0.6902411639073373,
+        "sum": -23265.05999999999,
+        "expectancy": -28.972677459526764,
+        "max_dd": -23758.91999999999
+      },
+      "holdout": {
+        "n": 0,
+        "wins": 0,
+        "win_rate": null,
+        "pf": null,
+        "sum": 0.0,
+        "expectancy": null,
+        "max_dd": 0.0
+      },
+      "exits": {
+        "time": 248,
+        "tp": 202,
+        "sl": 191,
+        "sl_both": 162
+      },
+      "verdict": "fails",
+      "series": "BTCUSDT_1H_MACRO",
+      "approach": "h1_always_short_cash_hour"
+    }
+  ],
+  "gates": {
+    "min_trades": 80,
+    "min_holdout": 30,
+    "pf_survive": 1.3,
+    "pf_holdout": 1.1,
+    "note": "Desk-research gates. Not cTrader live gates. Not US-index 1%/20%."
+  },
+  "prior_locked": {
+    "us_index_session_v1_v8": "promote=no; US100 M5 cash ORB/VWAP/EMA and later families missed 1%/20%",
+    "eurusd_ny_scalp": "promote=no; 192-config + specified-book replay SCREEN_FAIL",
+    "fx_directional_ta_2026_06": "ORB/trend-pullback on FX majors gross PF ~1.0\u20131.07"
+  },
+  "missing": [
+    "OIL/WTI/CL \u2014 no local OHLC",
+    "No 10y M1/M5 book for NQ/XAU/BTC/Oil. Longest fine grid is EURUSD M5 ~4.9y and XAU M15 ~4.2y.",
+    "CreateGoal tool not available in this session.",
+    "user-mt5-official MCP discovery failed; files read from workspace paths."
+  ]
+}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import FrozenInstanceError, dataclass
 from datetime import datetime
 
@@ -368,3 +369,13 @@ def test_window_metrics_ignore_holdout_pnls() -> None:
     assert empty.profit_factor == 0.0
     assert format_window_line("Develop (first 65%)", empty) == "  Develop (first 65%): 0 trades"
     assert "PF inf" in format_window_line("Develop (first 65%)", develop)
+
+
+def test_live_harness_exit_is_stop_first() -> None:
+    from research.evaluate import backtest_live_entry
+
+    source = inspect.getsource(backtest_live_entry)
+    assert "same_bar_exit" in source
+    assert "if bar_h >= tp" not in source
+    assert "if bar_l <= tp" not in source
+

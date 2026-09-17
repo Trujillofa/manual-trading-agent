@@ -17,7 +17,6 @@ from src.news.surprise import (
     score_surprise,
     surprise_readiness_label,
 )
-from src.scanner.state import _logs_dir
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,12 @@ def resolve_news_cache_path() -> Path:
     Uses the shared logs-dir resolver so host cron (no writable ``/app``)
     persists under ``$LOG_DIR`` or repo-relative ``logs/``, while the
     container still writes ``/app/logs/news_cache.json``.
+
+    Import of ``_logs_dir`` is deferred: ``src.scanner`` package init loads
+    settings/briefing, which import ``NewsEvent`` from this module.
     """
+    from src.scanner.state import _logs_dir
+
     return _logs_dir() / "news_cache.json"
 
 

@@ -347,7 +347,7 @@ class TestXmlParser:
 class TestNewsCache:
     def test_default_cache_path_uses_logs_dir(self, tmp_path, monkeypatch):
         monkeypatch.setattr(NewsChecker, "CACHE_PATH", None)
-        monkeypatch.setattr("src.news.news_checker._logs_dir", lambda: tmp_path)
+        monkeypatch.setattr("src.scanner.state._logs_dir", lambda: tmp_path)
         app_existed = Path("/app").exists()
 
         checker = NewsChecker()

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from src.news.news_checker import NewsChecker, NewsEvent
+from src.news.news_checker import NewsChecker, NewsEvent, resolve_news_cache_path
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -345,6 +345,30 @@ class TestXmlParser:
 
 
 class TestNewsCache:
+    def test_default_cache_path_uses_logs_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(NewsChecker, "CACHE_PATH", None)
+        monkeypatch.setattr("src.news.news_checker._logs_dir", lambda: tmp_path)
+        app_existed = Path("/app").exists()
+
+        checker = NewsChecker()
+        assert tmp_path / "news_cache.json" == checker.CACHE_PATH
+        checker._last_fetch = datetime(2026, 8, 25, 11, 15, tzinfo=UTC)
+        checker._save_cache()
+
+        assert (tmp_path / "news_cache.json").exists()
+        if not app_existed:
+            assert not Path("/app").exists()
+
+    def test_default_cache_path_honors_log_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(NewsChecker, "CACHE_PATH", None)
+        monkeypatch.delenv("MANUAL_TRADING_AGENT_LOG_DIR", raising=False)
+        monkeypatch.setenv("LOG_DIR", str(tmp_path / "from-log-dir"))
+
+        expected = tmp_path / "from-log-dir" / "news_cache.json"
+        assert expected == resolve_news_cache_path()
+        checker = NewsChecker()
+        assert expected == checker.CACHE_PATH
+
     def test_old_cache_payload_still_loads(self, tmp_path, monkeypatch):
         cache_path = tmp_path / "news_cache.json"
         monkeypatch.setattr(NewsChecker, "CACHE_PATH", cache_path)

@@ -10,6 +10,7 @@ from src.scanner.telemetry import _aggregate_scan_telemetry, _build_scan_telemet
 
 def test_logs_dir_falls_back_to_local_logs(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("MANUAL_TRADING_AGENT_LOG_DIR", raising=False)
+    monkeypatch.delenv("LOG_DIR", raising=False)
     monkeypatch.chdir(tmp_path)
 
     assert _logs_dir() == tmp_path / "logs"
@@ -20,6 +21,21 @@ def test_logs_dir_uses_env_override(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("MANUAL_TRADING_AGENT_LOG_DIR", str(override))
 
     assert _logs_dir() == Path(str(override))
+
+
+def test_logs_dir_uses_log_dir_env(monkeypatch, tmp_path) -> None:
+    monkeypatch.delenv("MANUAL_TRADING_AGENT_LOG_DIR", raising=False)
+    override = tmp_path / "from-log-dir"
+    monkeypatch.setenv("LOG_DIR", str(override))
+
+    assert _logs_dir() == Path(str(override))
+
+
+def test_logs_dir_prefers_manual_trading_env_over_log_dir(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("MANUAL_TRADING_AGENT_LOG_DIR", str(tmp_path / "specific"))
+    monkeypatch.setenv("LOG_DIR", str(tmp_path / "generic"))
+
+    assert _logs_dir() == tmp_path / "specific"
 
 
 def test_build_scan_telemetry_payload_sets_expected_counts_and_blockers() -> None:

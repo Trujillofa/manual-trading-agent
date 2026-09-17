@@ -122,6 +122,8 @@ def test_host_briefing_script_uses_emilio_hermes_env() -> None:
     assert "HERMES_HOME" in text
     assert "/home/emilio/.local/bin" in text
     assert "pre-ny-briefing" in text
+    assert 'LOG_DIR="${APP_DIR}/logs"' in text
+    assert "MANUAL_TRADING_AGENT_LOG_DIR" in text
     exec_lines = [line for line in text.splitlines() if line.lstrip().startswith("exec ")]
     assert exec_lines
     assert all("--safe-mode" not in line for line in exec_lines)

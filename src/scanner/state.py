@@ -84,9 +84,22 @@ def _normalize_pair_keyed_state(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _logs_dir() -> Path:
-    configured = os.getenv("MANUAL_TRADING_AGENT_LOG_DIR")
+    """Resolve the logs directory for host and Docker.
+
+    Precedence:
+      1. ``MANUAL_TRADING_AGENT_LOG_DIR`` (explicit override, used in tests).
+      2. ``LOG_DIR`` (docker-compose, scanner loop, host briefing cron).
+      3. ``/app/logs`` when that directory exists and is writable (container).
+      4. ``/app/logs`` when ``/app`` exists and is writable (container default).
+      5. ``./logs`` relative to the current working directory (host / local).
+    """
+    configured = os.getenv("MANUAL_TRADING_AGENT_LOG_DIR") or os.getenv("LOG_DIR")
     if configured:
         return Path(configured)
+
+    app_logs = Path("/app/logs")
+    if app_logs.exists() and os.access(app_logs, os.W_OK):
+        return app_logs
 
     app_root = Path("/app")
     if app_root.exists() and os.access(app_root, os.W_OK):

@@ -5,6 +5,9 @@
 # This is the scheduled invoke path: PATH + HERMES_HOME belong to emilio,
 # so `hermes chat -q` can reach the existing glm-5.2 / Z.AI install.
 # Do not pass --safe-mode (drops Z.AI). Failure must not take down the scan loop.
+#
+# News cache / briefing state must live under the host repo logs/ directory.
+# Do not inherit compose/.env LOG_DIR=/app/logs — that path is not writable here.
 
 set -eu
 
@@ -21,6 +24,12 @@ if [ -f .env ]; then
   . ./.env
   set +a
 fi
+
+# Unambiguous host logs: never /app/logs from the container compose default.
+export APP_DIR="${APP_DIR:-/home/emilio/manual-trading-agent}"
+export LOG_DIR="${APP_DIR}/logs"
+export MANUAL_TRADING_AGENT_LOG_DIR="${LOG_DIR}"
+mkdir -p "${LOG_DIR}"
 
 PYTHON="${PYTHON:-${APP_DIR}/.venv/bin/python}"
 if [ ! -x "${PYTHON}" ]; then

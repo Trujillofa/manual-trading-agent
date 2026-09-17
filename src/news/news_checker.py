@@ -23,6 +23,21 @@ logger = logging.getLogger(__name__)
 SOURCE_GROK = "grok"
 
 
+def resolve_news_cache_path() -> Path:
+    """Host- and Docker-safe path for ``news_cache.json``.
+
+    Uses the shared logs-dir resolver so host cron (no writable ``/app``)
+    persists under ``$LOG_DIR`` or repo-relative ``logs/``, while the
+    container still writes ``/app/logs/news_cache.json``.
+
+    Import of ``_logs_dir`` is deferred: ``src.scanner`` package init loads
+    settings/briefing, which import ``NewsEvent`` from this module.
+    """
+    from src.scanner.state import _logs_dir
+
+    return _logs_dir() / "news_cache.json"
+
+
 @dataclass(frozen=True)
 class NewsEvent:
     timestamp: datetime
@@ -41,7 +56,8 @@ class NewsChecker:
     """Check for 3-star news events that should block trading."""
 
     FOREX_FACTORY_URL: str = "https://nfs.faireconomy.media/ff_calendar_thisweek.xml"
-    CACHE_PATH: Path = Path("/app/logs/news_cache.json")
+    # Class override for tests; ``None`` resolves via ``resolve_news_cache_path``.
+    CACHE_PATH: Path | None = None
     _IMPACT_TO_IMPORTANCE: dict[str, int] = {
         "high": 3,
         "medium": 2,
@@ -61,13 +77,23 @@ class NewsChecker:
         self._last_fetch: datetime | None = None
         self._next_allowed_fetch: datetime | None = None
         self._cache_ttl = timedelta(minutes=15)
+        cache_path = type(self).CACHE_PATH
+        self.CACHE_PATH = resolve_news_cache_path() if cache_path is None else cache_path
         self._load_cache()
 
+    def _cache_file(self) -> Path:
+        path = self.CACHE_PATH
+        if path is None:
+            path = resolve_news_cache_path()
+            self.CACHE_PATH = path
+        return path
+
     def _load_cache(self) -> None:
-        if not self.CACHE_PATH.exists():
+        cache_path = self._cache_file()
+        if not cache_path.exists():
             return
         try:
-            payload = json.loads(self.CACHE_PATH.read_text(encoding="utf-8"))
+            payload = json.loads(cache_path.read_text(encoding="utf-8"))
             events_raw = payload.get("events", [])
             self._events = [self._event_from_cache_item(item) for item in events_raw]
             last_fetch = payload.get("last_fetch")
@@ -110,7 +136,8 @@ class NewsChecker:
 
     def _save_cache(self) -> None:
         try:
-            self.CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            cache_path = self._cache_file()
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
             payload = {
                 "last_fetch": self._last_fetch.isoformat() if self._last_fetch else None,
                 "next_allowed_fetch": (
@@ -118,7 +145,7 @@ class NewsChecker:
                 ),
                 "events": [self._event_to_cache_item(event) for event in self._events],
             }
-            self.CACHE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            cache_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except OSError as exc:
             logger.warning("news cache persist failed: %s", exc)
 

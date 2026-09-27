@@ -27,7 +27,7 @@ EMA 20/50 remains indicator context on the briefing card. Standalone EMA Telegra
 
 1. Treat every Telegram alert as **discretionary context**.
 2. Do not map alert count → trading frequency or “edge is working.”
-3. Use ETR shadow / audit logs as **evidence collection**, not as live sizing inputs, until a written price-basis audit and KEEP gates pass.
+3. Use ETR shadow / audit logs as **evidence collection**, not as live sizing inputs. Price-basis audit written 2026-08-22 (`docs/research/etr_shadow/ETR_SHADOW_PRICE_BASIS_AUDIT_2026-08.md`): nasdaq is terminal-native; btc/gold/oil match yfinance scale. KEEP gates have not passed.
 4. Hermes HTF / S/R / ETR thesis must not set the Plan NY action. Only `evaluate_entry` may.
 5. New profitability work happens on **isolated research branches/worktrees** under the harness rules — not by retuning live Branch B gates for P&L.
 

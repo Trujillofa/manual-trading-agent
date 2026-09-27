@@ -2,8 +2,10 @@
 
 ## Audit outcome
 
-No source has passed yet. This document defines the evidence required to record
-`DATA_PASS` or `BLOCKED`. It does not approve a vendor or authorize a purchase.
+No source has passed yet. 2026-08-22 refresh: still `BLOCKED`
+(`docs/research/pead/PEAD_SOURCE_AUDIT_RESULTS_2026-08.md`). This document
+defines the evidence required to record `DATA_PASS` or `BLOCKED`. It does not
+approve a vendor or authorize a purchase.
 
 ## Audit order
 

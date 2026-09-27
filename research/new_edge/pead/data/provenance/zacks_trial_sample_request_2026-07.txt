@@ -1,0 +1,65 @@
+Subject: Free evaluation sample request — ZACKS/EEH + ZACKS/ES (PEAD data-gate trial)
+
+To: Zacks Data Sales (zacksdata.com/request-access) or Nasdaq Data Link premium support
+
+---
+
+Hello,
+
+We are evaluating Zacks earnings data for an academic-style point-in-time research
+gate (post-earnings announcement drift / PEAD). This message is a request for a
+**free evaluation sample only** — not a paid subscription. Any production license
+would follow a separate internal approval step after the sample passes our
+verifier.
+
+## Primary tables (required for this trial)
+
+| Nasdaq DB | Table code | Purpose |
+|-----------|------------|---------|
+| ZEEH | ZACKS/EEH | Consensus estimate revision history (`obs_date`, `eps_mean_est`) |
+| ZES  | ZACKS/ES  | Realized announcements (`act_rpt_date`, `act_rpt_time`, `act_rpt_code`, `eps_act`) |
+
+Please do **not** substitute ZEE (current snapshot) or ZEA (forward calendar) —
+our gate requires EEH revision history joined to ES surprise rows.
+
+## Sample scope
+
+- **Symbols:** AAPL plus 50 delisted US names (survivorship-bias check)
+- **Window:** 2015-01-01 through 2020-12-31 (quarterly)
+- **Format:** CSV or bulk file delivery acceptable
+
+## Deliverables we need with the sample
+
+1. **Collision table:** For each ES row, count where `max(obs_date) == act_rpt_date`
+   on the joined EEH history, split by `act_rpt_code` (BTO / DTM / AMC).
+
+2. **Retention rates:** Eligible event counts under:
+   - **Strict join:** `max(obs_date) < act_rpt_date`
+   - **Relaxed join:** strict OR (`act_rpt_code = AMC` AND `obs_date == act_rpt_date`)
+
+3. **BNRI methodology note:** Brief confirmation that `eps_act` and joined
+   `eps_mean_est` use comparable Zacks BNRI definitions.
+
+4. **License snippet:** Written confirmation that we may pin the sample locally
+   for read-only verification (no redistribution) under trial terms.
+
+## Follow-on scope (not required in initial sample, but please note)
+
+If the estimate/announcement gate passes, a full DATA_PASS verification also
+requires daily OHLCV, survivorship-safe security master, and point-in-time
+sector history. We anticipate requesting follow-on trial access to ZACKS/MT,
+prices/returns, and sector classification feeds. Flagging this now so trial
+access can be scoped accordingly.
+
+## References
+
+- ZEEH: https://data.nasdaq.com/databases/ZEEH
+- ZES:  https://data.nasdaq.com/databases/ZES
+- Internal gate doc: PEAD contract requires estimate observation strictly
+  before announcement (no vendor surprise fields).
+
+Thank you — happy to jump on a short call if easier.
+
+[Your name]
+[Organization]
+[Contact email]

@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "lane": "pead",
+  "stage": "source_probe",
+  "verdict": "INSUFFICIENT",
+  "retrieved_at_utc": "2026-07-07T14:35:00+00:00",
+  "source": {
+    "publisher": "Alpha Vantage",
+    "api_base": "https://www.alphavantage.co/query",
+    "endpoints_probed": [
+      "EARNINGS",
+      "EARNINGS_ESTIMATES",
+      "LISTING_STATUS",
+      "EARNINGS_CALENDAR",
+      "OVERVIEW"
+    ],
+    "user_key_present": true,
+    "symbol_probe": "AAPL"
+  },
+  "earnings_fields_observed": [
+    "fiscalDateEnding",
+    "reportedDate",
+    "reportedEPS",
+    "estimatedEPS",
+    "surprise",
+    "surprisePercentage",
+    "reportTime"
+  ],
+  "estimates_fields_observed": [
+    "date",
+    "horizon",
+    "eps_estimate_average",
+    "eps_estimate_high",
+    "eps_estimate_low",
+    "eps_estimate_analyst_count",
+    "eps_estimate_average_7_days_ago",
+    "eps_estimate_average_30_days_ago",
+    "eps_estimate_average_60_days_ago",
+    "eps_estimate_average_90_days_ago",
+    "eps_estimate_revision_up_trailing_7_days",
+    "eps_estimate_revision_down_trailing_30_days",
+    "revenue_estimate_average"
+  ],
+  "sample_quarter": {
+    "fiscalDateEnding": "2026-03-31",
+    "reportedDate": "2026-04-30",
+    "reportedEPS": "1.65",
+    "estimatedEPS": "1.63",
+    "surprise": "0.02",
+    "surprisePercentage": "1.2269",
+    "reportTime": "post-market"
+  },
+  "coverage_probe": {
+    "symbol": "AAPL",
+    "quarterly_earnings_rows": 121,
+    "oldest_reported_date": "1996-04-17",
+    "newest_reported_date": "2026-04-30",
+    "report_time_counts": {
+      "post-market": 100,
+      "pre-market": 21
+    },
+    "earnings_estimates_rows": 40,
+    "listing_status_format": "csv",
+    "listing_status_fields": [
+      "symbol",
+      "name",
+      "exchange",
+      "assetType",
+      "ipoDate",
+      "delistingDate",
+      "status"
+    ],
+    "earnings_calendar_format": "csv",
+    "earnings_calendar_fields": [
+      "symbol",
+      "name",
+      "reportDate",
+      "fiscalDateEnding",
+      "estimate",
+      "currency",
+      "timeOfTheDay"
+    ],
+    "overview_sector_current": "TECHNOLOGY"
+  },
+  "pead_gate_gaps": [
+    "no estimate_observation_timestamp",
+    "reportedDate is date-only; reportTime is pre/post-market label only",
+    "EARNINGS_ESTIMATES revision trails are not point-in-time consensus snapshots",
+    "LISTING_STATUS active-only; not survivorship-safe point-in-time master",
+    "per-symbol EARNINGS history; not 500+ cross-section archive",
+    "free tier rate-limited (25 req/day; 1 req/sec throttle)"
+  ],
+  "reference": "https://www.alphavantage.co/documentation/#earnings"
+}

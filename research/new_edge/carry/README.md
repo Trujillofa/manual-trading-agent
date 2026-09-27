@@ -1,25 +1,28 @@
 # Carry / Swap-Aware FX Portfolio lane (new_edge)
 
-This is the first lane in the Grok-driven new edge program per GROK_RESEARCH_LOOP_ENGINEERING.md and PROFITABILITY_PLAN_2026-06.md.
+## Status (2026-08-13)
 
-## Status
-Contract written 2026-06-11. Data verification in progress. No strategy logic yet.
+Vantage MT5 broker-true static carry: `DATA_PASS` → thin pip-correct `GROSS_PASS_REAL_DATA` → net+IS/OOS **`DISCARD_REAL_DATA`** (OOS PF 1.043 < 1.20).
+
+Do **not** retune legs/costs on this prototype. Hetzner cTrader zero-swap remains CLOSED_DISCARD.
+
+See `docs/research/lanes/LANE3_BROKER_CARRY_2026-08.md`.
 
 ## Structure
-- docs/research/carry/ : contracts, results, manifests
-- research/new_edge/carry/ : code (data/ only for now)
-- research/new_edge/research_ledger.jsonl : machine readable memory
 
-## Current focus
-Verify broker swap units, rollover rules, daily OHLC coverage before any backtest or strategy code.
+- `docs/research/carry/` — contracts, manifests, gross/net results
+- `research/new_edge/carry/` — verifier, `gross_carry_test`, `net_carry_test`
+- `research/new_edge/research_ledger.jsonl` — ledger
 
-See CARRY_CONTRACT_2026-06-11.md for full details and first command.
+## Commands
 
-## How to run verification
-(After data verifier implemented)
+```bash
+.venv/bin/python -m research.new_edge.carry.data.verify_carry_data \
+  --rates research/new_edge/carry/data/verified_swap_rates_VANTAGE_2026-08-13.json --quick ...
 
-## Notes
-- Uses existing dukascopy_fetcher and yfinance for OHLC.
-- Swap data will require new source (broker API or static verified table).
-- All results will be gross-first, then net, with IS/OOS.
-- Lane will be marked KEEP / DISCARD / BLOCKED with ledger entry before next lane.
+.venv/bin/python -m research.new_edge.carry.gross_carry_test \
+  --rates ... --economics auto ...
+
+.venv/bin/python -m research.new_edge.carry.net_carry_test \
+  --rates ... --economics auto --is-end 2021-12-31 ...
+```

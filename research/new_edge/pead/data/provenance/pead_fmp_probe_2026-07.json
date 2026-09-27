@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "lane": "pead",
+  "stage": "source_probe",
+  "verdict": "INSUFFICIENT",
+  "retrieved_at_utc": "2026-07-06T21:00:00+00:00",
+  "source": {
+    "publisher": "Financial Modeling Prep",
+    "api_base": "https://financialmodelingprep.com",
+    "endpoints_probed": [
+      "/api/v3/earning_calendar",
+      "/stable/earnings",
+      "/stable/earnings-calendar",
+      "/stable/analyst-estimates"
+    ],
+    "user_key_present": true,
+    "legacy_v3_status": "legacy_forbidden",
+    "stable_earnings_status": "probed",
+    "stable_calendar_default_status": "probed",
+    "stable_calendar_range_status": "payment_required",
+    "stable_analyst_estimates_quarter_status": "payment_required"
+  },
+  "stable_earnings_fields_observed": [
+    "symbol",
+    "date",
+    "epsActual",
+    "epsEstimated",
+    "revenueActual",
+    "revenueEstimated",
+    "lastUpdated"
+  ],
+  "sample_row": {
+    "symbol": "AAPL",
+    "date": "2026-04-30",
+    "epsActual": 2.01,
+    "epsEstimated": 1.95,
+    "revenueActual": 111184000000,
+    "revenueEstimated": 109457600000,
+    "lastUpdated": "2026-07-07"
+  },
+  "coverage_probe": {
+    "symbol": "AAPL",
+    "stable_earnings_rows": 164,
+    "oldest_date": "1985-09-30",
+    "newest_date": "2026-07-30",
+    "default_calendar_rows": 76,
+    "default_calendar_unique_symbols": 76,
+    "default_calendar_date_range": "2026-04-08 to 2026-06-30"
+  },
+  "pead_gate_gaps": [
+    "no estimate_observation_timestamp",
+    "announcement date-only; no timezone timestamp",
+    "lastUpdated is record refresh metadata, not pre-announcement consensus snapshot",
+    "legacy v3 endpoints forbidden on current subscription",
+    "historical earnings_calendar date windows require premium (402)",
+    "default calendar window ~76 symbols, not 500+ survivorship-safe cross-section",
+    "per-symbol earnings history; no bulk survivorship-safe master"
+  ],
+  "reference": "https://site.financialmodelingprep.com/developer/docs/stable-earnings-calendar"
+}

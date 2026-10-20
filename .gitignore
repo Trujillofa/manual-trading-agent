@@ -36,6 +36,7 @@ Thumbs.db
 *.log
 logs/
 /data/
+.deploy-sha
 
 # Backtest results
 results/

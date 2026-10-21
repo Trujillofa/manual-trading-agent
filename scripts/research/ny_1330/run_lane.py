@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import subprocess
 import sys
 from dataclasses import asdict
 from datetime import UTC, date, datetime, timedelta
@@ -69,6 +70,17 @@ def _json_ready(obj):
     if isinstance(obj, (datetime, date, pd.Timestamp)):
         return str(obj)
     return obj
+
+
+def _git_short(*args: str) -> str:
+    """Short sha for the results stamp; never hard-code the base."""
+    try:
+        sha = subprocess.run(
+            ["git", "-C", str(WORKTREE), *args], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        return sha[:7] or "unknown"
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
 
 
 def _arrays(df: pd.DataFrame):
@@ -718,7 +730,8 @@ def main() -> int:
         "generated_at_utc": datetime.now(UTC).isoformat(),
         "worktree": str(WORKTREE),
         "branch": "research/ny-1330-cash-open",
-        "base": "origin/main e1f9612",
+        "base": f"origin/main {_git_short('merge-base', 'HEAD', 'origin/main')}",
+        "head": _git_short("rev-parse", "HEAD"),
         "paper_only": True,
         "clock_validation": {
             "method": (

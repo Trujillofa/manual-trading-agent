@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -213,10 +215,49 @@ def _surprise_readiness(events: list[NewsEvent]) -> str:
     return surprise_readiness_label(has)
 
 
+_FETCH_ATTEMPTS = 3
+_FETCH_BACKOFF_SECONDS = (0.5, 1.5)
+
+# Storage-layer failures that are transient (disk pressure, WAL contention) rather
+# than a bad symbol/URL. Retrying is safe: the fetch is a pure read.
+def _is_transient_fetch_error(exc: BaseException) -> bool:
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return True
+    if isinstance(exc, sqlite3.OperationalError):
+        msg = str(exc).lower()
+        return any(
+            key in msg
+            for key in ("disk i/o error", "database is locked", "unable to open", "readonly")
+        )
+    return False
+
+
 def _default_fetcher(instrument_id: str) -> dict[str, pd.DataFrame]:
+    """Fetch 1h/30m/15m frames, retrying transient storage errors.
+
+    A single disk-pressure window used to blank the technical pillar for every
+    instrument in that cycle (32 consecutive `briefing OHLC failed: disk I/O
+    error` entries) even though the next fetch seconds later succeeded.
+    """
     from src.data.fetcher import DataFetcher
 
-    return DataFetcher().fetch_multi_timeframe(instrument_id, period="7d")
+    last: BaseException | None = None
+    for attempt in range(1, _FETCH_ATTEMPTS + 1):
+        try:
+            return DataFetcher().fetch_multi_timeframe(instrument_id, period="7d")
+        except Exception as exc:  # noqa: BLE001 — re-raised when not transient
+            if not _is_transient_fetch_error(exc) or attempt == _FETCH_ATTEMPTS:
+                raise
+            last = exc
+            logger.warning(
+                "briefing OHLC transient failure for %s (attempt %d/%d): %s",
+                instrument_id,
+                attempt,
+                _FETCH_ATTEMPTS,
+                exc,
+            )
+            time.sleep(_FETCH_BACKOFF_SECONDS[min(attempt - 1, len(_FETCH_BACKOFF_SECONDS) - 1)])
+    raise last if last else RuntimeError("fetch failed")
 
 
 async def _load_news(

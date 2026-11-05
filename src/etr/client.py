@@ -248,7 +248,8 @@ class EtrClient:
                     raise RuntimeError(
                         f"ETR renderer HTTP {response.status_code} for {asset}"
                     )
-                return response.json()
+                payload: dict[str, Any] = response.json()
+                return payload
 
             data = await _render(session)
             if "/login" in str(data.get("url", "")):

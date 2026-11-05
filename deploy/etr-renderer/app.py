@@ -16,16 +16,15 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from playwright.async_api import async_playwright
 
-# The page shows the analysis once it has fresh quotes; when it does not, it says
-# so in one of these ways. Waiting for either avoids a fixed sleep that is both
-# slower and less reliable.
+# Wait for the analysis itself. Do NOT wait for the "reconnecting prices" or
+# "escenarios se mostrarán" notices: both appear transiently while the page is
+# still hydrating, and matching them returned a half-rendered header instead of
+# the analysis. When the terminal genuinely has nothing, the wait times out and
+# we return the settled page, which carries the notice the caller needs.
 READY_JS = """
 () => {
   const t = document.body.innerText.toLowerCase();
-  return t.includes('context score')
-      || t.includes('escenarios se mostrar')
-      || t.includes('historial de 5m está desactualizado')
-      || t.includes('reconectando precios');
+  return t.includes('context score') || t.includes('sesgo');
 }
 """
 
@@ -75,8 +74,9 @@ async def render(req: RenderRequest) -> dict[str, object]:
             )
             try:
                 await page.wait_for_function(READY_JS, timeout=req.timeout_ms)
-            except Exception:  # noqa: BLE001 - fall through and return what rendered
-                pass
+            except Exception:  # noqa: BLE001 - no analysis: return the notice
+                await page.wait_for_timeout(3_000)
+            await page.wait_for_timeout(300)
             text = await page.inner_text("body")
             return {
                 "text": text,

@@ -375,7 +375,16 @@ def parse_rendered_text(text: str, asset: str) -> EtrReport:
                 f"ETR has no current analysis for {asset}: the terminal reports "
                 "stale M5 history or reconnecting prices"
             )
-        raise ValueError(f"ETR render for {asset} contained no analysis section")
+        # The app shell loaded but the terminal rendered no analysis at all. That
+        # is what an asset with no candles on the account looks like (NASDAQ right
+        # now): a page, no notice, no report. Distinguish it from a page that never
+        # loaded — that genuinely is an error.
+        if "análisis técnico" in lowered:
+            raise EtrUnavailableError(
+                f"ETR has no current analysis for {asset}: the terminal rendered no "
+                "analysis section (no candles or scenarios pending)"
+            )
+        raise ValueError(f"ETR render for {asset} did not load the analysis page")
 
     score_raw = _line_after(lines, "context score")
     context_score = _first_number(score_raw) if score_raw else None

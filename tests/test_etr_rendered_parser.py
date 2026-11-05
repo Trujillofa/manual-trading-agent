@@ -55,3 +55,16 @@ def test_a_page_without_scenarios_is_unavailable_not_a_parse_error() -> None:
         parse_rendered_text(_text("etr_rendered_gold_unavailable.txt"), "gold")
 
     assert "gold" in str(excinfo.value)
+
+
+def test_an_authenticated_page_without_an_analysis_section_is_unavailable() -> None:
+    """NASDAQ currently renders the app shell with no candles and no notice."""
+    shell = "ETR EDGE / EXNESS\n\nAnálisis técnico\n\nTus gráficos, las cotizaciones de tu cuenta y los escenarios H4 / M5 en un solo lugar."
+
+    with pytest.raises(EtrUnavailableError):
+        parse_rendered_text(shell, "nasdaq")
+
+
+def test_a_page_that_never_loaded_is_still_an_error() -> None:
+    with pytest.raises(ValueError, match="did not load"):
+        parse_rendered_text("Iniciar sesión\nCorreo\nContraseña", "btc")

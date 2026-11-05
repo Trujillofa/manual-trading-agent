@@ -34,7 +34,7 @@ app = FastAPI(title="etr-renderer")
 class RenderRequest(BaseModel):
     url: str
     cookie: str
-    timeout_ms: int = 60_000
+    timeout_ms: int = 90_000
 
 
 @app.get("/health")
@@ -78,6 +78,12 @@ async def render(req: RenderRequest) -> dict[str, object]:
                 await page.wait_for_timeout(3_000)
             await page.wait_for_timeout(300)
             text = await page.inner_text("body")
+            low = text.lower()
+            print(
+                f"render {req.url} chars={len(text)} score={'context score' in low} "
+                f"sesgo={'sesgo' in low} unavailable={'escenarios se mostrar' in low or 'reconectando' in low}",
+                flush=True,
+            )
             return {
                 "text": text,
                 "url": page.url,

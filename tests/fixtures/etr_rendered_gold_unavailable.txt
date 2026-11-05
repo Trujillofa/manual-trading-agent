@@ -1,0 +1,163 @@
+EL TRADER ROLO
+
+ETR Edge
+
+PLATAFORMA
+
+Noticias y calendario
+Trading Terminal
+Dashboard
+Operaciones
+Estadísticas
+Comunidad
+Agenda presencial
+Torneos
+Análisis técnico
+Psicotrading IA
+Conexiones
+Cómo conectar mi cuenta
+Comprobar mi vinculación
+¿Tienes un problema?
+F
+
+Usuario Demo
+
+Exness
+
+Cuenta verificada
+Buenas tardes, Usuario Demo
+
+Jueves, 5 de noviembre
+
+Journal: actualizado
+Tutorial
+Noticias
+Terminal
+Comunidad
+¿Tienes un problema?
+Ver perfil
+Cerrar sesión
+
+ETR EDGE / EXNESS
+
+Análisis técnico
+
+Tus gráficos, las cotizaciones de tu cuenta y los escenarios H4 / M5 en un solo lugar.
+
+Ir a operar
+Bitcoin
+Oro
+Nasdaq
+Petróleo
+Cuenta Exness
+Exness · 00000000000
+
+Oro · XAUUSD
+
+Escenarios con velas cerradas H4 / M5 · Los gráficos reciben cada cotización disponible.
+
+Actualizar
+Mercado · XAUUSD
+
+EMA 20 / 50 · RSI 14 · Precios Bid de Exness
+
+1
+2
+
+Puedes cambiar la temporalidad visual de cada gráfico. Los escenarios de abajo siempre se calculan con H4 y M5. Los dibujos y controles de esta vista no envían órdenes.
+
+1 · XAUUSD
+Temporalidad
+1 segundo
+5 segundos
+15 segundos
+1 minuto
+3 minutos
+5 minutos
+10 minutos
+15 minutos
+30 minutos
+1 hora
+2 horas
+4 horas
+1 día
+1 semana
+1 mes
+Ampliar
+○ Reconectando precios…
+Reconectar
+ƒx
+Indicadores
+Dibujos
+XAUUSD · 4 horas · Bogotá (UTC−5)
+Apertura 4114.189
+Máximo 4114.471
+Mínimo 4081.233
+Cierre 4088.572
+EMA 20
+EMA 50
+RSI 14
+	
+	
+
+
+
+	
+	
+
+	
+	
+Mis dibujos (0)
+Mostrar posiciones y órdenes
+
+TradingView Lightweight Charts™ · Copyright (с) 2025 TradingView, Inc. · TradingView. Datos de Exness.
+
+2 · XAUUSD
+Temporalidad
+1 segundo
+5 segundos
+15 segundos
+1 minuto
+3 minutos
+5 minutos
+10 minutos
+15 minutos
+30 minutos
+1 hora
+2 horas
+4 horas
+1 día
+1 semana
+1 mes
+Ampliar
+○ Reconectando precios…
+Reconectar
+ƒx
+Indicadores
+Dibujos
+XAUUSD · 5 minutos · Bogotá (UTC−5)
+Apertura 4088.136
+Máximo 4089.130
+Mínimo 4087.912
+Cierre 4088.572
+EMA 20
+EMA 50
+RSI 14
+	
+	
+
+
+
+	
+	
+
+	
+	
+Mis dibujos (0)
+Mostrar posiciones y órdenes
+
+TradingView Lightweight Charts™ · Copyright (с) 2025 TradingView, Inc. · TradingView. Datos de Exness.
+
+El historial de 5m está desactualizado. Espera a que Exness envíe velas recientes o actualiza los datos. Los escenarios se mostrarán cuando tengamos precios e historial vigentes. Los gráficos conservan los datos recibidos.
+
+Esta lectura usa reglas técnicas de ETR y precios de Exness. La IA permanece en Psicotrading. TP1 y TP2 son zonas técnicas; no sustituyen el SL del 1,72% ni el TP del 4% de tus órdenes. Para enviar o modificar una operación, entra al Trading Terminal.

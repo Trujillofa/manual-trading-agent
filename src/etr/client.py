@@ -235,15 +235,22 @@ class EtrClient:
 
         url = f"{SITE_ORIGIN}{ASSET_PATHS[asset]}"
         session = await self.ensure_session()
-        # A browser render takes seconds; the plain HTTP timeout is too short.
-        timeout = max(self.timeout * 3, 90.0)
+        # A browser render takes seconds — longer on a cold page with charts.
+        timeout = max(self.timeout * 3, 180.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
 
             async def _render(cookie_session: dict[str, Any]) -> dict[str, Any]:
-                response = await client.post(
-                    f"{self.renderer_url}/render",
-                    json={"url": url, "cookie": self._cookie_header(cookie_session)},
-                )
+                try:
+                    response = await client.post(
+                        f"{self.renderer_url}/render",
+                        json={"url": url, "cookie": self._cookie_header(cookie_session)},
+                    )
+                except httpx.HTTPError as exc:
+                    # httpx timeouts stringify to "" — name the type or the log
+                    # line is an empty error with no way to tell what happened.
+                    raise RuntimeError(
+                        f"ETR renderer {type(exc).__name__} for {asset}: {exc!r}"
+                    ) from exc
                 if response.status_code != 200:
                     raise RuntimeError(
                         f"ETR renderer HTTP {response.status_code} for {asset}"

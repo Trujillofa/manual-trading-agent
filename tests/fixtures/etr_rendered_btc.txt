@@ -1,0 +1,300 @@
+EL TRADER ROLO
+
+ETR Edge
+
+PLATAFORMA
+
+Noticias y calendario
+Trading Terminal
+Dashboard
+Operaciones
+Estadísticas
+Comunidad
+Agenda presencial
+Torneos
+Análisis técnico
+Psicotrading IA
+Conexiones
+Cómo conectar mi cuenta
+Comprobar mi vinculación
+¿Tienes un problema?
+F
+
+Usuario Demo
+
+Exness
+
+Cuenta verificada
+Buenas tardes, Usuario Demo
+
+Jueves, 5 de noviembre
+
+Journal: actualizado
+Tutorial
+Noticias
+Terminal
+Comunidad
+¿Tienes un problema?
+Ver perfil
+Cerrar sesión
+
+ETR EDGE / EXNESS
+
+Análisis técnico
+
+Tus gráficos, las cotizaciones de tu cuenta y los escenarios H4 / M5 en un solo lugar.
+
+Ir a operar
+Bitcoin
+Oro
+Nasdaq
+Petróleo
+Cuenta Exness
+Exness · 00000000000
+
+Bitcoin · BTCUSD
+
+Escenarios con velas cerradas H4 / M5 · Los gráficos reciben cada cotización disponible.
+
+Actualizar
+Mercado · BTCUSD
+
+EMA 20 / 50 · RSI 14 · Precios Bid de Exness
+
+1
+2
+
+Puedes cambiar la temporalidad visual de cada gráfico. Los escenarios de abajo siempre se calculan con H4 y M5. Los dibujos y controles de esta vista no envían órdenes.
+
+1 · BTCUSD
+Temporalidad
+1 segundo
+5 segundos
+15 segundos
+1 minuto
+3 minutos
+5 minutos
+10 minutos
+15 minutos
+30 minutos
+1 hora
+2 horas
+4 horas
+1 día
+1 semana
+1 mes
+Ampliar
+● En vivo
+Bid 75972.25 · Ask 75978.65
+ƒx
+Indicadores
+Dibujos
+BTCUSD · 4 horas · Bogotá (UTC−5)
+Apertura 76236.43
+Máximo 76268.11
+Mínimo 75616.87
+Cierre 75972.25
+EMA 20
+EMA 50
+RSI 14
+	
+	
+
+
+
+	
+	
+
+	
+	
+Mis dibujos (0)
+Mostrar posiciones y órdenes
+
+TradingView Lightweight Charts™ · Copyright (с) 2025 TradingView, Inc. · TradingView. Datos de Exness.
+
+2 · BTCUSD
+Temporalidad
+1 segundo
+5 segundos
+15 segundos
+1 minuto
+3 minutos
+5 minutos
+10 minutos
+15 minutos
+30 minutos
+1 hora
+2 horas
+4 horas
+1 día
+1 semana
+1 mes
+Ampliar
+● En vivo
+Bid 75972.25 · Ask 75978.65
+ƒx
+Indicadores
+Dibujos
+BTCUSD · 5 minutos · Bogotá (UTC−5)
+Apertura 75831.45
+Máximo 75972.25
+Mínimo 75796.63
+Cierre 75972.25
+EMA 20
+EMA 50
+RSI 14
+	
+	
+
+
+
+	
+	
+
+	
+	
+Mis dibujos (0)
+Mostrar posiciones y órdenes
+
+TradingView Lightweight Charts™ · Copyright (с) 2025 TradingView, Inc. · TradingView. Datos de Exness.
+
+CONTEXT SCORE
+
+92
+
+/100
+
+Contexto limpio
+
+Mide claridad, alineación y confluencia técnica. No representa una probabilidad de ganancia.
+
+SESGO
+
+Bajista
+
+ESTADO
+
+Esperando Confirmación
+
+LECTURA ACTUAL
+
+Bitcoin · contexto bajista en 4H
+
+Lectura técnica de BTCUSD con velas Bid cerradas de Exness, EMA 20/50 y RSI 14. La cotización actual sitúa el precio frente a las zonas calculadas. El motor prioriza el escenario bajista.
+
+CONTEXTO 4H
+
+Bajista
+
+EMA20 bajo EMA50 · RSI 38.44
+
+EJECUCIÓN 5M
+
+Bajista
+
+EMA20 bajo EMA50 · RSI 46.25
+
+ESTRUCTURA
+
+Bajista
+
+MSS Bajista
+
+SMART MONEY
+
+11
+
+6 FVG · 3 imbalances · 2 OB
+
+EMA 20/50
+RSI
+ATR
+Estructura
+Liquidez
+FVG
+Imbalances
+Order Blocks
+Open Interest
+Funding
+
+FVG ACTIVOS
+
+6
+
+IMBALANCES ACTIVOS
+
+3
+
+ORDER BLOCKS
+
+2
+
+BARRIDAS DE LIQUIDEZ
+
+22
+
+LECTURA TÉCNICA ETR
+
+¿En qué se basa esta lectura?
+
+Reglas técnicas calculadas con las velas cerradas y el precio Bid de Exness. Los escenarios y objetivos se actualizan con estos datos, sin consultar un modelo de IA.
+
+Bitcoin · contexto bajista en 4H
+
+Lectura técnica de BTCUSD con velas Bid cerradas de Exness, EMA 20/50 y RSI 14. La cotización actual sitúa el precio frente a las zonas calculadas. El motor prioriza el escenario bajista.
+
+QUÉ ESPERAR
+
+Prioridad técnica bajista; espera las confirmaciones descritas antes de actuar.
+
+Lectura técnica educativa basada en los datos disponibles. No ejecuta operaciones ni garantiza resultados.
+
+Factores a favor
+8
+4H y 5m están alineados en dirección bajista.
+La estructura principal mantiene dirección bajista.
+El último MSS confirmado respalda el contexto bajista.
+El precio se encuentra cerca de una zona relevante de soporte.
+6 FVG activo(s) respaldan el escenario.
+3 imbalance(s) activo(s) permanecen en la dirección evaluada.
+2 Order Block(s) sin mitigar respaldan el contexto.
+El motor detectó barridas de liquidez relevantes.
+Riesgos y conflictos
+4
+El escenario todavía está esperando confirmación.
+Los objetivos TP1 y TP2 son zonas técnicas; no son los porcentajes automáticos del terminal.
+Tocar una zona no confirma una entrada. Revisa las confirmaciones de precio de cada escenario.
+Esta lectura no incluye noticias, posicionamiento ni volumen negociado; esos datos no están disponibles en este historial.
+
+ESCENARIO PRINCIPAL
+
+Escenario de continuación o reacción bajista
+Bajista
+Principal
+Esperando confirmación
+
+ACTIVACIÓN
+
+Buscar reacción bajista confirmada dentro de la zona 80578.66–81189.63.
+
+CONFIRMACIONES
+
+Esperar rechazo bajista o cierre de confirmación bajo la zona.
+La tendencia de 4H debe mantenerse bajista.
+No ejecutar únicamente por tocar la zona; exigir confirmación de precio.
+
+INVALIDACIÓN
+
+El escenario se invalida con cierre confirmado por encima de 81189.63.
+
+LECTURA DEL MOTOR
+
+Puntuación técnica del escenario: 100/100. Contexto 4H: bajista. Ejecución 5m: bajista. 6 FVG activo(s) respaldan el contexto. 3 imbalance(s) activo(s) en la dirección evaluada. 2 Order Block(s) sin mitigar identificados. Las confirmaciones son condiciones que debes comprobar antes de operar.
+
+ESCENARIO POR DEFINIR
+
+Sin escenario definido
+
+El motor no encontró una configuración suficientemente clara para construir este escenario.
+
+Esta lectura usa reglas técnicas de ETR y precios de Exness. La IA permanece en Psicotrading. TP1 y TP2 son zonas técnicas; no sustituyen el SL del 1,72% ni el TP del 4% de tus órdenes. Para enviar o modificar una operación, entra al Trading Terminal.

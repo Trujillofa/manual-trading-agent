@@ -25,6 +25,9 @@ services:
       - DEPLOY_GIT_SHA=${GIT_SHA:-unknown}
       # Container has no hermes binary. Scheduled Plan NY is host cron as emilio.
       - BRIEFING_INVOKE=${BRIEFING_INVOKE:-host}
+      # The ETR analysis page is client-rendered; the renderer runs the browser it
+      # needs. Blank disables the renderer path and falls back to legacy HTML.
+      - ETR_RENDERER_URL=${ETR_RENDERER_URL:-http://etr-renderer:8000}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -49,6 +52,32 @@ services:
       options:
         max-size: "50m"
         max-file: "10"
+
+  # ---------------------------------------------------------------------------
+  # ETR renderer: Chromium for the client-rendered analysis page.
+  # Stateless, no credentials: the agent passes its own session cookie per
+  # request. Internal-only (no published ports).
+  # ---------------------------------------------------------------------------
+  etr-renderer:
+    build:
+      context: ./deploy/etr-renderer
+    container_name: etr-renderer
+    restart: unless-stopped
+    shm_size: "512m"
+    mem_limit: 1500m
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   # ---------------------------------------------------------------------------
   # OPTIONAL: Prometheus — uncomment to enable metrics scraping

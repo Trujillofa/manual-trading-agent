@@ -14,7 +14,7 @@ from typing import Any, cast
 import httpx
 
 from src.etr.models import ASSET_PATHS, VALID_ASSETS, EtrReport
-from src.etr.parser import parse_analysis_html
+from src.etr.parser import parse_analysis_html, parse_rendered_text
 from src.scanner.state import _logs_dir
 
 logger = logging.getLogger(__name__)
@@ -42,6 +42,7 @@ class EtrClient:
         supabase_anon_key: str | None = None,
         session_path: Path | None = None,
         timeout: float = 30.0,
+        renderer_url: str | None = None,
     ) -> None:
         self.email = email.strip()
         self.password = password
@@ -55,6 +56,12 @@ class EtrClient:
             or os.environ.get("ETR_SUPABASE_ANON_KEY")
             or DEFAULT_SUPABASE_ANON_KEY
         )
+        # The analysis page is client-rendered: without a browser there is
+        # nothing to parse. Empty means "use the legacy HTML path", which only
+        # works against pre-redesign markup.
+        self.renderer_url = (
+            renderer_url or os.environ.get("ETR_RENDERER_URL") or ""
+        ).rstrip("/") or None
         self.session_path = session_path or (_logs_dir() / "etr_session.json")
         self.timeout = timeout
         self._session: dict[str, Any] | None = None
@@ -218,8 +225,46 @@ class EtrClient:
                     raise EtrAuthError(f"ETR fetch {asset} still unauthenticated")
         return text
 
+    async def fetch_rendered_text(self, asset: str) -> str:
+        """Render /analisis/{asset} in the sidecar's browser and return its text."""
+        asset = asset.lower().strip()
+        if asset not in VALID_ASSETS:
+            raise ValueError(f"Unknown ETR asset '{asset}'. Valid: {', '.join(VALID_ASSETS)}")
+        if not self.renderer_url:
+            raise RuntimeError("ETR renderer_url is not configured")
+
+        url = f"{SITE_ORIGIN}{ASSET_PATHS[asset]}"
+        session = await self.ensure_session()
+        # A browser render takes seconds; the plain HTTP timeout is too short.
+        timeout = max(self.timeout * 3, 90.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+
+            async def _render(cookie_session: dict[str, Any]) -> dict[str, Any]:
+                response = await client.post(
+                    f"{self.renderer_url}/render",
+                    json={"url": url, "cookie": self._cookie_header(cookie_session)},
+                )
+                if response.status_code != 200:
+                    raise RuntimeError(
+                        f"ETR renderer HTTP {response.status_code} for {asset}"
+                    )
+                return response.json()
+
+            data = await _render(session)
+            if "/login" in str(data.get("url", "")):
+                session = await self.ensure_session(force_login=True)
+                data = await _render(session)
+                if "/login" in str(data.get("url", "")):
+                    raise EtrAuthError(f"ETR renderer redirected {asset} to login")
+        text = str(data.get("text", ""))
+        if not text.strip():
+            raise RuntimeError(f"ETR renderer returned no text for {asset}")
+        return text
+
     async def fetch_report(self, asset: str) -> EtrReport:
-        html = await self.fetch_analysis_html(asset)
-        report = parse_analysis_html(html, asset)
+        if self.renderer_url:
+            report = parse_rendered_text(await self.fetch_rendered_text(asset), asset)
+        else:
+            report = parse_analysis_html(await self.fetch_analysis_html(asset), asset)
         report.fetched_at = datetime.now(UTC).isoformat()
         return report

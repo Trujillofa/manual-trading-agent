@@ -335,3 +335,95 @@ def parse_analysis_html(html: str, asset: str) -> EtrReport:
         alternative=alternative,
         raw_text_excerpt=excerpt,
     )
+
+
+class EtrUnavailableError(RuntimeError):
+    """The page rendered, but ETR has no current analysis to show.
+
+    This is a data state, not a parse failure: the terminal withholds scenarios
+    until the account has fresh M5 history, and says so on the page. Reporting it
+    as a parse error (as the old HTML parser did) turns the site's own gate into a
+    bug report against this agent.
+    """
+
+
+_READY_MARKERS = ("context score",)
+_UNAVAILABLE_MARKERS = (
+    "escenarios se mostrar",
+    "historial de 5m está desactualizado",
+    "historial de 5m esta desactualizado",
+    "reconectando precios",
+)
+
+
+def _line_after(lines: list[str], label: str) -> str | None:
+    return _find_after(lines, label, max_ahead=3)
+
+
+def parse_rendered_text(text: str, asset: str) -> EtrReport:
+    """Parse the browser-rendered analysis page.
+
+    The page is client-rendered, so this takes ``inner_text`` output rather than
+    HTML: labels are section headers with their values on the following lines.
+    """
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    lowered = text.lower()
+
+    if not any(marker in lowered for marker in _READY_MARKERS):
+        if any(marker in lowered for marker in _UNAVAILABLE_MARKERS):
+            raise EtrUnavailableError(
+                f"ETR has no current analysis for {asset}: the terminal reports "
+                "stale M5 history or reconnecting prices"
+            )
+        raise ValueError(f"ETR render for {asset} contained no analysis section")
+
+    score_raw = _line_after(lines, "context score")
+    context_score = _first_number(score_raw) if score_raw else None
+
+    bias = _line_after(lines, "sesgo") or ""
+    estado = _line_after(lines, "estado") or ""
+    headline = _line_after(lines, "lectura actual") or ""
+    body = ""
+    if headline:
+        idx = lines.index(headline)
+        if idx + 1 < len(lines):
+            body = lines[idx + 1]
+
+    price: float | None = None
+    for line in lines:
+        if line.lower().startswith("cierre"):
+            candidate = _first_number(line)
+            if candidate is not None:
+                price = candidate
+
+    primary: EtrScenario | None = None
+    alternative: EtrScenario | None = None
+    primary_idx = _find_label_index(lines, "escenario principal")
+    alt_idx = _find_label_index(lines, "escenario alternativo", "escenario por definir")
+    if primary_idx is not None:
+        end = alt_idx if alt_idx is not None and alt_idx > primary_idx else min(
+            primary_idx + 45, len(lines)
+        )
+        primary = _parse_scenario(_slice_block(lines, primary_idx + 1, end), "Principal")
+    if alt_idx is not None:
+        alt_block = _slice_block(lines, alt_idx + 1, min(alt_idx + 30, len(lines)))
+        if not any("sin escenario definido" in line.lower() for line in alt_block):
+            alternative = _parse_scenario(alt_block, "Alternativo")
+
+    return EtrReport(
+        asset=asset,
+        label=ASSET_LABELS.get(asset, asset),
+        price=price,
+        updated_at=None,
+        context_score=context_score,
+        bias=bias,
+        estado=estado,
+        lectura_headline=headline,
+        lectura_body=body,
+        h4_context=_line_after(lines, "contexto 4h") or "",
+        m5_execution=_line_after(lines, "ejecución 5m") or "",
+        structure=_line_after(lines, "estructura") or "",
+        primary=primary,
+        alternative=alternative,
+        raw_text_excerpt=" | ".join(lines[:80])[:500],
+    )

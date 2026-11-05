@@ -365,6 +365,7 @@ class EtrConfig:
     shadow_horizon_hours: float = 24.0
     login: str | None = None
     password: str | None = None
+    renderer_url: str | None = None
     supabase_url: str | None = None
     supabase_anon_key: str | None = None
 
@@ -728,6 +729,7 @@ class Settings:
             "password": etr_data.get("password"),
             "supabase_url": etr_data.get("supabase_url"),
             "supabase_anon_key": etr_data.get("supabase_anon_key"),
+            "renderer_url": etr_data.get("renderer_url") or os.environ.get("ETR_RENDERER_URL"),
         }
 
         return cls(

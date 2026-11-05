@@ -18,6 +18,7 @@ from src.etr.alerts import (
 from src.etr.client import EtrAuthError, EtrClient
 from src.etr.diff import diff_reports
 from src.etr.models import VALID_ASSETS, AssetState, EtrChange, EtrPollResult, EtrReport
+from src.etr.parser import EtrUnavailableError
 from src.etr.shadow import process_shadow_for_report
 from src.etr.state import append_etr_audit, load_etr_state, load_global_meta, save_state_with_meta
 
@@ -64,6 +65,7 @@ def build_client(config: EtrConfig) -> EtrClient:
         config.password,
         supabase_url=config.supabase_url,
         supabase_anon_key=config.supabase_anon_key,
+        renderer_url=config.renderer_url,
     )
 
 
@@ -110,6 +112,7 @@ async def poll_and_notify(
     results: list[EtrPollResult] = []
     notified_count = 0
     error_count = 0
+    unavailable_count = 0
     now_iso = datetime.now(UTC).isoformat()
 
     for asset in target_assets:
@@ -210,6 +213,20 @@ async def poll_and_notify(
                         "price_in_primary_zone": report.price_in_primary_zone(),
                     }
                 )
+        except EtrUnavailableError as exc:
+            # The terminal withholds scenarios until it has fresh M5 history. That
+            # is its own gate, not a defect here: record the state, leave the last
+            # report untouched, and let the next poll pick it up.
+            unavailable_count += 1
+            logger.warning("ETR %s unavailable: %s", asset, exc)
+            append_etr_audit(
+                {
+                    "ts": now_iso,
+                    "asset": asset,
+                    "event": "unavailable",
+                    "reason": str(exc),
+                }
+            )
         except Exception as exc:
             error_count += 1
             result.error = str(exc)
@@ -234,7 +251,10 @@ async def poll_and_notify(
         results=results,
         notified_count=notified_count,
         error_count=error_count,
-        message=f"polled={len(results)} notified={notified_count} errors={error_count}",
+        message=(
+            f"polled={len(results)} notified={notified_count} "
+            f"errors={error_count} unavailable={unavailable_count}"
+        ),
     )
 
 

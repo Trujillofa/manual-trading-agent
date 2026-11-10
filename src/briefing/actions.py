@@ -224,6 +224,11 @@ def evaluate_desk_status(
         or result.get("no_trade_reasons") != []
     ):
         return unavailable("evaluación V2 inconsistente")
+    reasons_value = result.get("no_trade_reasons")
+    if not isinstance(reasons_value, list) or not all(
+        isinstance(reason, str) for reason in reasons_value
+    ):
+        return unavailable("evaluación V2 incompleta")
     action = desk_action_from_result(result, news_blocked=news_blocked)
     reasons = [str(reason) for reason in (result.get("no_trade_reasons") or [])]
     if news_blocked and not any("news" in reason.lower() for reason in reasons):

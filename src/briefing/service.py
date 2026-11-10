@@ -318,8 +318,15 @@ def _briefing_freshness(frames: dict[str, pd.DataFrame] | None, now: datetime) -
             issues.append(f"OHLC {tf} sin fecha verificable")
             continue
         stamp = frame.index[-1]
-        if pd.isna(stamp) or not frame.index.is_monotonic_increasing:
+        if frame.index.hasnans or not frame.index.is_monotonic_increasing:
             issues.append(f"OHLC {tf} fecha inválida")
+            continue
+        interval = pd.Timedelta({"1h": "1h", "30m": "30min", "15m": "15min"}[tf])
+        deltas = frame.index[1:] - frame.index[:-1]
+        # Gaps (including weekends and market closures) are legitimate; a
+        # shorter interval or no evidence of the requested cadence is not.
+        if len(deltas) == 0 or (deltas < interval).any() or not (deltas == interval).any():
+            issues.append(f"OHLC {tf} cadencia no verificable")
             continue
         stamp = stamp.tz_localize("UTC") if stamp.tzinfo is None else stamp.tz_convert("UTC")
         age = pd.Timestamp(now).tz_convert("UTC") - stamp

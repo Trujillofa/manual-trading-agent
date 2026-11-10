@@ -18,7 +18,14 @@ def frames():
         {"open": [100.0] * 20, "high": [101.0] * 20, "low": [99.0] * 20, "close": [100.0] * 20},
         index=pd.date_range(end="2026-08-24 11:15", periods=20, freq="15min", tz="UTC"),
     )
-    return {"1h": frame, "30m": frame, "15m": frame}
+    return {
+        tf: frame.set_axis(pd.date_range(end=end, periods=20, freq=freq, tz="UTC"))
+        for tf, end, freq in (
+            ("1h", "2026-08-24 11:00", "1h"),
+            ("30m", "2026-08-24 11:00", "30min"),
+            ("15m", "2026-08-24 11:15", "15min"),
+        )
+    }
 
 
 @pytest.mark.parametrize(

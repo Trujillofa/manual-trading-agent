@@ -165,7 +165,7 @@ def evaluate_desk_status(
     """Same evaluate_entry contract as the scan. Direction only when V2 fires."""
 
     def unavailable(reason: str) -> DeskDecision:
-        reasons = (reason,)
+        reasons: tuple[str, ...] = (reason,)
         if news_blocked:
             reasons += ("bloqueo por noticias de alto impacto",)
         return DeskDecision("STAND_ASIDE", reasons=reasons)

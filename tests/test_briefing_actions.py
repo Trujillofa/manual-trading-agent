@@ -70,7 +70,7 @@ def test_hermes_buy_cannot_survive_gate() -> None:
     assert gated.recommendation == "no operar"
     assert gated.action == "STAND_ASIDE"
     assert gated.htf_trend == "alcista"
-    assert gated.support == ("64000",)
+    assert gated.support == ()  # model-generated levels are not verified OHLC
 
 
 def test_unavailable_hermes_still_emits_action() -> None:
@@ -95,7 +95,7 @@ def test_enter_only_if_overwrites_buy() -> None:
         NyPlan(available=True, recommendation="compra en retroceso", htf_trend="alcista"),
         "ENTER_ONLY_IF",
     )
-    assert gated.recommendation == "entrar solo si V2"
+    assert gated.recommendation == "V2 activado en esta muestra (no autorización)"
     assert gated.action == "ENTER_ONLY_IF"
     assert gated.htf_trend == "alcista"
 

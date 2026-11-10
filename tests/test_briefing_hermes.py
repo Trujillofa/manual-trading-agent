@@ -372,7 +372,7 @@ async def test_attach_injected_enter_overwrites_hermes_buy(tmp_path: Path) -> No
     )
     plan = out.instruments[0].ny_plan
     assert plan is not None
-    assert plan.recommendation == "entrar solo si V2"
+    assert plan.recommendation == "V2 activado en esta muestra (no autorización)"
     assert plan.action == "ENTER_ONLY_IF"
     assert plan.htf_trend == "alcista"
     assert "compra" not in plan.recommendation

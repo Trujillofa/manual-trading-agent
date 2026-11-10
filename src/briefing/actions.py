@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Literal
 
@@ -17,10 +17,18 @@ logger = logging.getLogger(__name__)
 
 DeskAction = Literal["STAND_ASIDE", "WATCH", "ENTER_ONLY_IF"]
 
+
+@dataclass(frozen=True)
+class DeskDecision:
+    action: DeskAction
+    direction: str | None = None
+    reasons: tuple[str, ...] = ()
+
+
 ACTION_LABELS: dict[DeskAction, str] = {
     "STAND_ASIDE": "no operar",
     "WATCH": "esperar",
-    "ENTER_ONLY_IF": "entrar solo si V2",
+    "ENTER_ONLY_IF": "V2 activado en esta muestra (no autorización)",
 }
 
 _SESSION_BLOCK = "outside allowed session"
@@ -41,8 +49,10 @@ def desk_action_from_entry(
     """
     if news_blocked or session_blocked:
         return "STAND_ASIDE"
-    if fired:
+    if fired and aligned:
         return "ENTER_ONLY_IF"
+    if fired:
+        return "STAND_ASIDE"
     if aligned:
         return "WATCH"
     return "STAND_ASIDE"
@@ -81,6 +91,10 @@ def apply_desk_action(
     action: DeskAction,
     *,
     hermes_note: str | None = None,
+    v2_reasons: tuple[str, ...] = (),
+    v2_direction: str | None = None,
+    scenario_support: str = "",
+    scenario_resistance: str = "",
 ) -> NyPlan:
     """Overwrite recommendation with the V2-gated action. Keep Hermes HTF/S/R."""
     label = ACTION_LABELS[action]
@@ -91,7 +105,11 @@ def apply_desk_action(
             recommendation=label,
             action=action,
             htf_trend="indefinido",
-            honesty=note[:140],
+            honesty=f"Contexto Hermes no disponible: {note or 'sin respuesta'}"[:140],
+            v2_reasons=v2_reasons,
+            v2_direction=v2_direction,
+            scenario_support=scenario_support,
+            scenario_resistance=scenario_resistance,
         )
     if not plan.available:
         reason = plan.unavailable_reason or note or "Hermes no disponible"
@@ -100,22 +118,41 @@ def apply_desk_action(
             recommendation=label,
             action=action,
             htf_trend="indefinido",
-            honesty=reason[:140],
+            honesty=f"Contexto Hermes no disponible: {reason}"[:140],
+            v2_reasons=v2_reasons,
+            v2_direction=v2_direction,
+            scenario_support=scenario_support,
+            scenario_resistance=scenario_resistance,
         )
-    honesty = plan.honesty
+    # Free-form model prose may invent triggers or price levels. Only retain the
+    # parser's own diagnostic; context levels come from the observed candles.
+    honesty = plan.honesty if plan.honesty.startswith("Hermes no devolvió JSON") else ""
     if note:
         honesty = f"{honesty} · {note}".strip(" ·") if honesty else note
     return replace(
         plan,
         recommendation=label,
         action=action,
-        why=_scrub_directional(plan.why),
-        invalidation=_scrub_directional(plan.invalidation),
+        support=(scenario_support,) if scenario_support else (),
+        resistance=(scenario_resistance,) if scenario_resistance else (),
+        htf_trend=plan.htf_trend
+        if plan.htf_trend in {"alcista", "bajista", "rango", "indefinido"}
+        else "indefinido",
+        confidence=plan.confidence if plan.confidence in {"baja", "media", "alta"} else "",
+        why="",
+        invalidation="",
         honesty=honesty[:140],
+        v2_reasons=v2_reasons,
+        v2_direction=v2_direction,
+        scenario_support=scenario_support,
+        scenario_resistance=scenario_resistance,
+        context_recommendation=(
+            plan.recommendation if plan.recommendation in {"esperar", "no operar"} else ""
+        ),
     )
 
 
-def evaluate_desk_decision(
+def evaluate_desk_status(
     pair: str,
     frames: dict[str, Any] | None,
     *,
@@ -124,22 +161,29 @@ def evaluate_desk_decision(
     active_signal_state: dict[str, Any] | None = None,
     alignment_state: dict[str, Any] | None = None,
     settings: Any | None = None,
-) -> tuple[DeskAction, str | None]:
+) -> DeskDecision:
     """Same evaluate_entry contract as the scan. Direction only when V2 fires."""
+
+    def unavailable(reason: str) -> DeskDecision:
+        reasons = (reason,)
+        if news_blocked:
+            reasons += ("bloqueo por noticias de alto impacto",)
+        return DeskDecision("STAND_ASIDE", reasons=reasons)
+
     if not frames:
-        return "STAND_ASIDE", None
+        return unavailable("datos OHLC ausentes")
     data_1h = frames.get("1h")
     data_30m = frames.get("30m")
     data_15m = frames.get("15m")
     if data_1h is None or data_30m is None or data_15m is None:
-        return "STAND_ASIDE", None
+        return unavailable("faltan marcos OHLC 1h/30m/15m")
     empty = (
         getattr(data_1h, "empty", False)
         or getattr(data_30m, "empty", False)
         or getattr(data_15m, "empty", False)
     )
     if empty:
-        return "STAND_ASIDE", None
+        return unavailable("marco OHLC vacío")
     try:
         from src.config.settings import get_settings
         from src.scanner.evaluator import evaluate_entry
@@ -163,12 +207,47 @@ def evaluate_desk_decision(
         )
     except Exception:
         logger.exception("evaluate_desk_decision failed for %s", pair)
-        return "STAND_ASIDE", None
+        return unavailable("error al evaluar V2")
+    if (
+        not isinstance(result, dict)
+        or not isinstance(result.get("aligned"), bool)
+        or not isinstance(result.get("fired"), bool)
+    ):
+        details = result.get("reasons", []) if isinstance(result, dict) else []
+        detail = ", ".join(str(reason) for reason in details) if isinstance(details, list) else ""
+        return unavailable(f"evaluación V2 incompleta{': ' + detail if detail else ''}")
+    # evaluate_entry derives alignment and direction from the same RSI
+    # predicates, and fires only with a direction and no blocked gates.
+    if result["fired"] and (
+        not result["aligned"]
+        or result.get("direction") not in ("BUY", "SELL")
+        or result.get("no_trade_reasons") != []
+    ):
+        return unavailable("evaluación V2 inconsistente")
     action = desk_action_from_result(result, news_blocked=news_blocked)
-    direction = result.get("direction") if isinstance(result, dict) else None
-    if action != "ENTER_ONLY_IF" or direction not in {"BUY", "SELL"}:
-        return action, None
-    return action, str(direction)
+    reasons = [str(reason) for reason in (result.get("no_trade_reasons") or [])]
+    if news_blocked and not any("news" in reason.lower() for reason in reasons):
+        reasons.insert(0, "bloqueo por noticias de alto impacto")
+    if not result["aligned"]:
+        reasons.append("sin alineación RSI MTF ahora")
+    elif action == "WATCH" and not reasons:
+        reasons.append("alineado; confirmación de entrada pendiente")
+    elif action == "ENTER_ONLY_IF" and not reasons:
+        reasons.append("evaluación V2 activada en esta muestra; no es autorización")
+    direction = result.get("direction")
+    return DeskDecision(
+        action,
+        str(direction) if action == "ENTER_ONLY_IF" and direction in {"BUY", "SELL"} else None,
+        tuple(reasons),
+    )
+
+
+def evaluate_desk_decision(
+    pair: str, frames: dict[str, Any] | None, **kwargs: Any
+) -> tuple[DeskAction, str | None]:
+    """Compatibility wrapper for callers needing the action and V2 direction."""
+    decision = evaluate_desk_status(pair, frames, **kwargs)
+    return decision.action, decision.direction
 
 
 def evaluate_desk_action(

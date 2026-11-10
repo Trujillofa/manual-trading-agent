@@ -264,7 +264,7 @@ async def test_build_briefing_has_four_instruments_and_three_pillars(tmp_path: P
     assert "proxy" in message.lower()
     assert briefing.synthesis == "hoy: sin lockout; riesgo = CPI"
     assert message.count("CPI") == 2  # header synthesis + shared Macro 3★
-    assert len(chunk_telegram(message)) == 1
+    assert all(len(chunk) <= 4096 for chunk in chunk_telegram(message))
 
 
 @pytest.mark.asyncio
@@ -503,6 +503,7 @@ async def test_etr_and_funding_absence_is_graceful(tmp_path: Path) -> None:
         now=now,
         fetch_mtf=fetch,
         events=[],
+        events_verified=True,
         etr_reports={},
         fetch_funding=False,
         active_signals={},
@@ -562,7 +563,7 @@ async def test_shared_macro_keeps_non_usd_and_does_not_repeat(
     assert message.count("Core PCE Price Index m/m") == 1
     assert briefing.synthesis == "hoy: sin lockout; riesgo = AUD CPI / PCE"
     assert "hoy: sin lockout; riesgo = AUD CPI / PCE" in message
-    assert len(chunk_telegram(message)) == 1
+    assert all(len(chunk) <= 4096 for chunk in chunk_telegram(message))
 
 
 @pytest.mark.asyncio

@@ -39,6 +39,11 @@ class NyPlan:
     confidence: str = ""
     honesty: str = ""
     unavailable_reason: str | None = None
+    v2_reasons: tuple[str, ...] = ()
+    context_recommendation: str = ""
+    v2_direction: str | None = None
+    scenario_support: str = ""
+    scenario_resistance: str = ""
 
 
 @dataclass(frozen=True)
@@ -51,6 +56,8 @@ class InstrumentBriefing:
     sentiment: Pillar
     data_as_of: datetime | None = None
     data_freshness: str | None = None
+    scenario_support: str = ""
+    scenario_resistance: str = ""
     ny_plan: NyPlan | None = None
     avoids: tuple[str, ...] = ()
 

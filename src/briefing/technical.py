@@ -79,6 +79,8 @@ def _pct(current: float, previous: float) -> str:
 
 
 def _last_bar_time(frame: pd.DataFrame) -> datetime | None:
+    if not isinstance(frame.index, pd.DatetimeIndex):
+        return None
     try:
         raw = frame.index[-1]
         parsed = pd.Timestamp(raw)
@@ -121,12 +123,8 @@ def build_technical_pillar(
             )
 
         lines: list[str] = []
-        as_of = None
-        for frame in (m15, m30, h1):
-            if frame is not None:
-                as_of = _last_bar_time(frame)
-                if as_of is not None:
-                    break
+        # The freshness label refers to the 1h bar, not the newest lower-TF bar.
+        as_of = _last_bar_time(h1) if h1 is not None else None
 
         if h1 is not None:
             closes = _closes(h1)

@@ -6,13 +6,13 @@ import logging
 import sqlite3
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Protocol
 
 import pandas as pd
 
-from src.briefing.actions import DeskAction, evaluate_desk_decision
+from src.briefing.actions import DeskDecision, evaluate_desk_status
 from src.briefing.avoids import build_instrument_avoids, build_session_avoids
 from src.briefing.formatter import format_pre_ny_briefing
 from src.briefing.fundamental import (
@@ -218,6 +218,7 @@ def _surprise_readiness(events: list[NewsEvent]) -> str:
 _FETCH_ATTEMPTS = 3
 _FETCH_BACKOFF_SECONDS = (0.5, 1.5)
 
+
 # Storage-layer failures that are transient (disk pressure, WAL contention) rather
 # than a bad symbol/URL. Retrying is safe: the fetch is a pure read.
 def _is_transient_fetch_error(exc: BaseException) -> bool:
@@ -288,7 +289,7 @@ async def _load_news(
         )
         status = checker.get_source_status()
         if cached:
-            return cached, None, status
+            return cached, f"calendario no verificado: {exc}", status
         return [], f"calendario no disponible: {exc}", status
     events = checker.get_events_in_window(
         now=now,
@@ -296,9 +297,64 @@ async def _load_news(
         hours_behind=cfg.news_hours_behind,
     )
     status = checker.get_source_status()
-    if not events and status == "none":
-        return [], "calendario no disponible (sin feed ni caché)", status
+    # fetch_events swallows HTTP/parse errors and can return stale cache or Grok
+    # while get_source_status still says "forex_factory_or_grok". Only a
+    # successful current Forex Factory snapshot establishes a verified feed.
+    if (
+        status in {"none", "cache/backoff"}
+        or checker._last_fetch != now.astimezone(UTC)
+        or any(event.source != SOURCE_FOREX_FACTORY for event in checker._events)
+    ):
+        return events, "calendario no verificado (sin feed actual)", status
     return events, None, status
+
+
+def _briefing_freshness(frames: dict[str, pd.DataFrame] | None, now: datetime) -> tuple[str, ...]:
+    """Require independently timestamped, recent bars on every evaluated timeframe."""
+    issues = []
+    for tf in ("1h", "30m", "15m"):
+        frame = (frames or {}).get(tf)
+        if frame is None or frame.empty or not isinstance(frame.index, pd.DatetimeIndex):
+            issues.append(f"OHLC {tf} sin fecha verificable")
+            continue
+        stamp = frame.index[-1]
+        if pd.isna(stamp) or not frame.index.is_monotonic_increasing:
+            issues.append(f"OHLC {tf} fecha inválida")
+            continue
+        stamp = stamp.tz_localize("UTC") if stamp.tzinfo is None else stamp.tz_convert("UTC")
+        age = pd.Timestamp(now).tz_convert("UTC") - stamp
+        max_age = {"1h": "2h", "30m": "1h", "15m": "30min"}[tf]
+        if age < pd.Timedelta(0) or age >= pd.Timedelta(max_age):
+            issues.append(f"OHLC {tf} atrasado o fecha futura")
+    return tuple(issues)
+
+
+def _scenario_levels(frames: dict[str, pd.DataFrame] | None, lookback: int) -> tuple[str, str]:
+    """Observed range only; never accept model-generated levels as triggers."""
+    import math
+
+    try:
+        frame = frames["15m"].tail(lookback)  # type: ignore[index]
+        if len(frame) < lookback or lookback <= 0:
+            return "", ""
+        if not isinstance(frame.index, pd.DatetimeIndex) or not all(
+            delta == pd.Timedelta(minutes=15) for delta in frame.index.to_series().diff().iloc[1:]
+        ):
+            return "", ""
+        lows = pd.to_numeric(frame["low"], errors="coerce")
+        highs = pd.to_numeric(frame["high"], errors="coerce")
+        if not all(math.isfinite(float(x)) for x in (*lows, *highs)):
+            return "", ""
+        low, high = float(lows.min()), float(highs.max())
+        if (
+            not all(math.isfinite(x) and x > 0 for x in (low, high))
+            or low >= high
+            or (lows > highs).any()
+        ):
+            return "", ""
+        return str(low), str(high)
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return "", ""
 
 
 def build_instrument_briefing(
@@ -316,6 +372,7 @@ def build_instrument_briefing(
     funding_error: str | None = None,
     extra_technical_lines: tuple[str, ...] = (),
     avoids: tuple[str, ...] = (),
+    scenario_levels: tuple[str, str] = ("", ""),
 ) -> InstrumentBriefing:
     spec = get_instrument_optional(instrument.id)
     point_size = spec.point_size if spec is not None else 0.01
@@ -381,6 +438,8 @@ def build_instrument_briefing(
         sentiment=sentiment,
         data_as_of=as_of,
         data_freshness=bar_freshness(as_of, now),
+        scenario_support=scenario_levels[0],
+        scenario_resistance=scenario_levels[1],
         avoids=avoids,
     )
 
@@ -391,6 +450,7 @@ async def build_briefing(
     now: datetime | None = None,
     fetch_mtf: MtfFetcher | None = None,
     events: list[NewsEvent] | None = None,
+    events_verified: bool = False,
     etr_reports: dict[str, EtrReport] | None = None,
     etr_polled: dict[str, str | None] | None = None,
     news_error: str | None = None,
@@ -403,6 +463,12 @@ async def build_briefing(
     instrument_ids: list[str] | None = None,
     attach_hermes: bool = True,
 ) -> PreNyBriefing:
+    """Require explicit verification for an externally supplied calendar.
+
+    events_verified=True asserts a current, complete Forex Factory snapshot
+    for this briefing, including a legitimately empty window. news_status is
+    display text, not evidence of verification.
+    """
     current = now or datetime.now(UTC)
     cfg = settings.briefing
     caveats = [
@@ -415,6 +481,8 @@ async def build_briefing(
         loaded_events, loaded_error, status = await _load_news(settings, current)
     else:
         loaded_events = events
+        if events_verified is not True and not loaded_error:
+            loaded_error = "calendario proporcionado sin procedencia verificada"
 
     if etr_reports is None:
         cached_reports, cached_polled = _etr_reports()
@@ -451,7 +519,7 @@ async def build_briefing(
 
     fetcher = fetch_mtf or _default_fetcher
     items: list[InstrumentBriefing] = []
-    actions: dict[str, DeskAction] = {}
+    decisions: dict[str, DeskDecision] = {}
     for instrument in selected:
         frames: dict[str, pd.DataFrame] | None
         frame_error: str | None = None
@@ -460,7 +528,7 @@ async def build_briefing(
         except Exception as exc:
             logger.warning("briefing OHLC failed for %s: %s", instrument.id, exc)
             frames = None
-            frame_error = str(exc)
+            frame_error = str(exc) or type(exc).__name__
         extra = list(
             _scanner_extra_lines(
                 instrument.id,
@@ -469,7 +537,7 @@ async def build_briefing(
             )
         )
         news_blocked = _news_blocked_for(instrument, loaded_events, current, settings)
-        action, v2_direction = evaluate_desk_decision(
+        decision = evaluate_desk_status(
             instrument.id,
             frames,
             news_blocked=news_blocked,
@@ -478,7 +546,23 @@ async def build_briefing(
             alignment_state=alignment_state,
             settings=settings,
         )
-        actions[instrument.id] = action
+        if frame_error:
+            decision = replace(
+                decision,
+                reasons=("falló obtención OHLC", *decision.reasons[1:]),
+            )
+        freshness_issues = _briefing_freshness(frames, current)
+        if freshness_issues:
+            decision = replace(
+                decision, action="STAND_ASIDE", reasons=(*decision.reasons, *freshness_issues)
+            )
+        if loaded_error or (status and ("cache/backoff" in status or status == "none")):
+            decision = replace(
+                decision,
+                action="STAND_ASIDE",
+                reasons=(*decision.reasons, "noticias no verificadas"),
+            )
+        decisions[instrument.id] = decision
         etr_key = (instrument.etr_asset or "").lower()
         etr_report = cached_reports.get(etr_key)
         avoids = build_instrument_avoids(
@@ -487,8 +571,8 @@ async def build_briefing(
             session_codes=session_avoids,
             frames=frames,
             etr_report=etr_report,
-            action=action,
-            v2_direction=v2_direction,
+            action=decision.action,
+            v2_direction=decision.direction,
             lookback=settings.strategy.lookback_bars,
             rsi_period=settings.strategy.rsi_period,
         )
@@ -507,6 +591,9 @@ async def build_briefing(
                 funding_error=funding_error,
                 extra_technical_lines=tuple(extra),
                 avoids=avoids,
+                scenario_levels=_scenario_levels(frames, settings.strategy.lookback_bars)
+                if not freshness_issues
+                else ("", ""),
             )
         )
 
@@ -545,7 +632,7 @@ async def build_briefing(
 
         hermes_cfg = _replace(hermes_cfg, enabled=False)
     return await attach_ny_plans(
-        briefing, cfg=hermes_cfg, complete=hermes_complete, actions=actions
+        briefing, cfg=hermes_cfg, complete=hermes_complete, decisions=decisions
     )
 
 

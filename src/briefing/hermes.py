@@ -25,6 +25,7 @@ import httpx
 from src.briefing.models import NyPlan, PreNyBriefing
 
 if TYPE_CHECKING:
+    from src.briefing.actions import DeskDecision
     from src.config.settings import BriefingHermesConfig
 
 logger = logging.getLogger(__name__)
@@ -292,12 +293,44 @@ def format_ny_plan(plan: NyPlan) -> list[str]:
     resist = _short_levels(plan.resistance)
     trend = plan.htf_trend[:40]
     action = plan.recommendation or plan.action or "no operar"
+    reasons = " ".join(plan.v2_reasons).lower()
+    if any(word in reasons for word in ("ohlc", "evaluación v2 incompleta", "evaluación v2 inconsistente", "error al evaluar")):
+        action = f"{action} (V2 no evaluable)"
     first = f"*Plan NY* {action} · HTF {trend} · S {support} / R {resist}"
     bits = [part for part in (plan.why, plan.invalidation and f"Inv: {plan.invalidation}") if part]
     if plan.confidence:
         bits.append(f"Conf: {plan.confidence}")
     second = " · ".join(bits) if bits else ""
     lines = [first]
+    if plan.v2_reasons:
+        lines.append("V2 ahora: " + " · ".join(plan.v2_reasons))
+        if plan.v2_direction:
+            lines.append(f"Dirección V2 observada: {plan.v2_direction} (no autorización)")
+        if "error al evaluar" in reasons:
+            condition = "se resuelve el error de evaluación"
+        elif any(word in reasons for word in ("ohlc", "evaluación v2 incompleta", "evaluación v2 inconsistente")):
+            condition = "se recuperan los datos"
+        elif "bloqueo por noticias" in reasons or "blocked by high-impact news" in reasons:
+            condition = "se verifican las noticias y termina el bloqueo"
+        elif "noticias no verificadas" in reasons:
+            condition = "se verifican las noticias"
+        elif "outside allowed session" in reasons:
+            condition = "abre una sesión permitida"
+        elif plan.action == "WATCH":
+            condition = "cambia el estado de los filtros"
+        elif plan.action == "ENTER_ONLY_IF":
+            condition = "cambian las condiciones"
+        else:
+            condition = "hay alineación"
+        lines.append(f"NY: si {condition}, reevaluar V2 y filtros; si no, observar. No es señal.")
+    if plan.scenario_support and plan.scenario_resistance:
+        lines.append(
+            f"Escenarios (rango 15m): si el precio se aproxima a soporte {plan.scenario_support} o resistencia {plan.scenario_resistance}, observar su reacción. No es señal ni autorización."
+        )
+    else:
+        lines.append("Escenarios: niveles OHLC fiables no disponibles; no inferir desencadenantes.")
+    if plan.context_recommendation:
+        lines.append(f"Contexto Hermes (no acción): {plan.context_recommendation}")
     if second:
         lines.append(second)
     if plan.honesty:
@@ -451,6 +484,7 @@ async def attach_ny_plans(
     cfg: BriefingHermesConfig,
     complete: HermesComplete | None = None,
     actions: Mapping[str, str] | None = None,
+    decisions: Mapping[str, DeskDecision] | None = None,
 ) -> PreNyBriefing:
     """Fill ``ny_plan`` then overwrite the action from V2. Never raises."""
     from src.briefing.actions import DeskAction, apply_desk_action
@@ -464,7 +498,11 @@ async def attach_ny_plans(
     resolved: dict[str, DeskAction] = {}
     for instrument_id in ids:
         resolved[instrument_id] = allowed.get(
-            (actions or {}).get(instrument_id, "STAND_ASIDE"),
+            (
+                decisions[instrument_id].action
+                if decisions and instrument_id in decisions
+                else (actions or {}).get(instrument_id, "STAND_ASIDE")
+            ),
             "STAND_ASIDE",
         )
 
@@ -497,6 +535,18 @@ async def attach_ny_plans(
                 plans.get(item.instrument_id),
                 resolved[item.instrument_id],
                 hermes_note=hermes_note,
+                v2_direction=(
+                    decisions[item.instrument_id].direction
+                    if decisions and item.instrument_id in decisions
+                    else None
+                ),
+                scenario_support=item.scenario_support,
+                scenario_resistance=item.scenario_resistance,
+                v2_reasons=(
+                    decisions[item.instrument_id].reasons
+                    if decisions and item.instrument_id in decisions
+                    else ()
+                ),
             ),
         )
         for item in briefing.instruments

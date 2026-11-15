@@ -5,9 +5,9 @@ it: bias, context score and scenarios are computed in the browser from the
 account's candles, and only exist in the DOM after that engine runs. A plain HTTP
 GET can never see them, at any user agent.
 
-This service runs the browser and returns the page's visible text. It holds no
-credentials and keeps no session: the caller passes its own Supabase cookie, so
-authentication stays the agent's responsibility and this container is disposable.
+This service runs the browser and returns the page's visible text. The caller
+passes its Supabase cookie on each request. The shared in-memory browser context
+can retain cookies and other session state until the renderer process exits.
 
 One browser is launched lazily and reused: a cold Chromium start costs several
 seconds on this host, and launching one per asset made a four-asset poll take
@@ -21,8 +21,15 @@ import asyncio
 import time
 
 from fastapi import FastAPI
+from playwright.async_api import (
+    Browser,
+    Playwright,
+    async_playwright,
+)
+from playwright.async_api import (
+    TimeoutError as PlaywrightTimeoutError,
+)
 from pydantic import BaseModel
-from playwright.async_api import Browser, Playwright, async_playwright
 
 READY_MARKER = "context score"
 # The terminal says one of these while it has no scenarios to show. They must hold
@@ -43,10 +50,8 @@ POLL_INTERVAL_MS = 2_000
 MIN_NOTICE_SECONDS = 30
 # Anything short of READY or a definitive notice waits for the full timeout. There
 # used to be an early bail for pages without a chart "cierre" price, meant to spot
-# assets with no market data. It fired on a page that was simply still hydrating
-# (btc, 1464 chars) and turned a live analysis into a false "ETR has nothing to
-# say". The caller decides emptiness from a settled page, not from a missing
-# price.
+# assets with no market data. A missing price can also occur during hydration;
+# a timeout does not establish that the terminal has no analysis.
 
 app = FastAPI(title="etr-renderer")
 
@@ -121,18 +126,26 @@ async def render(req: RenderRequest) -> dict[str, object]:
         try:
             await _add_cookies(context, req.cookie)
             page = await context.new_page()
-            # The clock starts before navigation so the whole render — load plus
-            # hydration wait — stays inside the caller's timeout.
+            # Bound navigation and hydration, excluding lock queue and setup.
             started = time.monotonic()
             deadline = started + req.timeout_ms / 1000
-            response = await page.goto(
-                req.url, wait_until="domcontentloaded", timeout=req.timeout_ms
-            )
+            try:
+                response = await page.goto(
+                    req.url, wait_until="domcontentloaded", timeout=req.timeout_ms
+                )
+            except PlaywrightTimeoutError:
+                return {"text": "", "url": page.url, "status": None, "outcome": "timeout"}
             text = ""
             notice_ticks = 0
             outcome = "timeout"
             while True:
-                text = await page.inner_text("body")
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                try:
+                    text = await asyncio.wait_for(page.inner_text("body"), timeout=remaining)
+                except (TimeoutError, PlaywrightTimeoutError):
+                    break
                 low = text.lower()
                 if READY_MARKER in low:
                     outcome = "ready"

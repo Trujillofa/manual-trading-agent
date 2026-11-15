@@ -44,16 +44,7 @@ class EtrRenderIncompleteError(RuntimeError):
 # first attempt died waiting on a half-built page.
 RENDER_TIMEOUT_MS = 75_000
 RENDER_RETRY_TIMEOUT_MS = 90_000
-# The section title exists in the app shell before any analysis is in the DOM, so
-# on its own it proves nothing. It is only used, after retries are exhausted, to
-# tell "terminal rendered, no analysis for this asset" apart from "page never
-# loaded".
-_EMPTY_TERMINAL_MARKER = "análisis técnico"
 
-
-def _terminal_has_no_analysis(text: str) -> bool:
-    low = text.lower()
-    return "context score" not in low and _EMPTY_TERMINAL_MARKER in low
 
 
 class EtrClient:
@@ -300,8 +291,11 @@ class EtrClient:
                 data = await _render(session)
                 if "/login" in str(data.get("url", "")):
                     raise EtrAuthError(f"ETR renderer redirected {asset} to login")
+        status = data.get("status")
+        if status is not None and status != 200:
+            raise RuntimeError(f"ETR upstream HTTP {status} for {asset}")
         text = str(data.get("text", ""))
-        if not text.strip():
+        if not text.strip() and data.get("outcome") != "timeout":
             raise RuntimeError(f"ETR renderer returned no text for {asset}")
         return text, str(data.get("outcome") or "")
 
@@ -313,7 +307,7 @@ class EtrClient:
                 # hydration losing a race, not ETR having nothing to say: it used
                 # to be reported as "no analysis for this asset" (a silent skip)
                 # or as a hard parse error on a near-empty page. One longer retry,
-                # then concede only what the settled page actually shows.
+                # then report the timeout as inconclusive, not as unavailable.
                 logger.warning(
                     "ETR render for %s timed out at %d chars; retrying with %d ms",
                     asset,
@@ -321,7 +315,7 @@ class EtrClient:
                     RENDER_RETRY_TIMEOUT_MS,
                 )
                 text, outcome = await self._render_once(asset, timeout_ms=RENDER_RETRY_TIMEOUT_MS)
-                if outcome == "timeout" and not _terminal_has_no_analysis(text):
+                if outcome == "timeout":
                     raise EtrRenderIncompleteError(
                         f"ETR render for {asset} did not load the analysis page "
                         f"after 2 attempts ({len(text)} chars returned)"

@@ -102,9 +102,19 @@ class RendererDiagnosticsTests(unittest.TestCase):
             return object()
         async def fail(*args):
             raise ValueError("cookie failure")
-        with patch.object(renderer, "_browser_instance", browser), patch.object(renderer, "_context_instance", context), patch.object(renderer, "_add_cookies", fail):
-            with self.assertRaisesRegex(ValueError, "cookie failure"):
-                asyncio.run(renderer.render(renderer.RenderRequest(url="https://etracademy.com/analisis/btc", cookie="")))
+        with patch.object(renderer, "_browser_instance", browser), patch.object(renderer, "_context_instance", context), patch.object(renderer, "_add_cookies", fail), self.assertRaisesRegex(ValueError, "cookie failure"):
+            asyncio.run(renderer.render(renderer.RenderRequest(url="https://etracademy.com/analisis/btc", cookie="")))
+
+    def test_navigation_timeout_is_retryable_and_closes_page(self):
+        class TimedOutPage(Page):
+            async def goto(self, *args, **kwargs):
+                raise renderer.PlaywrightTimeoutError("navigation timed out")
+
+        page = TimedOutPage("")
+        result, _ = self.run_render(page)
+        self.assertEqual(result["outcome"], "timeout")
+        self.assertEqual(result["text"], "")
+        self.assertTrue(page.closed)
 
 
 if __name__ == "__main__":

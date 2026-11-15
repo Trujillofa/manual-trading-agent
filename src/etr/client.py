@@ -30,6 +30,32 @@ class EtrAuthError(RuntimeError):
     """Raised when login or token refresh fails."""
 
 
+class EtrRenderIncompleteError(RuntimeError):
+    """The browser gave up before the analysis page hydrated.
+
+    Distinct from ``EtrUnavailableError``: ETR may have an analysis and the page
+    merely lost the race against hydration, so this is this agent's problem, not
+    the terminal's data gate.
+    """
+
+
+# Page timeout for one browser render, and for the single retry after a render
+# that timed out without reaching the analysis. The retry is longer because the
+# first attempt died waiting on a half-built page.
+RENDER_TIMEOUT_MS = 75_000
+RENDER_RETRY_TIMEOUT_MS = 90_000
+# The section title exists in the app shell before any analysis is in the DOM, so
+# on its own it proves nothing. It is only used, after retries are exhausted, to
+# tell "terminal rendered, no analysis for this asset" apart from "page never
+# loaded".
+_EMPTY_TERMINAL_MARKER = "análisis técnico"
+
+
+def _terminal_has_no_analysis(text: str) -> bool:
+    low = text.lower()
+    return "context score" not in low and _EMPTY_TERMINAL_MARKER in low
+
+
 class EtrClient:
     """Supabase password auth + cookie session fetch of /analisis/{asset}."""
 
@@ -47,9 +73,7 @@ class EtrClient:
         self.email = email.strip()
         self.password = password
         self.supabase_url = (
-            supabase_url
-            or os.environ.get("ETR_SUPABASE_URL")
-            or DEFAULT_SUPABASE_URL
+            supabase_url or os.environ.get("ETR_SUPABASE_URL") or DEFAULT_SUPABASE_URL
         ).rstrip("/")
         self.supabase_anon_key = (
             supabase_anon_key
@@ -59,9 +83,9 @@ class EtrClient:
         # The analysis page is client-rendered: without a browser there is
         # nothing to parse. Empty means "use the legacy HTML path", which only
         # works against pre-redesign markup.
-        self.renderer_url = (
-            renderer_url or os.environ.get("ETR_RENDERER_URL") or ""
-        ).rstrip("/") or None
+        self.renderer_url = (renderer_url or os.environ.get("ETR_RENDERER_URL") or "").rstrip(
+            "/"
+        ) or None
         self.session_path = session_path or (_logs_dir() / "etr_session.json")
         self.timeout = timeout
         self._session: dict[str, Any] | None = None
@@ -227,6 +251,16 @@ class EtrClient:
 
     async def fetch_rendered_text(self, asset: str) -> str:
         """Render /analisis/{asset} in the sidecar's browser and return its text."""
+        text, _outcome = await self._render_once(asset, timeout_ms=RENDER_TIMEOUT_MS)
+        return text
+
+    async def _render_once(self, asset: str, *, timeout_ms: int) -> tuple[str, str]:
+        """One render call. Returns the page text and the renderer's outcome.
+
+        Outcome is one of ``ready`` (analysis in the DOM), ``notice`` (the
+        terminal itself says it has nothing to show), ``timeout`` (the browser
+        gave up first) or ``""`` from a renderer too old to report it.
+        """
         asset = asset.lower().strip()
         if asset not in VALID_ASSETS:
             raise ValueError(f"Unknown ETR asset '{asset}'. Valid: {', '.join(VALID_ASSETS)}")
@@ -243,7 +277,11 @@ class EtrClient:
                 try:
                     response = await client.post(
                         f"{self.renderer_url}/render",
-                        json={"url": url, "cookie": self._cookie_header(cookie_session)},
+                        json={
+                            "url": url,
+                            "cookie": self._cookie_header(cookie_session),
+                            "timeout_ms": timeout_ms,
+                        },
                     )
                 except httpx.HTTPError as exc:
                     # httpx timeouts stringify to "" — name the type or the log
@@ -252,9 +290,7 @@ class EtrClient:
                         f"ETR renderer {type(exc).__name__} for {asset}: {exc!r}"
                     ) from exc
                 if response.status_code != 200:
-                    raise RuntimeError(
-                        f"ETR renderer HTTP {response.status_code} for {asset}"
-                    )
+                    raise RuntimeError(f"ETR renderer HTTP {response.status_code} for {asset}")
                 payload: dict[str, Any] = response.json()
                 return payload
 
@@ -267,11 +303,30 @@ class EtrClient:
         text = str(data.get("text", ""))
         if not text.strip():
             raise RuntimeError(f"ETR renderer returned no text for {asset}")
-        return text
+        return text, str(data.get("outcome") or "")
 
     async def fetch_report(self, asset: str) -> EtrReport:
         if self.renderer_url:
-            report = parse_rendered_text(await self.fetch_rendered_text(asset), asset)
+            text, outcome = await self._render_once(asset, timeout_ms=RENDER_TIMEOUT_MS)
+            if outcome == "timeout":
+                # The browser gave up before the analysis reached the DOM. That is
+                # hydration losing a race, not ETR having nothing to say: it used
+                # to be reported as "no analysis for this asset" (a silent skip)
+                # or as a hard parse error on a near-empty page. One longer retry,
+                # then concede only what the settled page actually shows.
+                logger.warning(
+                    "ETR render for %s timed out at %d chars; retrying with %d ms",
+                    asset,
+                    len(text),
+                    RENDER_RETRY_TIMEOUT_MS,
+                )
+                text, outcome = await self._render_once(asset, timeout_ms=RENDER_RETRY_TIMEOUT_MS)
+                if outcome == "timeout" and not _terminal_has_no_analysis(text):
+                    raise EtrRenderIncompleteError(
+                        f"ETR render for {asset} did not load the analysis page "
+                        f"after 2 attempts ({len(text)} chars returned)"
+                    )
+            report = parse_rendered_text(text, asset)
         else:
             report = parse_analysis_html(await self.fetch_analysis_html(asset), asset)
         report.fetched_at = datetime.now(UTC).isoformat()

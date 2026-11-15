@@ -35,15 +35,18 @@ NOTICE_MARKERS = (
     "historial de 5m está desactualizado",
     "historial de 5m esta desactualizado",
 )
-# Transient: shown while the quote stream reconnects, including on pages that do
-# go on to render a full analysis. Never bail out on this one alone.
-TRANSIENT_MARKERS = ("reconectando precios",)
 NOTICE_TICKS = 3
 POLL_INTERVAL_MS = 2_000
 # "Reconectando precios" shows while the app hydrates and can persist for half a
 # minute on a cold page. Treating it as conclusive early returned a header with no
 # charts, so a notice only counts after the page has had time to load.
 MIN_NOTICE_SECONDS = 30
+# Anything short of READY or a definitive notice waits for the full timeout. There
+# used to be an early bail for pages without a chart "cierre" price, meant to spot
+# assets with no market data. It fired on a page that was simply still hydrating
+# (btc, 1464 chars) and turned a live analysis into a false "ETR has nothing to
+# say". The caller decides emptiness from a settled page, not from a missing
+# price.
 
 app = FastAPI(title="etr-renderer")
 
@@ -114,45 +117,52 @@ async def render(req: RenderRequest) -> dict[str, object]:
     async with _lock:
         browser = await _browser_instance()
         context = await _context_instance(browser)
+        page = None
         try:
             await _add_cookies(context, req.cookie)
             page = await context.new_page()
+            # The clock starts before navigation so the whole render — load plus
+            # hydration wait — stays inside the caller's timeout.
+            started = time.monotonic()
+            deadline = started + req.timeout_ms / 1000
             response = await page.goto(
                 req.url, wait_until="domcontentloaded", timeout=req.timeout_ms
             )
-            started = time.monotonic()
-            deadline = started + req.timeout_ms / 1000
             text = ""
             notice_ticks = 0
-            while time.monotonic() < deadline:
+            outcome = "timeout"
+            while True:
                 text = await page.inner_text("body")
                 low = text.lower()
                 if READY_MARKER in low:
+                    outcome = "ready"
                     break
                 settled = time.monotonic() - started >= MIN_NOTICE_SECONDS
-                if any(marker in low for marker in NOTICE_MARKERS):
-                    notice_ticks += 1
-                    if notice_ticks >= NOTICE_TICKS and settled:
-                        break
-                elif settled and "cierre" not in low:
-                    # No chart close price after the settle window: this asset has
-                    # no market data on the account, so no analysis is coming.
+                if settled and any(marker in low for marker in NOTICE_MARKERS):
                     notice_ticks += 1
                     if notice_ticks >= NOTICE_TICKS:
+                        outcome = "notice"
                         break
                 else:
                     notice_ticks = 0
-                await page.wait_for_timeout(POLL_INTERVAL_MS)
+                remaining_ms = int((deadline - time.monotonic()) * 1000)
+                if remaining_ms <= 0:
+                    break
+                await page.wait_for_timeout(min(POLL_INTERVAL_MS, remaining_ms))
             low = text.lower()
             print(
                 f"render {req.url} chars={len(text)} score={READY_MARKER in low} "
-                f"sesgo={'sesgo' in low}",
+                f"sesgo={'sesgo' in low} status={response.status if response else None} "
+                f"outcome={outcome} elapsed_ms={int((time.monotonic() - started) * 1000)} "
+                f"redirected={page.url != req.url}",
                 flush=True,
             )
             return {
                 "text": text,
                 "url": page.url,
                 "status": response.status if response else None,
+                "outcome": outcome,
             }
         finally:
-            await page.close()
+            if page is not None:
+                await page.close()

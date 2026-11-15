@@ -23,7 +23,7 @@ except ModuleNotFoundError as exc:
 
 
 class Page:
-    def __init__(self, text, status=503, url="https://etracademy.com/analisis/btc"):
+    def __init__(self, text, status=200, url="https://etracademy.com/analisis/btc"):
         self.text, self.status, self.url = text, status, url
         self.closed = False
 
@@ -67,13 +67,13 @@ class RendererDiagnosticsTests(unittest.TestCase):
         return result, output.getvalue()
 
     def test_short_error_body_diagnostics_without_content(self):
-        page = Page("x" * 21)
+        page = Page("x" * 21, 503)
         result, log = self.run_render(page)
-        self.assertEqual(result["text"], "x" * 21)
+        self.assertEqual(result["text"], "")
         self.assertEqual(result["status"], 503)
-        self.assertEqual(result["outcome"], "timeout")
-        self.assertIn("chars=21", log)
-        self.assertIn("status=503 outcome=timeout elapsed_ms=75000 redirected=False", log)
+        self.assertEqual(result["outcome"], "http_error")
+        self.assertIn("chars=0", log)
+        self.assertIn("status=503 outcome=http_error elapsed_ms=0 redirected=False", log)
         self.assertNotIn("x" * 21, log)
         self.assertTrue(page.closed)
 

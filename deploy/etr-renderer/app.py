@@ -135,6 +135,15 @@ async def render(req: RenderRequest) -> dict[str, object]:
                 )
             except PlaywrightTimeoutError:
                 return {"text": "", "url": page.url, "status": None, "outcome": "timeout"}
+            if response is not None and response.status != 200:
+                print(
+                    f"render {req.url} chars=0 score=False sesgo=False "
+                    f"status={response.status} outcome=http_error "
+                    f"elapsed_ms={int((time.monotonic() - started) * 1000)} "
+                    f"redirected={page.url != req.url}",
+                    flush=True,
+                )
+                return {"text": "", "url": page.url, "status": response.status, "outcome": "http_error"}
             text = ""
             notice_ticks = 0
             outcome = "timeout"

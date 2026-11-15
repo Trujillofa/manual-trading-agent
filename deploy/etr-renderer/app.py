@@ -5,9 +5,9 @@ it: bias, context score and scenarios are computed in the browser from the
 account's candles, and only exist in the DOM after that engine runs. A plain HTTP
 GET can never see them, at any user agent.
 
-This service runs the browser and returns the page's visible text. It holds no
-credentials and keeps no session: the caller passes its own Supabase cookie, so
-authentication stays the agent's responsibility and this container is disposable.
+This service runs the browser and returns the page's visible text. The caller
+passes its Supabase cookie on each request. The shared in-memory browser context
+can retain cookies and other session state until the renderer process exits.
 
 One browser is launched lazily and reused: a cold Chromium start costs several
 seconds on this host, and launching one per asset made a four-asset poll take
@@ -21,8 +21,15 @@ import asyncio
 import time
 
 from fastapi import FastAPI
+from playwright.async_api import (
+    Browser,
+    Playwright,
+    async_playwright,
+)
+from playwright.async_api import (
+    TimeoutError as PlaywrightTimeoutError,
+)
 from pydantic import BaseModel
-from playwright.async_api import Browser, Playwright, async_playwright
 
 READY_MARKER = "context score"
 # The terminal says one of these while it has no scenarios to show. They must hold
@@ -35,15 +42,16 @@ NOTICE_MARKERS = (
     "historial de 5m está desactualizado",
     "historial de 5m esta desactualizado",
 )
-# Transient: shown while the quote stream reconnects, including on pages that do
-# go on to render a full analysis. Never bail out on this one alone.
-TRANSIENT_MARKERS = ("reconectando precios",)
 NOTICE_TICKS = 3
 POLL_INTERVAL_MS = 2_000
 # "Reconectando precios" shows while the app hydrates and can persist for half a
 # minute on a cold page. Treating it as conclusive early returned a header with no
 # charts, so a notice only counts after the page has had time to load.
 MIN_NOTICE_SECONDS = 30
+# Anything short of READY or a definitive notice waits for the full timeout. There
+# used to be an early bail for pages without a chart "cierre" price, meant to spot
+# assets with no market data. A missing price can also occur during hydration;
+# a timeout does not establish that the terminal has no analysis.
 
 app = FastAPI(title="etr-renderer")
 
@@ -114,45 +122,69 @@ async def render(req: RenderRequest) -> dict[str, object]:
     async with _lock:
         browser = await _browser_instance()
         context = await _context_instance(browser)
+        page = None
         try:
             await _add_cookies(context, req.cookie)
             page = await context.new_page()
-            response = await page.goto(
-                req.url, wait_until="domcontentloaded", timeout=req.timeout_ms
-            )
+            # Bound navigation and hydration, excluding lock queue and setup.
             started = time.monotonic()
             deadline = started + req.timeout_ms / 1000
+            try:
+                response = await page.goto(
+                    req.url, wait_until="domcontentloaded", timeout=req.timeout_ms
+                )
+            except PlaywrightTimeoutError:
+                return {"text": "", "url": page.url, "status": None, "outcome": "timeout"}
+            if response is not None and response.status != 200:
+                print(
+                    f"render {req.url} chars=0 score=False sesgo=False "
+                    f"status={response.status} outcome=http_error "
+                    f"elapsed_ms={int((time.monotonic() - started) * 1000)} "
+                    f"redirected={page.url != req.url}",
+                    flush=True,
+                )
+                return {"text": "", "url": page.url, "status": response.status, "outcome": "http_error"}
             text = ""
             notice_ticks = 0
-            while time.monotonic() < deadline:
-                text = await page.inner_text("body")
+            outcome = "timeout"
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                try:
+                    text = await asyncio.wait_for(page.inner_text("body"), timeout=remaining)
+                except (TimeoutError, PlaywrightTimeoutError):
+                    break
                 low = text.lower()
                 if READY_MARKER in low:
+                    outcome = "ready"
                     break
                 settled = time.monotonic() - started >= MIN_NOTICE_SECONDS
-                if any(marker in low for marker in NOTICE_MARKERS):
-                    notice_ticks += 1
-                    if notice_ticks >= NOTICE_TICKS and settled:
-                        break
-                elif settled and "cierre" not in low:
-                    # No chart close price after the settle window: this asset has
-                    # no market data on the account, so no analysis is coming.
+                if settled and any(marker in low for marker in NOTICE_MARKERS):
                     notice_ticks += 1
                     if notice_ticks >= NOTICE_TICKS:
+                        outcome = "notice"
                         break
                 else:
                     notice_ticks = 0
-                await page.wait_for_timeout(POLL_INTERVAL_MS)
+                remaining_ms = int((deadline - time.monotonic()) * 1000)
+                if remaining_ms <= 0:
+                    break
+                await page.wait_for_timeout(min(POLL_INTERVAL_MS, remaining_ms))
             low = text.lower()
             print(
                 f"render {req.url} chars={len(text)} score={READY_MARKER in low} "
-                f"sesgo={'sesgo' in low}",
+                f"sesgo={'sesgo' in low} status={response.status if response else None} "
+                f"outcome={outcome} elapsed_ms={int((time.monotonic() - started) * 1000)} "
+                f"redirected={page.url != req.url}",
                 flush=True,
             )
             return {
                 "text": text,
                 "url": page.url,
                 "status": response.status if response else None,
+                "outcome": outcome,
             }
         finally:
-            await page.close()
+            if page is not None:
+                await page.close()

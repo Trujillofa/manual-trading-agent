@@ -120,8 +120,16 @@ async def test_crash_between_commit_and_send_leaves_a_reservation_and_a_loss(
         await service.poll_and_notify(_settings(), crashing, force=True)
 
     events = [record["event"] for record in _audit(logs)]
-    assert events[-2:] == ["alert_reserved", "alert_lost"]
-    lost = _audit(logs)[-1]
+    # The reservation and the loss are still adjacent, and the poll row that
+    # used to be skipped when the send raised is now written by the flush in
+    # ``finally`` — its absence made a failed send look like a poll that never
+    # ran.
+    assert [
+        event for event in events if event in {"alert_reserved", "alert_lost"}
+    ][-2:] == ["alert_reserved", "alert_lost"]
+    assert events.count("poll") == 1
+    assert events.index("poll") > events.index("alert_lost")
+    lost = next(r for r in _audit(logs) if r["event"] == "alert_lost")
     assert lost["reason"] == "RuntimeError: telegram down"
     assert lost["notified"] is False
 

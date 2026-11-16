@@ -21,7 +21,13 @@ from src.etr.diff import diff_reports
 from src.etr.models import VALID_ASSETS, AssetState, EtrChange, EtrPollResult, EtrReport
 from src.etr.parser import EtrUnavailableError
 from src.etr.shadow import process_shadow_for_report
-from src.etr.source_time import source_is_older, source_timestamp_max
+from src.etr.source_time import (
+    MAX_SOURCE_FUTURE_HOURS,
+    source_is_older,
+    source_latest_instant,
+    source_timestamp_in_future,
+    source_timestamp_max,
+)
 from src.etr.state import append_etr_audit, load_etr_state, load_global_meta, save_state_with_meta
 
 if TYPE_CHECKING:
@@ -76,6 +82,23 @@ class _Commit:
 # default five-minute interval that is a quarter of an hour with no analysis for
 # any asset, and it used to be counted as "unavailable" and never alerted.
 RENDER_BUSY_ALERT_AFTER_POLLS = 3
+# Same shape for the failure path, and **this is the one the deployed topology
+# reaches**. ``etr-scan`` is one step of a strictly sequential shell loop
+# (scripts/run_scanner_loop.sh), ``_fetch_reports`` awaits assets one at a time
+# and uvicorn runs a single worker, so at most one /render is ever in flight and
+# the renderer's 20 s queue timeout — the only thing that produces ``outcome=
+# busy`` — cannot fire. A broken page or a wedged browser instead shows up as a
+# render that returns no analysis, which the client retries once and then
+# reports as an error. So escalation keys off *consecutive poll cycles that
+# produced no analysis at all*, while the busy streak stays for the multi-client
+# case (two agents sharing the sidecar, or a second poll overlapping a wedged
+# holder) where busy really is reachable. The two counters are independent:
+# whichever condition does not hold resets its own streak.
+RENDER_FAILURE_ALERT_AFTER_POLLS = 3
+# A rejected (older) render is not an error and must not alert on its own. But a
+# watermark that stays ahead of every render is a stuck feed: after this long
+# with nothing accepted, one alert fires so the silent skip becomes visible.
+STALE_SOURCE_ALERT_AFTER_SECONDS = 6 * 3600
 
 
 def _env_flag(name: str) -> bool | None:
@@ -286,33 +309,60 @@ def _commit_poll(
         result = result_by_asset[asset]
         prev_state = state.get(asset)
         prev_report = EtrReport.from_dict(prev_state.report) if prev_state else None
-        previous_source = prev_report.updated_at if prev_report else None
-        # The high-water mark survives a date-only commit; the last committed
-        # report does not.
         previous_max = prev_state.source_at_max if prev_state else None
+        previous_source = prev_report.updated_at if prev_report else None
         source_max = source_timestamp_max(previous_max, previous_source)
+        report_source = _plausible_source(report.updated_at, now_iso, asset=asset, after=source_max)
 
         if source_is_older(report.updated_at, source_max):
-            # A serialized poll can still carry an older render. Keeping the
-            # newer snapshot is the point of the monotonic guard; an old page is
-            # not an error and must not raise an alert.
-            result.skipped = True
-            logger.warning(
-                "ETR %s source timestamp went backwards: kept %s, ignored %s",
-                asset,
-                source_max,
-                report.updated_at,
-            )
-            append_etr_audit(
-                {
-                    "ts": now_iso,
-                    "asset": asset,
-                    "event": "stale_source",
-                    "kept_source_timestamp": source_max,
-                    "ignored_source_timestamp": report.updated_at,
-                }
-            )
-            continue
+            if _watermark_suspect(source_max, now_iso):
+                # The watermark sits months ahead of the clock, so it is a
+                # misparse rather than newer data — and the only way that shows
+                # is an honest render being skipped. Drop it and fall through to
+                # commit the render; this is also the self-heal for a state file
+                # the old code poisoned.
+                logger.warning(
+                    "ETR %s watermark %s is implausibly far ahead of the poll clock; discarding",
+                    asset,
+                    source_max,
+                )
+                append_etr_audit(
+                    {
+                        "ts": now_iso,
+                        "asset": asset,
+                        "event": "source_watermark_discarded",
+                        "discarded_source_timestamp": source_max,
+                        "accepted_source_timestamp": report.updated_at,
+                    }
+                )
+                source_max = None
+                # Re-judged against the poll clock: the discarded value must not
+                # go on licensing whatever comes next.
+                report_source = _plausible_source(report.updated_at, now_iso, asset=asset)
+            else:
+                # A serialized poll can still carry an older render. Keeping the
+                # newer snapshot is the point of the monotonic guard; an old page
+                # is not an error and must not raise an alert on its own.
+                result.skipped = True
+                logger.warning(
+                    "ETR %s source timestamp went backwards: kept %s, ignored %s",
+                    asset,
+                    source_max,
+                    report.updated_at,
+                )
+                append_etr_audit(
+                    {
+                        "ts": now_iso,
+                        "asset": asset,
+                        "event": "stale_source",
+                        "kept_source_timestamp": source_max,
+                        "ignored_source_timestamp": report.updated_at,
+                    }
+                )
+                _note_stale_source(
+                    commit, meta, asset, source_max, now_iso, do_notify, notifier
+                )
+                continue
 
         fp = report.fingerprint(config.score_alert_low, config.score_alert_high)
         if prev_state is None:
@@ -324,9 +374,10 @@ def _commit_poll(
                 last_polled_at=now_iso,
                 last_alerted_at=now_iso,
                 in_primary_zone=report.price_in_primary_zone(),
-                source_at_max=source_timestamp_max(source_max, report.updated_at),
+                source_at_max=source_timestamp_max(source_max, report_source),
             )
             result.seeded = True
+            _clear_stale_source(meta, asset)
             logger.info("ETR baseline seeded for %s fp=%s", asset, fp)
             process_shadow_for_report(
                 report,
@@ -367,9 +418,47 @@ def _commit_poll(
                 last_polled_at=now_iso,
                 last_alerted_at=prev_state.last_alerted_at,
                 in_primary_zone=report.price_in_primary_zone(),
-                source_at_max=source_timestamp_max(source_max, report.updated_at),
+                source_at_max=source_timestamp_max(source_max, report_source),
+                # Carried until it is actually reserved: a suppressed change
+                # outlives the commit that swallowed its diff.
+                pending_alert=prev_state.pending_alert,
             )
+            _clear_stale_source(meta, asset)
 
+            carried = prev_state.pending_alert
+            if carried and do_notify and notifier is not None and notifier.enabled:
+                # The change a preview poll withheld. Delivered before this
+                # poll's own alert so the older change is not ordered after a
+                # newer one, and cleared in the same transaction that reserves
+                # it, which keeps delivery at-most-once.
+                message = str(carried.get("message") or "")
+                if message:
+                    state[asset].last_alerted_fingerprint = (
+                        carried.get("fingerprint") or prev_state.last_alerted_fingerprint
+                    )
+                    state[asset].last_alerted_at = now_iso
+                    commit.alerts.append(
+                        _PendingAlert(
+                            message,
+                            result,
+                            kind="change",
+                            asset=asset,
+                            fingerprint=state[asset].last_alerted_fingerprint,
+                        )
+                    )
+                    append_etr_audit(
+                        {
+                            "ts": now_iso,
+                            "asset": asset,
+                            "event": "alert_carried_forward",
+                            "fingerprint": state[asset].last_alerted_fingerprint,
+                            "suppressed_because": carried.get("suppressed_because"),
+                            "suppressed_at": carried.get("suppressed_at"),
+                        }
+                    )
+                state[asset].pending_alert = None
+
+            suppressed: str | None = None
             if should_alert and do_notify and notifier is not None and notifier.enabled:
                 # Reserve before sending: the saved fingerprint is what makes a
                 # crash between send and save impossible to double-deliver.
@@ -385,13 +474,38 @@ def _commit_poll(
                     )
                 )
             elif should_alert and not do_notify:
+                # A preview poll must not *consume* the change. The commit below
+                # saves the new snapshot, so the next poll's diff against it is
+                # empty whatever the fingerprint says: the change is carried
+                # forward as a ready-made message and delivered by the next
+                # notifying poll. Advancing the fingerprint here (the old
+                # behaviour) made ``--no-notify`` silently eat the alert and left
+                # no trace of it at all.
                 logger.info(
-                    "ETR change on %s (%d fields) — notify disabled",
+                    "ETR change on %s (%d fields) — notify disabled, alert left pending",
                     asset,
                     len(changes),
                 )
-                state[asset].last_alerted_fingerprint = fp
-                state[asset].last_alerted_at = now_iso
+                state[asset].pending_alert = {
+                    "fingerprint": fp,
+                    "message": format_change_alert(report, notify_changes),
+                    "suppressed_because": "notifications disabled",
+                    "suppressed_at": now_iso,
+                }
+                suppressed = "notifications disabled"
+            elif should_alert:
+                logger.warning(
+                    "ETR change on %s (%d fields) — no notifier available, alert left pending",
+                    asset,
+                    len(changes),
+                )
+                state[asset].pending_alert = {
+                    "fingerprint": fp,
+                    "message": format_change_alert(report, notify_changes),
+                    "suppressed_because": "notifier unavailable",
+                    "suppressed_at": now_iso,
+                }
+                suppressed = "notifier unavailable"
 
             # Forward paper-shadow: log polls, open/resolve zone events
             process_shadow_for_report(
@@ -401,20 +515,18 @@ def _commit_poll(
                 horizon_hours=config.shadow_horizon_hours,
             )
 
-            commit.audits.append(
-                (
-                    result,
-                    {
-                        "ts": now_iso,
-                        "asset": asset,
-                        "event": "poll",
-                        "fingerprint": fp,
-                        "changes": [c.to_dict() for c in changes],
-                        "notified": False,
-                        "price_in_primary_zone": report.price_in_primary_zone(),
-                    },
-                )
-            )
+            audit_row: dict[str, Any] = {
+                "ts": now_iso,
+                "asset": asset,
+                "event": "poll",
+                "fingerprint": fp,
+                "changes": [c.to_dict() for c in changes],
+                "notified": False,
+                "price_in_primary_zone": report.price_in_primary_zone(),
+            }
+            if suppressed is not None:
+                audit_row["alert_suppressed"] = suppressed
+            commit.audits.append((result, audit_row))
 
     if do_notify and notifier is not None and notifier.enabled:
         for asset, error in errors:
@@ -423,6 +535,7 @@ def _commit_poll(
                 commit.alerts.append(alert)
 
     _note_renderer_busy(commit, meta, busy_count, assets or [], now_iso, do_notify, notifier)
+    _note_render_failures(commit, meta, len(errors), len(assets or []), now_iso, do_notify, notifier)
 
     meta["last_poll_unix"] = time.time()
     meta["last_poll_at"] = now_iso
@@ -504,39 +617,256 @@ def _busy_streak_message(streak: int, assets: list[str], since: object) -> str:
     )
 
 
+def _note_render_failures(
+    commit: _Commit,
+    meta: dict[str, Any],
+    error_count: int,
+    asset_count: int,
+    now_iso: str,
+    do_notify: bool,
+    notifier: NotifierLike | None,
+) -> None:
+    """Escalate a feed that produced no analysis at all, poll after poll.
+
+    This is the path the **deployed** topology reaches. ``etr-scan`` is one step
+    of a strictly sequential shell loop, ``_fetch_reports`` awaits assets one at
+    a time and uvicorn runs a single worker, so at most one /render is in flight
+    and the renderer's queue timeout never fires: ``outcome=busy`` is
+    unreachable and the busy streak above cannot alert. What does happen is
+    every render returning no analysis — navigation timeout, upstream HTTP
+    error, a page that never hydrated, or a browser wedged past its deadline.
+
+    The client retries a render timeout once and then raises, so all of those
+    arrive here as per-asset errors, and consecutive *overruns* are covered by
+    the same counter because the renderer reports an overrun to its caller as
+    ``outcome=timeout``. The busy streak stays in place for the multi-client
+    case; it is not relied on.
+    """
+    try:
+        streak = int(meta.get("render_failure_streak") or 0)
+    except (TypeError, ValueError):
+        streak = 0
+    if asset_count <= 0 or error_count < asset_count:
+        if streak:
+            logger.info("ETR render failure streak ended after %d polls", streak)
+            meta["render_failure_streak"] = 0
+            meta.pop("render_failure_since", None)
+        return
+
+    streak += 1
+    meta["render_failure_streak"] = streak
+    meta.setdefault("render_failure_since", now_iso)
+    if streak != RENDER_FAILURE_ALERT_AFTER_POLLS:
+        return
+    # Exactly at the threshold: one alert per run of failures, not one per poll.
+    if not do_notify or notifier is None or notifier.enabled is False:
+        return
+    commit.alerts.append(
+        _PendingAlert(
+            _render_failure_message(streak, meta.get("render_failure_since")),
+            kind="render_failure",
+        )
+    )
+    append_etr_audit(
+        {
+            "ts": now_iso,
+            "event": "render_failure_streak",
+            "consecutive_failed_polls": streak,
+            "since": meta.get("render_failure_since"),
+        }
+    )
+
+
+def _render_failure_message(streak: int, since: object) -> str:
+    return (
+        f"⚠️ *ETR renderer failing* · no analysis for {streak} consecutive polls\n"
+        f"`every render returned no page since {since or 'unknown'}`"
+    )
+
+
+def _now_from_iso(now_iso: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(now_iso)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is not None:
+        return parsed.astimezone(UTC).replace(tzinfo=None)
+    return parsed
+
+
+def _plausible_source(
+    raw: object, now_iso: str, *, asset: str | None = None, after: object = None
+) -> str | None:
+    """Return the stamp if it can be a real render clock, else ``None``.
+
+    A stamp more than ``MAX_SOURCE_FUTURE_HOURS`` ahead of the trusted frontier —
+    the poll clock, or the asset's own accepted watermark when that is later — is
+    a misparse (a US MM/DD date read as DD/MM) or a broken clock, and it is
+    dropped instead of being stored. One such value used to become the
+    high-water mark and reject every honest render from then on, and because the
+    committed report still looked plausible there was nothing in the state file
+    to point at.
+
+    Judging against the later of the two matters: the source clock may
+    legitimately run ahead of ours (a skewed host, a replay, a harness that
+    advances the stamp faster than the wall clock), and a freshness guard that
+    drops honest renders is the same bug it was added to prevent.
+    """
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    reference = source_latest_instant(now_iso, after)
+    if not source_timestamp_in_future(raw, now=reference):
+        return raw
+    logger.warning(
+        "ETR %s source timestamp %r is implausibly far in the future; ignored", asset, raw
+    )
+    append_etr_audit(
+        {
+            "ts": now_iso,
+            "asset": asset,
+            "event": "source_timestamp_rejected",
+            "rejected_source_timestamp": raw,
+            "reason": "timestamp more than {}h ahead of {}".format(
+                int(MAX_SOURCE_FUTURE_HOURS), reference.isoformat() if reference else "now"
+            ),
+        }
+    )
+    return None
+
+
+def _watermark_suspect(watermark: object, now_iso: str) -> bool:
+    """True when a watermark sits implausibly far ahead of the poll clock.
+
+    Only the poll clock is used here, deliberately. A watermark ahead of *real*
+    time by months cannot be newer data; it can only be a misparse, and the way
+    it manifests is exactly one thing — honest renders being skipped as older
+    than it.
+    """
+    return source_timestamp_in_future(watermark, now=source_latest_instant(now_iso))
+
+
+def _note_stale_source(
+    commit: _Commit,
+    meta: dict[str, Any],
+    asset: str,
+    kept: object,
+    now_iso: str,
+    do_notify: bool,
+    notifier: NotifierLike | None,
+) -> None:
+    """Alert once when the same asset has been rejected as stale for hours.
+
+    A single rejected older render is normal and silent. An asset whose
+    high-water mark stays ahead of every render is not: it is a stuck feed, and
+    it used to be invisible because each skip only wrote an audit row.
+    """
+    stale = meta.get("stale_source")
+    if not isinstance(stale, dict):
+        stale = {}
+        meta["stale_source"] = stale
+    entry = stale.get(asset)
+    if not isinstance(entry, dict):
+        entry = {}
+        stale[asset] = entry
+    now = time.time()
+    since = entry.get("since_unix")
+    if not isinstance(since, (int, float)):
+        entry["since_unix"] = now
+        entry["since"] = now_iso
+        since = now
+    if entry.get("alerted_at"):
+        return
+    if now - float(since) < STALE_SOURCE_ALERT_AFTER_SECONDS:
+        return
+    entry["alerted_at"] = now_iso
+    hours = round((now - float(since)) / 3600, 1)
+    append_etr_audit(
+        {
+            "ts": now_iso,
+            "asset": asset,
+            "event": "stale_source_stuck",
+            "kept_source_timestamp": kept,
+            "since": entry.get("since"),
+            "hours": hours,
+        }
+    )
+    if not do_notify or notifier is None or notifier.enabled is False:
+        return
+    commit.alerts.append(
+        _PendingAlert(
+            _stale_source_message(asset, kept, hours),
+            kind="stale_source",
+            asset=asset,
+        )
+    )
+
+
+def _clear_stale_source(meta: dict[str, Any], asset: str) -> None:
+    stale = meta.get("stale_source")
+    if isinstance(stale, dict):
+        stale.pop(asset, None)
+        if not stale:
+            meta.pop("stale_source", None)
+
+
+def _stale_source_message(asset: str, kept: object, hours: float) -> str:
+    return (
+        f"⚠️ *ETR source timestamp stuck* · `{asset}`\n"
+        f"`no render accepted for {hours:g}h; watermark still {kept or 'unknown'}`"
+    )
+
+
 async def _deliver_alerts(
     notifier: NotifierLike | None,
     alerts: list[_PendingAlert],
     audits: list[tuple[EtrPollResult, dict[str, Any]]],
 ) -> int:
-    """Send reserved notifications and finish deferred poll audits."""
+    """Send reserved notifications and finish deferred poll audits.
+
+    One failing send must not abort the batch. Before this, a notifier that
+    raised on the second of three assets stopped the loop: the third alert stayed
+    ``alert_reserved`` with no outcome row, and the poll audits after the loop
+    were never written at all, so the silence looked like a poll that had not
+    run. Every alert is now isolated and the deferred audits are flushed in
+    ``finally``; the first failure is re-raised afterwards so a broken notifier
+    is still loud.
+    """
     notified_count = 0
     deliverable = notifier is not None and notifier.enabled
-    if alerts and not deliverable:
-        for alert in alerts:
-            _audit_alert_outcome(alert, delivered=False, reason="notifier unavailable")
-    if deliverable and notifier is not None:
-        for alert in alerts:
-            try:
-                ok = await notifier.send(alert.message)
-            except Exception as exc:
-                # Record it before the exception unwinds: the reservation is
-                # already durable, so without this line the alert would simply
-                # vanish from the audit trail.
-                _audit_alert_outcome(alert, delivered=False, reason=f"{type(exc).__name__}: {exc}")
-                raise
-            _audit_alert_outcome(
-                alert,
-                delivered=bool(ok),
-                reason=None if ok else "notifier returned False",
-            )
-            if ok:
-                notified_count += 1
-            if alert.result is not None:
-                alert.result.notified = bool(ok)
-    for result, record in audits:
-        record["notified"] = result.notified
-        append_etr_audit(record)
+    first_error: Exception | None = None
+    try:
+        if alerts and not deliverable:
+            for alert in alerts:
+                _audit_alert_outcome(alert, delivered=False, reason="notifier unavailable")
+        if deliverable and notifier is not None:
+            for alert in alerts:
+                try:
+                    ok = await notifier.send(alert.message)
+                except Exception as exc:
+                    # Recorded before moving on: the reservation is already
+                    # durable, so without this row the alert vanishes from the
+                    # audit trail instead of showing up as lost.
+                    _audit_alert_outcome(
+                        alert, delivered=False, reason=f"{type(exc).__name__}: {exc}"
+                    )
+                    if first_error is None:
+                        first_error = exc
+                    continue
+                _audit_alert_outcome(
+                    alert,
+                    delivered=bool(ok),
+                    reason=None if ok else "notifier returned False",
+                )
+                if ok:
+                    notified_count += 1
+                if alert.result is not None:
+                    alert.result.notified = bool(ok)
+    finally:
+        for result, record in audits:
+            record["notified"] = result.notified
+            append_etr_audit(record)
+    if first_error is not None:
+        raise first_error
     return notified_count
 
 

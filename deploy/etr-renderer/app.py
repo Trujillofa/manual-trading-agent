@@ -70,6 +70,22 @@ BROWSER_CLOSE_TIMEOUT_SECONDS = 10.0
 # long, or after this many consecutive renders had to be abandoned.
 BUSY_DEGRADED_SECONDS = 240.0
 OVERRUN_DEGRADED_COUNT = 2
+# A render that reaches its own deadline and returns no analysis — navigation
+# timeout, upstream HTTP error, or a page that never hydrated — is a *failure*,
+# never a completion. It used to take the success branch of ``render``:
+# ``_note_completed()`` zeroed the counters and /health answered ``ok`` while
+# every render failed. That was 103 of 242 renders in production logs, and the
+# container stayed green throughout. Three in a row means a whole poll cycle
+# produced nothing, which is the state the healthcheck exists to catch.
+COMPLETED_OUTCOMES = frozenset({"ready", "notice"})
+FAILURE_DEGRADED_COUNT = 3
+# A caller-supplied timeout is a caller-supplied render budget. Without a
+# ceiling a huge value makes the budget effectively unbounded, and one parked
+# await owns the browser lock again. 180 s is the longest the agent asks for
+# (its retry budget); anything below a second cannot survive a cold page.
+MIN_RENDER_TIMEOUT_MS = 1_000
+MAX_RENDER_TIMEOUT_MS = 180_000
+RENDER_TIMEOUT_DEFAULT_MS = 75_000
 # "Reconectando precios" shows while the app hydrates and can persist for half a
 # minute on a cold page. Treating it as conclusive early returned a header with
 # no charts, so a notice only counts after the page has had time to load.
@@ -90,18 +106,34 @@ class _Health:
     """Renderer health counters.
 
     Single uvicorn worker, single event loop, so plain module state is enough.
-    ``consecutive_busy`` counts requests answered ``outcome=busy`` since the last
-    completed render; ``consecutive_overruns`` counts renders abandoned at their
-    deadline, which is the signature of a wedged browser rather than a slow page.
-    A plain class, not a dataclass: this module is also loaded by tests through
-    ``module_from_spec`` without a ``sys.modules`` entry.
+    Three independent failure shapes are tracked, because they have different
+    causes and only one of them was reachable in the deployed topology:
+
+    ``consecutive_busy`` / ``busy_since``
+        requests answered ``outcome=busy`` since the last completion. Only
+        reachable when a *second* client shares the sidecar, or when a wedged
+        holder makes another caller wait out the queue timeout.
+    ``consecutive_overruns``
+        renders abandoned at their deadline, the signature of a wedged
+        Playwright target.
+    ``consecutive_failures``
+        renders that ran to their deadline and returned no analysis
+        (navigation timeout, upstream HTTP error, page never hydrated). This is
+        the shape that actually happens with one sequential client, and it used
+        to be counted as success.
+
+    Only ``ready`` and ``notice`` are completions. A plain class, not a
+    dataclass: this module is also loaded by tests through ``module_from_spec``
+    without a ``sys.modules`` entry.
     """
 
     __slots__ = (
         "busy_since",
         "busy_since_wall",
         "consecutive_busy",
+        "consecutive_failures",
         "consecutive_overruns",
+        "detached",
         "in_flight",
     )
 
@@ -110,7 +142,12 @@ class _Health:
         self.busy_since_wall: float | None = None  # epoch, reported by /health
         self.consecutive_busy = 0
         self.consecutive_overruns = 0
+        self.consecutive_failures = 0
         self.in_flight = False
+        # Renders we stopped waiting for but which are still parked inside a
+        # Playwright await. They are not done, so ``render_in_flight`` must keep
+        # telling the truth about them.
+        self.detached = 0
 
 
 _health = _Health()
@@ -120,33 +157,60 @@ _background: set[asyncio.Task[Any]] = set()
 class RenderRequest(BaseModel):
     url: str
     cookie: str
-    timeout_ms: int = 75_000
+    timeout_ms: int = RENDER_TIMEOUT_DEFAULT_MS
 
 
 async def _browser_instance() -> Browser:
-    global _playwright, _browser
-    if _browser is None or not _browser.is_connected():
-        _playwright = await async_playwright().start()
-        _browser = await _playwright.chromium.launch(
-            args=["--no-sandbox", "--disable-dev-shm-usage"]
-        )
+    global _playwright, _browser, _context, _context_owner
+    if _browser is not None and _browser.is_connected():
+        return _browser
+    # The last browser died on its own — chromium OOM-killed, its process gone —
+    # so nothing raised and nothing cleared the caches. A relaunch that kept the
+    # old ``_context`` handed the new browser a context bound to the dead target:
+    # every later render raised "Target page, context or browser has been
+    # closed", and because that is a fast error rather than an overrun, /health
+    # stayed green while the feed produced nothing. The stale driver is also
+    # stopped here: relaunching it without stopping leaked one Playwright
+    # instance per crash.
+    stale_browser, stale_playwright = _browser, _playwright
+    _browser = None
+    _playwright = None
+    _context = None
+    _context_owner = None
+    if stale_browser is not None or stale_playwright is not None:
+        print("renderer reset: browser is no longer connected", flush=True)
+        _detach(asyncio.ensure_future(_close_quietly(stale_browser, stale_playwright)))
+    driver = await async_playwright().start()
+    _playwright = driver
+    _browser = await driver.chromium.launch(
+        args=["--no-sandbox", "--disable-dev-shm-usage"]
+    )
     return _browser
 
 
 _context = None
+# The browser the cached context belongs to. Identity, not liveness, is the
+# cheap correctness key: a context is only reusable by the browser that created
+# it, so any path that swaps the browser must not be able to hand back the old
+# one.
+_context_owner: Browser | None = None
 
 
 async def _context_instance(browser: Browser):
-    """One context for the whole process: a fresh context per render re-downloaded
+    """One context per browser instance.
 
-    the entire Next.js bundle for every asset, which is what made a four-asset poll
-    take minutes and time out before the analysis appeared.
+    A fresh context per render re-downloaded the entire Next.js bundle for every
+    asset, which is what made a four-asset poll take minutes and time out before
+    the analysis appeared. It is cached against the browser that created it, so
+    a relaunched browser can never be served a context from its dead
+    predecessor.
     """
-    global _context
-    if _context is None:
+    global _context, _context_owner
+    if _context is None or _context_owner is not browser:
         _context = await browser.new_context(
             viewport={"width": 1360, "height": 1800}, locale="es-ES"
         )
+        _context_owner = browser
     return _context
 
 
@@ -173,16 +237,23 @@ def _health_payload() -> tuple[dict[str, object], bool]:
     now = time.monotonic()
     busy_for = None if _health.busy_since is None else now - _health.busy_since
     degraded = (
-        busy_for is not None and busy_for >= BUSY_DEGRADED_SECONDS
-    ) or _health.consecutive_overruns >= OVERRUN_DEGRADED_COUNT
+        (busy_for is not None and busy_for >= BUSY_DEGRADED_SECONDS)
+        or _health.consecutive_overruns >= OVERRUN_DEGRADED_COUNT
+        or _health.consecutive_failures >= FAILURE_DEGRADED_COUNT
+    )
     payload: dict[str, object] = {
         "status": "degraded" if degraded else "ok",
         "degraded": degraded,
-        "render_in_flight": _health.in_flight,
+        # A render we stopped waiting for is still running: reporting False here
+        # while a wedged task sits inside a Playwright await was the lie that
+        # made a wedged renderer look idle.
+        "render_in_flight": _health.in_flight or _health.detached > 0,
+        "detached_renders": _health.detached,
         "busy_since": _health.busy_since_wall,
         "busy_for_seconds": None if busy_for is None else round(busy_for, 1),
         "consecutive_busy": _health.consecutive_busy,
         "consecutive_overruns": _health.consecutive_overruns,
+        "consecutive_failures": _health.consecutive_failures,
     }
     return payload, degraded
 
@@ -212,6 +283,25 @@ def _note_completed() -> None:
     _health.busy_since_wall = None
     _health.consecutive_busy = 0
     _health.consecutive_overruns = 0
+    _health.consecutive_failures = 0
+
+
+def _note_failed(outcome: str) -> None:
+    """A render that returned no analysis. Not a completion, whatever it cost.
+
+    The request was served, so the renderer is not *starved*: the busy window
+    closes. The overrun counter is left alone — an abandoned render is a
+    stronger signal than a failed one, and only a real completion clears it.
+    """
+    _health.busy_since = None
+    _health.busy_since_wall = None
+    _health.consecutive_busy = 0
+    _health.consecutive_failures += 1
+    print(
+        f"render outcome={outcome} counted=failure consecutive_failures="
+        f"{_health.consecutive_failures}",
+        flush=True,
+    )
 
 
 def _note_overrun() -> None:
@@ -223,8 +313,20 @@ def _consume(task: asyncio.Task[Any]) -> None:
         task.exception()
 
 
-def _detach(task: asyncio.Task[Any]) -> None:
-    """Keep a reference to a task we stop waiting for and swallow its outcome."""
+def _release_detached(_task: asyncio.Task[Any]) -> None:
+    _health.detached = max(0, _health.detached - 1)
+
+
+def _detach(task: asyncio.Task[Any], *, render: bool = False) -> None:
+    """Keep a reference to a task we stop waiting for and swallow its outcome.
+
+    ``render=True`` records that a *render* is still running without a waiter,
+    so ``/health`` cannot report an idle renderer while a wedged render holds a
+    Playwright await.
+    """
+    if render:
+        _health.detached += 1
+        task.add_done_callback(_release_detached)
     _background.add(task)
     task.add_done_callback(_consume)
     task.add_done_callback(_background.discard)
@@ -247,10 +349,11 @@ def _discard_browser(reason: str) -> None:
     anything still alive is left to process exit, and the next render launches a
     browser of its own.
     """
-    global _browser, _context, _playwright
+    global _browser, _context, _context_owner, _playwright
     browser, playwright = _browser, _playwright
     _browser = None
     _context = None
+    _context_owner = None
     _playwright = None
     if browser is None and playwright is None:
         return
@@ -295,8 +398,28 @@ def _render_budget_seconds(req: RenderRequest) -> float:
     return req.timeout_ms / 1000 + RENDER_SETUP_GRACE_SECONDS
 
 
+def _bounded_timeout_ms(raw: object) -> int:
+    try:
+        value = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return RENDER_TIMEOUT_DEFAULT_MS
+    return max(MIN_RENDER_TIMEOUT_MS, min(value, MAX_RENDER_TIMEOUT_MS))
+
+
 @app.post("/render")
 async def render(req: RenderRequest) -> dict[str, object]:
+    # The caller's timeout is the render's whole budget. Clamp it before it
+    # reaches the deadline maths: an unbounded value makes the budget unbounded,
+    # and then a single parked await owns the lock for as long as the caller
+    # likes — the exact starvation this module exists to prevent.
+    clamped = _bounded_timeout_ms(req.timeout_ms)
+    if clamped != req.timeout_ms:
+        print(
+            f"render {req.url} timeout_ms={req.timeout_ms} clamped={clamped}",
+            flush=True,
+        )
+        req.timeout_ms = clamped
+
     if not await _acquire_lock_bounded(_lock, RENDER_QUEUE_TIMEOUT_SECONDS):
         # A busy renderer is not a failure: report it so the caller can count the
         # asset as unavailable instead of raising an error alert. Repetition is
@@ -318,13 +441,21 @@ async def render(req: RenderRequest) -> dict[str, object]:
             # result() re-raises whatever the render raised; the lock is released
             # by the finally block either way.
             payload = work.result()
-            _note_completed()
+            # Only a page that gave us analysis is a completion. A navigation
+            # timeout, an upstream HTTP error or a page that never hydrated all
+            # return a payload too — counting those as success is what kept
+            # /health green while every render failed.
+            outcome = str(payload.get("outcome") or "")
+            if outcome in COMPLETED_OUTCOMES:
+                _note_completed()
+            else:
+                _note_failed(outcome or "unknown")
             return payload
         # The page or the browser stopped answering. Stop waiting, stop the work,
         # and give the lock back: a hung await must never own it past the budget.
         _note_overrun()
         work.cancel()
-        _detach(work)
+        _detach(work, render=True)
         _discard_browser(f"render exceeded {_render_budget_seconds(req):g}s budget")
         print(
             f"render {req.url} chars=0 score=False status=None outcome=timeout "
@@ -335,7 +466,9 @@ async def render(req: RenderRequest) -> dict[str, object]:
         return {"text": "", "url": req.url, "status": None, "outcome": "timeout"}
     except asyncio.CancelledError:
         # The caller went away (client disconnect). Same rule: never leave the
-        # render running against a browser the next request will reuse.
+        # render running against a browser the next request will reuse. The
+        # render is being torn down rather than wedged, so it is not counted as
+        # a detached in-flight render.
         work.cancel()
         _detach(work)
         _discard_browser("render cancelled by caller")

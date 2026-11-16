@@ -14,12 +14,25 @@ is not the same instant as midnight: ETR publishes "12/08/2026" for a render mad
 at any hour of that day, so comparing it as 00:00 made every later same-day
 update look older and the guard silently dropped it for the rest of the day. When
 one side has no time, only calendar dates are compared.
+
+Every stamp is normalised to **naive UTC** on parse. A timezone-aware value used
+to make ``source_is_older`` fail open and made ``source_timestamp_max`` refuse to
+replace it, so a single legacy aware ``updated_at`` disabled both halves of the
+guard permanently. Normalising before comparison makes that state self-heal: the
+legacy value stays comparable and an honest newer render replaces it.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+
+# A source stamp this far in the future is a misparse or a bad clock, not a
+# fresh render. ``08/12/2026`` read as DD/MM (8 December) instead of the US
+# MM/DD it was taken from sits months ahead; kept as the high-water mark it
+# rejects every honest render from then on, and because the *stored report*
+# still looks plausible nothing points at it.
+MAX_SOURCE_FUTURE_HOURS = 48.0
 
 _FORMATS = (
     "%d/%m/%Y %H:%M:%S",
@@ -66,7 +79,9 @@ def _parse_stamp(raw: object) -> _Stamp | None:
         # time; ``2026-08-11`` alone is date-exact.
         has_time = "T" in text or " " in text
         if parsed.tzinfo is not None:
-            parsed = parsed.astimezone(UTC)
+            # Naive UTC, so an aware legacy value cannot make the guard
+            # incomparable with a naive ETR stamp and silently abandon it.
+            parsed = parsed.astimezone(UTC).replace(tzinfo=None)
         return _Stamp(parsed, has_time)
     normalised = _normalise(text)
     for fmt in _FORMATS:
@@ -85,19 +100,56 @@ def parse_source_timestamp(raw: object) -> datetime | None:
 def source_is_older(current: object, previous: object) -> bool:
     """True only when both timestamps are comparable and ``current`` is older.
 
-    A naive date and an aware instant are not comparable without inventing a
-    timezone; treat that as unknown instead of guessing. A date-only stamp and a
-    timed stamp are compared by calendar date, the coarsest precision they share.
+    A date-only stamp and a timed stamp are compared by calendar date, the
+    coarsest precision they share. Both sides are naive UTC by construction (see
+    ``_parse_stamp``), so an aware legacy value can never disable the guard by
+    being incomparable.
     """
     left = _parse_stamp(current)
     right = _parse_stamp(previous)
     if left is None or right is None:
         return False
-    if (left.value.tzinfo is None) != (right.value.tzinfo is None):
-        return False
     if left.has_time and right.has_time:
         return left.value < right.value
     return left.value.date() < right.value.date()
+
+
+def source_latest_instant(*raws: object) -> datetime | None:
+    """Latest naive-UTC instant among the parseable stamps, or ``None``.
+
+    Used as the reference clock for freshness checks: the frontier we have
+    reason to trust is the poll clock or the asset's own accepted watermark,
+    whichever is later.
+    """
+    best: datetime | None = None
+    for raw in raws:
+        stamp = _parse_stamp(raw)
+        if stamp is not None and (best is None or stamp.value > best):
+            best = stamp.value
+    return best
+
+
+def source_timestamp_in_future(
+    raw: object, *, now: datetime | None = None, horizon_hours: float = MAX_SOURCE_FUTURE_HOURS
+) -> bool:
+    """True when a stamp is further ahead than any plausible render clock.
+
+    Both sides are naive UTC. An unparseable value is not "in the future": it is
+    unknown, and the caller keeps its existing fail-open policy for it.
+    """
+    stamp = _parse_stamp(raw)
+    if stamp is None:
+        return False
+    current = now or datetime.now(UTC).replace(tzinfo=None)
+    if current.tzinfo is not None:
+        current = current.astimezone(UTC).replace(tzinfo=None)
+    try:
+        ahead = (stamp.value - current).total_seconds()
+    except TypeError:
+        # Only reachable if a caller passes a naive ``now`` that is really aware
+        # of a different zone; treat it as unknowable rather than poisoning.
+        return False
+    return ahead > horizon_hours * 3600
 
 
 def source_timestamp_max(first: object, second: object) -> str | None:
@@ -119,9 +171,6 @@ def source_timestamp_max(first: object, second: object) -> str | None:
     if left is None:
         return second_raw
     if right is None:
-        return first_raw
-    if (left.value.tzinfo is None) != (right.value.tzinfo is None):
-        # Cannot order them; keep what was already recorded.
         return first_raw
     if left.has_time and right.has_time:
         return second_raw if right.value > left.value else first_raw

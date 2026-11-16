@@ -62,7 +62,8 @@ def _hourly_ret_corr(a: pd.DataFrame, b: pd.DataFrame, *, lag: int) -> float:
     return float(ra[ok].corr(rb[ok]))
 
 
-def _lag_peak(a: pd.DataFrame, b: pd.DataFrame, lags=range(-3, 4)) -> tuple[int, float]:
+def _lag_peak(a: pd.DataFrame, b: pd.DataFrame, lags: range | None = None) -> tuple[int, float]:
+    lags = range(-3, 4) if lags is None else lags
     scores = {lag: _hourly_ret_corr(a, b, lag=lag) for lag in lags}
     peak = max(scores, key=lambda k: scores[k] if scores[k] == scores[k] else -9)
     return peak, scores[peak]

@@ -212,6 +212,11 @@ class AssetState:
     last_polled_at: str | None = None
     last_alerted_at: str | None = None
     in_primary_zone: bool | None = None
+    # Latest source ("Actualizado") value ever seen for this asset, independent
+    # of what the last committed report carried. A date-only render must not
+    # lower this watermark, or a later older render of the same day would compare
+    # equal and be committed.
+    source_at_max: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -221,6 +226,7 @@ class AssetState:
             "last_polled_at": self.last_polled_at,
             "last_alerted_at": self.last_alerted_at,
             "in_primary_zone": self.in_primary_zone,
+            "source_at_max": self.source_at_max,
         }
 
     @classmethod
@@ -234,6 +240,7 @@ class AssetState:
             in_primary_zone=payload.get("in_primary_zone")
             if isinstance(payload.get("in_primary_zone"), bool)
             else None,
+            source_at_max=_opt_str(payload.get("source_at_max")),
         )
 
 

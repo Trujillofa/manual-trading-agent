@@ -100,8 +100,40 @@ def state_read_lock(timeout: float = DEFAULT_READ_TIMEOUT_SECONDS):
 
     Atomic replacement already prevents torn reads; the shared lock makes the
     read order explicit and keeps readers behind a writer that is mid-commit.
+
+    Never use this from an async caller: ``flock`` retries with ``time.sleep``,
+    so a contended read freezes the event loop for the whole timeout. Prefer
+    :func:`try_state_read_lock`.
     """
     return coordination_lock(exclusive=False, timeout=timeout)
+
+
+@contextmanager
+def try_state_read_lock() -> Iterator[bool]:
+    """Best-effort shared lock for readers. Never blocks, never raises when held.
+
+    Yields whether the shared lock was taken. A caller that gets ``False`` should
+    read anyway: ``save_state_with_meta`` publishes with ``os.replace``, so every
+    visible file is a complete snapshot and an unlocked reader can only observe
+    the previous commit, never a half-written one.
+
+    This exists for readers reached from the event loop (Telegram handlers,
+    briefing). Blocking them on a writer cost up to the full read timeout of
+    loop stall and then returned an empty cache, which is worse than slightly
+    stale content.
+    """
+    fh = _open_lock_file()
+    acquired = False
+    try:
+        try:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            acquired = False
+        else:
+            acquired = True
+        yield acquired
+    finally:
+        fh.close()
 
 
 @asynccontextmanager

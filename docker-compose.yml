@@ -68,6 +68,9 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
+      # /health now answers 503 once the renderer has been unable to complete a
+      # render for a few minutes (or after repeated deadline overruns), so a
+      # wedged browser shows up as unhealthy instead of a silent 200.
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 5m
       timeout: 10s

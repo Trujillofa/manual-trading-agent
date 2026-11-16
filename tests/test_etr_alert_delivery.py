@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import deque
 from pathlib import Path
 from types import SimpleNamespace
@@ -87,27 +88,22 @@ async def test_crash_during_send_cannot_repeat_the_alert(tmp_path: Path, monkeyp
 @pytest.mark.asyncio
 async def test_error_alerts_share_one_global_cooldown(monkeypatch) -> None:
     cfg = SimpleNamespace(error_alert_cooldown_minutes=360)
-    meta, messages = {}, []
+    meta, reserved = {}, []
     now = [100000.0]
     monkeypatch.setattr(service.time, "time", lambda: now[0])
 
-    class Notifier:
-        enabled = True
-
-        async def send(self, message: str) -> bool:
-            messages.append(message)
-            return True
-
-    notifier = Notifier()
     for _ in range(96):
         for asset in ["nasdaq", "btc", "gold", "oil"]:
-            await service._maybe_error_alert(cfg, meta, notifier, asset, "timeout", True)
+            alert = service._reserve_error_alert(cfg, meta, asset, "timeout")
+            if alert is not None:
+                reserved.append(alert)
         now[0] += 900
 
     # 96 * 15 minutes = 24h at a six-hour global cooldown: four alerts, not the
     # sixteen a per-asset cooldown would have produced.
-    assert len(messages) == 4
-    assert all("nasdaq" in message for message in messages)
+    assert len(reserved) == 4
+    assert all("nasdaq" in alert.message for alert in reserved)
+    assert all(alert.kind == "error" for alert in reserved)
 
 
 @pytest.mark.asyncio
@@ -117,25 +113,37 @@ async def test_failed_error_send_still_consumes_the_cooldown(monkeypatch) -> Non
     now = [100000.0]
     monkeypatch.setattr(service.time, "time", lambda: now[0])
 
+    alert = service._reserve_error_alert(cfg, meta, "btc", "e")
+    assert alert is not None
+    assert meta["last_error_alert_unix"] == 100000.0
+
+    # The cooldown is already durable, so the next reservation is suppressed even
+    # though this alert never actually reached Telegram.
+    assert service._reserve_error_alert(cfg, meta, "btc", "e") is None
+
+
+@pytest.mark.asyncio
+async def test_reserved_error_alert_is_audited_lost_when_the_send_fails(
+    tmp_path: Path, monkeypatch
+) -> None:
+    logs = tmp_path / "logs"
+    monkeypatch.setenv("MANUAL_TRADING_AGENT_LOG_DIR", str(logs))
+
     class FailingNotifier:
         enabled = True
 
         async def send(self, message: str) -> bool:
             return False
 
-    await service._maybe_error_alert(cfg, meta, FailingNotifier(), "btc", "e", True)
-    assert meta["last_error_alert_unix"] == 100000.0
+    alert = service._PendingAlert(
+        "⚠️ *ETR error* · `btc`", kind="error", asset="btc", fingerprint=None
+    )
+    notified = await service._deliver_alerts(FailingNotifier(), [alert], [])
 
-    class RecordingNotifier:
-        enabled = True
-
-        def __init__(self) -> None:
-            self.messages = []
-
-        async def send(self, message: str) -> bool:
-            self.messages.append(message)
-            return True
-
-    notifier = RecordingNotifier()
-    await service._maybe_error_alert(cfg, meta, notifier, "btc", "e", True)
-    assert notifier.messages == []
+    assert notified == 0
+    events = [
+        json.loads(line)
+        for line in (logs / "etr_audit.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert [record["event"] for record in events] == ["alert_lost"]
+    assert events[0]["reason"] == "notifier returned False"

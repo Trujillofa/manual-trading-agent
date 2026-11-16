@@ -15,13 +15,13 @@ from src.etr.alerts import (
     format_full_report,
     telegram_alert_changes,
 )
-from src.etr.client import EtrAuthError, EtrClient
-from src.etr.coordination import CoordinationBusyError, poll_lock, state_read_lock
+from src.etr.client import EtrAuthError, EtrClient, EtrRendererBusyError
+from src.etr.coordination import CoordinationBusyError, poll_lock, try_state_read_lock
 from src.etr.diff import diff_reports
 from src.etr.models import VALID_ASSETS, AssetState, EtrChange, EtrPollResult, EtrReport
 from src.etr.parser import EtrUnavailableError
 from src.etr.shadow import process_shadow_for_report
-from src.etr.source_time import source_is_older
+from src.etr.source_time import source_is_older, source_timestamp_max
 from src.etr.state import append_etr_audit, load_etr_state, load_global_meta, save_state_with_meta
 
 if TYPE_CHECKING:
@@ -52,10 +52,15 @@ class _PendingAlert:
     Reserving before sending makes delivery at-most-once: a crash between the
     state commit and the send loses that one alert, but can never repeat it.
     That trade is deliberate — a missed alert is quieter than duplicate noise.
+    ``alert_reserved`` is written to the audit log before the send, so the loss
+    is observable instead of being inferred from silence.
     """
 
     message: str
     result: EtrPollResult | None = None
+    kind: str = "change"
+    asset: str | None = None
+    fingerprint: str | None = None
 
 
 @dataclass
@@ -65,6 +70,12 @@ class _Commit:
     audits: list[tuple[EtrPollResult, dict[str, Any]]] = field(default_factory=list)
     skipped: bool = False
     message: str = ""
+
+
+# One busy poll is scheduling. Three in a row is a starved renderer: at the
+# default five-minute interval that is a quarter of an hour with no analysis for
+# any asset, and it used to be counted as "unavailable" and never alerted.
+RENDER_BUSY_ALERT_AFTER_POLLS = 3
 
 
 def _env_flag(name: str) -> bool | None:
@@ -142,7 +153,7 @@ async def poll_and_notify(
     client = build_client(config)
     now_iso = datetime.now(UTC).isoformat()
 
-    fetched, results, errors, unavailable_count = await _fetch_reports(
+    fetched, results, errors, unavailable_count, busy_count = await _fetch_reports(
         client, target_assets, now_iso
     )
 
@@ -157,9 +168,25 @@ async def poll_and_notify(
                 do_notify=do_notify,
                 force=force,
                 now_iso=now_iso,
+                busy_count=busy_count,
+                assets=target_assets,
             )
     except CoordinationBusyError:
         logger.info("ETR poll skipped: another writer holds the state lock")
+        # The fetch already happened; throwing it away without a record made a
+        # repeated lock contention look exactly like a poll that never ran.
+        append_etr_audit(
+            {
+                "ts": now_iso,
+                "event": "commit_skipped_lock_busy",
+                "reason": "etr_coordination.lock held by another writer",
+                "assets_fetched": [asset for asset, _ in fetched],
+                "assets_requested": list(target_assets),
+                "errors": len(errors),
+                "unavailable": unavailable_count,
+                "renderer_busy": busy_count,
+            }
+        )
         return PollSummary(
             results=results,
             notified_count=0,
@@ -185,19 +212,35 @@ async def poll_and_notify(
 
 async def _fetch_reports(
     client: EtrClient, assets: list[str], now_iso: str
-) -> tuple[list[tuple[str, EtrReport]], list[EtrPollResult], list[tuple[str, str]], int]:
-    """Network phase: no lock held. Returns reports, results, errors."""
+) -> tuple[list[tuple[str, EtrReport]], list[EtrPollResult], list[tuple[str, str]], int, int]:
+    """Network phase: no lock held. Returns reports, results, errors, counts."""
     fetched: list[tuple[str, EtrReport]] = []
     results: list[EtrPollResult] = []
     errors: list[tuple[str, str]] = []
     unavailable_count = 0
+    busy_count = 0
     for asset in assets:
         result = EtrPollResult(asset=asset, report=None)
         try:
             report = await client.fetch_report(asset)
+        except EtrRendererBusyError as exc:
+            # Scheduling, not a failure: count it separately so a renderer that
+            # is busy for poll after poll can be alerted on.
+            busy_count += 1
+            unavailable_count += 1
+            logger.warning("ETR %s unavailable: %s", asset, exc)
+            append_etr_audit(
+                {
+                    "ts": now_iso,
+                    "asset": asset,
+                    "event": "unavailable",
+                    "kind": "renderer_busy",
+                    "reason": str(exc),
+                }
+            )
         except EtrUnavailableError as exc:
-            # The terminal withholds scenarios until it has fresh M5 history, and
-            # a busy renderer is a scheduling fact. Neither is a failure alert.
+            # The terminal withholds scenarios until it has fresh M5 history.
+            # That is a data state, not a failure alert.
             unavailable_count += 1
             logger.warning("ETR %s unavailable: %s", asset, exc)
             append_etr_audit(
@@ -212,7 +255,7 @@ async def _fetch_reports(
             result.report = report
             fetched.append((asset, report))
         results.append(result)
-    return fetched, results, errors, unavailable_count
+    return fetched, results, errors, unavailable_count, busy_count
 
 
 def _commit_poll(
@@ -225,6 +268,8 @@ def _commit_poll(
     do_notify: bool,
     force: bool,
     now_iso: str,
+    busy_count: int = 0,
+    assets: list[str] | None = None,
 ) -> _Commit:
     """Single-writer phase. Runs under the coordination lock; no network calls."""
     meta = load_global_meta()
@@ -242,8 +287,12 @@ def _commit_poll(
         prev_state = state.get(asset)
         prev_report = EtrReport.from_dict(prev_state.report) if prev_state else None
         previous_source = prev_report.updated_at if prev_report else None
+        # The high-water mark survives a date-only commit; the last committed
+        # report does not.
+        previous_max = prev_state.source_at_max if prev_state else None
+        source_max = source_timestamp_max(previous_max, previous_source)
 
-        if source_is_older(report.updated_at, previous_source):
+        if source_is_older(report.updated_at, source_max):
             # A serialized poll can still carry an older render. Keeping the
             # newer snapshot is the point of the monotonic guard; an old page is
             # not an error and must not raise an alert.
@@ -251,7 +300,7 @@ def _commit_poll(
             logger.warning(
                 "ETR %s source timestamp went backwards: kept %s, ignored %s",
                 asset,
-                previous_source,
+                source_max,
                 report.updated_at,
             )
             append_etr_audit(
@@ -259,7 +308,7 @@ def _commit_poll(
                     "ts": now_iso,
                     "asset": asset,
                     "event": "stale_source",
-                    "kept_source_timestamp": previous_source,
+                    "kept_source_timestamp": source_max,
                     "ignored_source_timestamp": report.updated_at,
                 }
             )
@@ -275,6 +324,7 @@ def _commit_poll(
                 last_polled_at=now_iso,
                 last_alerted_at=now_iso,
                 in_primary_zone=report.price_in_primary_zone(),
+                source_at_max=source_timestamp_max(source_max, report.updated_at),
             )
             result.seeded = True
             logger.info("ETR baseline seeded for %s fp=%s", asset, fp)
@@ -317,6 +367,7 @@ def _commit_poll(
                 last_polled_at=now_iso,
                 last_alerted_at=prev_state.last_alerted_at,
                 in_primary_zone=report.price_in_primary_zone(),
+                source_at_max=source_timestamp_max(source_max, report.updated_at),
             )
 
             if should_alert and do_notify and notifier is not None and notifier.enabled:
@@ -325,7 +376,13 @@ def _commit_poll(
                 state[asset].last_alerted_fingerprint = fp
                 state[asset].last_alerted_at = now_iso
                 commit.alerts.append(
-                    _PendingAlert(format_change_alert(report, notify_changes), result)
+                    _PendingAlert(
+                        format_change_alert(report, notify_changes),
+                        result,
+                        kind="change",
+                        asset=asset,
+                        fingerprint=fp,
+                    )
                 )
             elif should_alert and not do_notify:
                 logger.info(
@@ -361,17 +418,90 @@ def _commit_poll(
 
     if do_notify and notifier is not None and notifier.enabled:
         for asset, error in errors:
-            if not _error_alert_due(config, meta):
-                continue
-            # Same at-most-once reservation for error alerts: the cooldown is
-            # advanced before the send so a crash cannot repeat it.
-            meta["last_error_alert_unix"] = time.time()
-            commit.alerts.append(_PendingAlert(_error_alert_message(asset, error)))
+            alert = _reserve_error_alert(config, meta, asset, error)
+            if alert is not None:
+                commit.alerts.append(alert)
+
+    _note_renderer_busy(commit, meta, busy_count, assets or [], now_iso, do_notify, notifier)
 
     meta["last_poll_unix"] = time.time()
     meta["last_poll_at"] = now_iso
     save_state_with_meta(state, meta)
+
+    # Written after the snapshot exists and before anything is sent: a crash
+    # during delivery leaves a reservation with no matching send, which is the
+    # only way a lost alert is visible at all.
+    for alert in commit.alerts:
+        append_etr_audit(
+            {
+                "ts": now_iso,
+                "asset": alert.asset,
+                "event": "alert_reserved",
+                "kind": alert.kind,
+                "fingerprint": alert.fingerprint,
+            }
+        )
     return commit
+
+
+def _note_renderer_busy(
+    commit: _Commit,
+    meta: dict[str, Any],
+    busy_count: int,
+    assets: list[str],
+    now_iso: str,
+    do_notify: bool,
+    notifier: NotifierLike | None,
+) -> None:
+    """Track consecutive busy polls and alert once when the streak is too long.
+
+    The counter lives in durable meta, not on the client: a poll builds a fresh
+    client every cycle, so an instance counter would reset before it could ever
+    fire. It resets on any cycle where no asset came back busy.
+    """
+    try:
+        streak = int(meta.get("renderer_busy_streak") or 0)
+    except (TypeError, ValueError):
+        streak = 0
+    if busy_count <= 0:
+        if streak:
+            logger.info("ETR renderer busy streak ended after %d polls", streak)
+            meta["renderer_busy_streak"] = 0
+            meta.pop("renderer_busy_since", None)
+        return
+
+    streak += 1
+    meta["renderer_busy_streak"] = streak
+    meta.setdefault("renderer_busy_since", now_iso)
+    if streak != RENDER_BUSY_ALERT_AFTER_POLLS:
+        return
+
+    # Exactly at the threshold, so a permanently wedged renderer alerts once per
+    # degradation instead of once per poll.
+    if not do_notify or notifier is None or notifier.enabled is False:
+        return
+    commit.alerts.append(
+        _PendingAlert(
+            _busy_streak_message(streak, assets, meta.get("renderer_busy_since")),
+            kind="renderer_busy",
+        )
+    )
+    append_etr_audit(
+        {
+            "ts": now_iso,
+            "event": "renderer_busy_streak",
+            "consecutive_busy_polls": streak,
+            "since": meta.get("renderer_busy_since"),
+            "assets": list(assets),
+        }
+    )
+
+
+def _busy_streak_message(streak: int, assets: list[str], since: object) -> str:
+    return (
+        f"⚠️ *ETR renderer starved* · busy for {streak} consecutive polls\n"
+        f"`no analysis for {', '.join(assets) or 'all assets'} since {since or 'unknown'}`"
+    )
 
 
 async def _deliver_alerts(
@@ -381,17 +511,47 @@ async def _deliver_alerts(
 ) -> int:
     """Send reserved notifications and finish deferred poll audits."""
     notified_count = 0
-    if notifier is not None and notifier.enabled:
+    deliverable = notifier is not None and notifier.enabled
+    if alerts and not deliverable:
         for alert in alerts:
-            ok = await notifier.send(alert.message)
+            _audit_alert_outcome(alert, delivered=False, reason="notifier unavailable")
+    if deliverable and notifier is not None:
+        for alert in alerts:
+            try:
+                ok = await notifier.send(alert.message)
+            except Exception as exc:
+                # Record it before the exception unwinds: the reservation is
+                # already durable, so without this line the alert would simply
+                # vanish from the audit trail.
+                _audit_alert_outcome(alert, delivered=False, reason=f"{type(exc).__name__}: {exc}")
+                raise
+            _audit_alert_outcome(
+                alert,
+                delivered=bool(ok),
+                reason=None if ok else "notifier returned False",
+            )
+            if ok:
+                notified_count += 1
             if alert.result is not None:
                 alert.result.notified = bool(ok)
-                if ok:
-                    notified_count += 1
     for result, record in audits:
         record["notified"] = result.notified
         append_etr_audit(record)
     return notified_count
+
+
+def _audit_alert_outcome(alert: _PendingAlert, *, delivered: bool, reason: str | None) -> None:
+    record: dict[str, Any] = {
+        "ts": datetime.now(UTC).isoformat(),
+        "asset": alert.asset,
+        "event": "alert_sent" if delivered else "alert_lost",
+        "kind": alert.kind,
+        "fingerprint": alert.fingerprint,
+        "notified": delivered,
+    }
+    if reason:
+        record["reason"] = reason
+    append_etr_audit(record)
 
 
 def _error_alert_message(asset: str, error: str) -> str:
@@ -409,21 +569,18 @@ def _error_alert_due(config: EtrConfig, meta: dict[str, Any]) -> bool:
         return True
 
 
-async def _maybe_error_alert(
-    config: EtrConfig,
-    meta: dict[str, Any],
-    notifier: NotifierLike | None,
-    asset: str,
-    error: str,
-    do_notify: bool,
-) -> None:
-    """Direct error alert helper, at-most-once: reserve the cooldown first."""
-    if not do_notify or notifier is None or not notifier.enabled:
-        return
+def _reserve_error_alert(
+    config: EtrConfig, meta: dict[str, Any], asset: str, error: str
+) -> _PendingAlert | None:
+    """Reserve one error alert, at-most-once: the cooldown advances first.
+
+    This is the live path — ``_commit_poll`` calls it under the lock, so the
+    cooldown is durable before the send.
+    """
     if not _error_alert_due(config, meta):
-        return
+        return None
     meta["last_error_alert_unix"] = time.time()
-    await notifier.send(_error_alert_message(asset, error))
+    return _PendingAlert(_error_alert_message(asset, error), kind="error", asset=asset)
 
 
 async def fetch_one_report(settings: Settings, asset: str) -> EtrReport:
@@ -433,12 +590,19 @@ async def fetch_one_report(settings: Settings, asset: str) -> EtrReport:
 
 
 def cached_reports(assets: list[str] | None = None) -> list[EtrReport]:
-    try:
-        with state_read_lock():
-            state = load_etr_state()
-    except CoordinationBusyError:
-        logger.warning("ETR cache read skipped: state coordination busy")
-        return []
+    """Last committed reports, readable without blocking the caller.
+
+    Called from async Telegram handlers and the briefing, which run on the event
+    loop. Taking the shared lock with a blocking retry stalled the loop for the
+    full two-second read timeout and then returned nothing; instead try once and
+    read anyway. Atomic replacement means a reader without the lock can only see
+    the previous complete snapshot, and slightly stale content beats an empty
+    cache.
+    """
+    with try_state_read_lock() as locked:
+        if not locked:
+            logger.info("ETR cache read proceeding without the shared lock: a writer is committing")
+        state = load_etr_state()
     keys = assets or list(state.keys())
     reports: list[EtrReport] = []
     for key in keys:

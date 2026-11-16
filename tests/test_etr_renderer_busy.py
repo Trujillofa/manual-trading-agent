@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import json
-import sys
-import types
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,42 +12,16 @@ import pytest
 
 from src.config.settings import EtrConfig
 from src.etr import service
-from src.etr.client import EtrClient
+from src.etr.client import EtrClient, EtrRendererBusyError
 from src.etr.parser import EtrUnavailableError
 from src.etr.state import load_etr_state
-
-ROOT = Path(__file__).resolve().parents[1]
-RENDERER = ROOT / "deploy" / "etr-renderer" / "app.py"
+from tests.support import renderer_stub
 
 
 def _load_renderer(monkeypatch):
-    fastapi = types.ModuleType("fastapi")
-
-    class FastAPI:
-        def __init__(self, **kwargs):
-            pass
-
-        def get(self, *args):
-            return lambda fn: fn
-
-        post = get
-
-    fastapi.FastAPI = FastAPI
-    playwright = types.ModuleType("playwright")
-    api = types.ModuleType("playwright.async_api")
-    api.Browser = object
-    api.Playwright = object
-    api.TimeoutError = TimeoutError
-    api.async_playwright = lambda: None
-    monkeypatch.setitem(sys.modules, "fastapi", fastapi)
-    monkeypatch.setitem(sys.modules, "playwright", playwright)
-    monkeypatch.setitem(sys.modules, "playwright.async_api", api)
-
-    spec = importlib.util.spec_from_file_location("etr_renderer_busy", RENDERER)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    # monkeypatch kept in the signature: the stub installs and restores its own
+    # sys.modules entries, nothing else needs patching here.
+    return renderer_stub.load("etr_renderer_busy")
 
 
 @pytest.mark.asyncio
@@ -164,19 +135,45 @@ async def test_client_maps_busy_payload_to_unavailable_without_retry(monkeypatch
         )
 
     client = _render_client(monkeypatch, handler)
-    with pytest.raises(EtrUnavailableError, match="busy"):
+    with pytest.raises(EtrRendererBusyError, match="busy"):
         await client.fetch_report("btc")
     assert len(calls) == 1  # busy is not the timeout-retry path
 
 
 @pytest.mark.asyncio
-async def test_client_maps_renderer_http_503_to_unavailable(monkeypatch) -> None:
+async def test_client_maps_busy_503_body_to_unavailable(monkeypatch) -> None:
+    # A proxy/ingress can forward the renderer's own 503; the body still names
+    # the scheduling outcome, so it stays non-alerting.
     def handler(request):
-        return httpx.Response(503, text="busy")
+        return httpx.Response(
+            503,
+            json={"text": "", "url": "https://etracademy.com/analisis/btc", "outcome": "busy"},
+        )
 
     client = _render_client(monkeypatch, handler)
-    with pytest.raises(EtrUnavailableError, match="busy"):
+    with pytest.raises(EtrRendererBusyError, match="busy"):
         await client.fetch_report("btc")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(503, text="busy"),
+        httpx.Response(503, json={"detail": "service unavailable"}),
+        httpx.Response(503, text="<html>502 Bad Gateway</html>"),
+    ],
+)
+async def test_client_plain_503_is_an_error_not_a_busy_skip(monkeypatch, response) -> None:
+    # A dead renderer, a proxy error page or a readiness probe also answer 503.
+    # Treating those as scheduling made a renderer outage completely silent.
+    def handler(request):
+        return response
+
+    client = _render_client(monkeypatch, handler)
+    with pytest.raises(RuntimeError, match="HTTP 503") as caught:
+        await client.fetch_report("btc")
+    assert not isinstance(caught.value, EtrUnavailableError)
 
 
 @pytest.mark.asyncio
@@ -207,7 +204,7 @@ class _Notifier:
 
 class _BusyClient:
     async def fetch_report(self, asset: str):
-        raise EtrUnavailableError(f"ETR renderer busy for {asset}")
+        raise EtrRendererBusyError(f"ETR renderer busy for {asset}")
 
 
 @pytest.mark.asyncio

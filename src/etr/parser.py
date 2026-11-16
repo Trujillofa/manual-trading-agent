@@ -9,9 +9,7 @@ from src.etr.models import ASSET_LABELS, EtrReport, EtrScenario, PriceZone
 
 # Prefer full integer+optional-decimal runs so 64131.2 is not truncated to 641.
 _NUM_TOKEN = r"\d+(?:[.,]\d+)*"
-_RANGE_RE = re.compile(
-    rf"(?P<lo>{_NUM_TOKEN})\s*[–\-—]\s*(?P<hi>{_NUM_TOKEN})"
-)
+_RANGE_RE = re.compile(rf"(?P<lo>{_NUM_TOKEN})\s*[–\-—]\s*(?P<hi>{_NUM_TOKEN})")
 _NUM_RE = re.compile(_NUM_TOKEN)
 _CENTER_RE = re.compile(rf"centro\s+({_NUM_TOKEN})", re.I)
 _INVALIDATION_RE = re.compile(
@@ -102,6 +100,40 @@ def _find_after(lines: list[str], label: str, *, max_ahead: int = 3) -> str | No
     return None
 
 
+def parse_updated_at(lines: list[str]) -> str | None:
+    """ETR's own "Actualizado" stamp, whether inline or on the next line.
+
+    The rendered label appears both ways: ``Actualizado: 11/08/2026 14:30`` with
+    the value on the same line, and ``Actualizado:`` as a header with the value
+    below it. Handing back the next line unconditionally returned the following
+    section title ("Tutorial") for the inline form, which ``source_time`` cannot
+    parse, so the monotonic guard stayed inert for every page: it fails open on
+    unparseable values by design.
+
+    Candidates are validated as timestamps. A label whose neighbours are not
+    timestamps yields ``None`` (guard fails open) instead of a section title.
+    """
+    from src.etr.source_time import parse_source_timestamp
+
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        lowered = stripped.lower()
+        if not (lowered.startswith("actualizado") or lowered.startswith("actualizada")):
+            continue
+        if ":" in stripped:
+            same_line = stripped.split(":", 1)[1].strip()
+        else:
+            word = "actualizado" if lowered.startswith("actualizado") else "actualizada"
+            same_line = stripped[len(word) :].strip()
+        candidates = [same_line]
+        candidates.extend(lines[j].strip() for j in range(index + 1, min(index + 3, len(lines))))
+        for candidate in candidates:
+            if candidate and parse_source_timestamp(candidate) is not None:
+                return candidate
+        return None
+    return None
+
+
 def _find_index(lines: list[str], *needles: str, exact: bool = False) -> int | None:
     lowered = [n.lower() for n in needles]
     for i, line in enumerate(lines):
@@ -168,10 +200,7 @@ def _parse_scenario(block: list[str], role: str) -> EtrScenario | None:
                 direction = line.strip().capitalize()
             continue
         if not status and (
-            "esperando" in ll
-            or "confirmaci" in ll
-            or ll == "activo"
-            or "contra tendencia" in ll
+            "esperando" in ll or "confirmaci" in ll or ll == "activo" or "contra tendencia" in ll
         ):
             status = line.strip()
 
@@ -249,7 +278,7 @@ def parse_analysis_html(html: str, asset: str) -> EtrReport:
                 price = num
                 break
 
-    updated_at = _find_after(lines, "Actualizado:")
+    updated_at = parse_updated_at(lines)
     context_score = None
     score_line = _find_after(lines, "Context score")
     if score_line:
@@ -301,8 +330,10 @@ def parse_analysis_html(html: str, asset: str) -> EtrReport:
     primary: EtrScenario | None = None
     alternative: EtrScenario | None = None
     if primary_idx is not None:
-        end = alt_idx if alt_idx is not None and alt_idx > primary_idx else min(
-            primary_idx + 45, len(lines)
+        end = (
+            alt_idx
+            if alt_idx is not None and alt_idx > primary_idx
+            else min(primary_idx + 45, len(lines))
         )
         # Name often sits right after the header
         block = _slice_block(lines, primary_idx + 1, end)
@@ -410,8 +441,10 @@ def parse_rendered_text(text: str, asset: str) -> EtrReport:
     primary_idx = _find_label_index(lines, "escenario principal")
     alt_idx = _find_label_index(lines, "escenario alternativo", "escenario por definir")
     if primary_idx is not None:
-        end = alt_idx if alt_idx is not None and alt_idx > primary_idx else min(
-            primary_idx + 45, len(lines)
+        end = (
+            alt_idx
+            if alt_idx is not None and alt_idx > primary_idx
+            else min(primary_idx + 45, len(lines))
         )
         primary = _parse_scenario(_slice_block(lines, primary_idx + 1, end), "Principal")
     if alt_idx is not None:
@@ -423,7 +456,7 @@ def parse_rendered_text(text: str, asset: str) -> EtrReport:
         asset=asset,
         label=ASSET_LABELS.get(asset, asset),
         price=price,
-        updated_at=None,
+        updated_at=parse_updated_at(lines),
         context_score=context_score,
         bias=bias,
         estado=estado,

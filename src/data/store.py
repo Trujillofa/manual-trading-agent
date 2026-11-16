@@ -185,8 +185,13 @@ class CandleStore:
             self._init_schema()
             conn = self._connect()
             try:
+                # Connections use autocommit; explicitly group the batch so a
+                # failed upsert cannot leave a partially refreshed timeframe.
+                conn.execute("BEGIN")
                 conn.executemany(_UPSERT_CANDLE, rows)
+                conn.commit()
             finally:
+                # Closing also rolls back an uncommitted transaction on failure.
                 conn.close()
             logger.info("candle_store: wrote %d rows for %s %s", len(rows), symbol_norm, timeframe)
             return len(rows)

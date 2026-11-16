@@ -14,7 +14,7 @@ from typing import Any, cast
 import httpx
 
 from src.etr.models import ASSET_PATHS, VALID_ASSETS, EtrReport
-from src.etr.parser import parse_analysis_html, parse_rendered_text
+from src.etr.parser import EtrUnavailableError, parse_analysis_html, parse_rendered_text
 from src.scanner.state import _logs_dir
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,6 @@ class EtrRenderIncompleteError(RuntimeError):
 # first attempt died waiting on a half-built page.
 RENDER_TIMEOUT_MS = 75_000
 RENDER_RETRY_TIMEOUT_MS = 90_000
-
 
 
 class EtrClient:
@@ -250,7 +249,8 @@ class EtrClient:
 
         Outcome is one of ``ready`` (analysis in the DOM), ``notice`` (the
         terminal itself says it has nothing to show), ``timeout`` (the browser
-        gave up first) or ``""`` from a renderer too old to report it.
+        gave up first), ``busy`` (another render held the renderer past the
+        bounded wait) or ``""`` from a renderer too old to report it.
         """
         asset = asset.lower().strip()
         if asset not in VALID_ASSETS:
@@ -280,15 +280,23 @@ class EtrClient:
                     raise RuntimeError(
                         f"ETR renderer {type(exc).__name__} for {asset}: {exc!r}"
                     ) from exc
+                if response.status_code == 503:
+                    # Renderer or its proxy is temporarily out of capacity. A
+                    # busy sidecar is a scheduling fact, not an ETR failure.
+                    raise EtrUnavailableError(f"ETR renderer busy (HTTP 503) for {asset}")
                 if response.status_code != 200:
                     raise RuntimeError(f"ETR renderer HTTP {response.status_code} for {asset}")
                 payload: dict[str, Any] = response.json()
                 return payload
 
             data = await _render(session)
+            if data.get("outcome") == "busy":
+                raise EtrUnavailableError(f"ETR renderer busy for {asset}")
             if "/login" in str(data.get("url", "")):
                 session = await self.ensure_session(force_login=True)
                 data = await _render(session)
+                if data.get("outcome") == "busy":
+                    raise EtrUnavailableError(f"ETR renderer busy for {asset}")
                 if "/login" in str(data.get("url", "")):
                     raise EtrAuthError(f"ETR renderer redirected {asset} to login")
         status = data.get("status")

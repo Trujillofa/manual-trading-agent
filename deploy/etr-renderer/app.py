@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from contextlib import suppress
 
 from fastapi import FastAPI
 from playwright.async_api import (
@@ -44,6 +45,10 @@ NOTICE_MARKERS = (
 )
 NOTICE_TICKS = 3
 POLL_INTERVAL_MS = 2_000
+# A second request waits this long for the single browser before being told the
+# renderer is busy. It is bounded so a caller is never queued for a full render
+# timeout; "busy" is a non-alerting outcome, not a failure.
+RENDER_QUEUE_TIMEOUT_SECONDS = 20.0
 # "Reconectando precios" shows while the app hydrates and can persist for half a
 # minute on a cold page. Treating it as conclusive early returned a header with no
 # charts, so a notice only counts after the page has had time to load.
@@ -117,9 +122,51 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+async def _acquire_lock_bounded(lock: asyncio.Lock, timeout: float) -> bool:
+    """Acquire in bounded time without ever leaking the lock on cancellation.
+
+    ``asyncio.wait_for(lock.acquire(), ...)`` can cancel acquire() at the instant
+    it succeeded, leaving the lock held forever. Reconcile the waiter task and
+    hand the lock back if that race was lost.
+    """
+    waiter = asyncio.ensure_future(lock.acquire())
+    try:
+        done, _ = await asyncio.wait({waiter}, timeout=timeout)
+        if done:
+            return True
+        waiter.cancel()
+    except asyncio.CancelledError:
+        waiter.cancel()
+        await _give_back_if_acquired(waiter, lock)
+        raise
+    await _give_back_if_acquired(waiter, lock)
+    return False
+
+
+async def _give_back_if_acquired(waiter: asyncio.Future, lock: asyncio.Lock) -> None:
+    with suppress(asyncio.CancelledError):
+        await waiter
+    if waiter.done() and not waiter.cancelled():
+        try:
+            acquired = waiter.result()
+        except Exception:
+            acquired = False
+        if acquired:
+            lock.release()
+
+
 @app.post("/render")
 async def render(req: RenderRequest) -> dict[str, object]:
-    async with _lock:
+    if not await _acquire_lock_bounded(_lock, RENDER_QUEUE_TIMEOUT_SECONDS):
+        # A busy renderer is not a failure: report it so the caller can count the
+        # asset as unavailable instead of raising an error alert.
+        print(
+            f"render {req.url} outcome=busy elapsed_ms=0 queue_timeout_s="
+            f"{RENDER_QUEUE_TIMEOUT_SECONDS:g}",
+            flush=True,
+        )
+        return {"text": "", "url": req.url, "status": None, "outcome": "busy"}
+    try:
         browser = await _browser_instance()
         context = await _context_instance(browser)
         page = None
@@ -143,7 +190,12 @@ async def render(req: RenderRequest) -> dict[str, object]:
                     f"redirected={page.url != req.url}",
                     flush=True,
                 )
-                return {"text": "", "url": page.url, "status": response.status, "outcome": "http_error"}
+                return {
+                    "text": "",
+                    "url": page.url,
+                    "status": response.status,
+                    "outcome": "http_error",
+                }
             text = ""
             notice_ticks = 0
             outcome = "timeout"
@@ -188,3 +240,5 @@ async def render(req: RenderRequest) -> dict[str, object]:
         finally:
             if page is not None:
                 await page.close()
+    finally:
+        _lock.release()

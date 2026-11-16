@@ -28,6 +28,7 @@ from src.briefing.sentiment import build_sentiment_pillar
 from src.briefing.state import load_briefing_state, save_briefing_state
 from src.briefing.technical import bar_freshness, build_technical_pillar
 from src.config.instruments import get_instrument_optional
+from src.etr.coordination import CoordinationBusyError, state_read_lock
 from src.etr.models import EtrReport
 from src.etr.state import load_etr_state
 from src.news.news_checker import NewsChecker, NewsEvent
@@ -111,7 +112,13 @@ def _etr_reports() -> tuple[dict[str, EtrReport], dict[str, str | None]]:
     reports: dict[str, EtrReport] = {}
     polled: dict[str, str | None] = {}
     try:
-        state = load_etr_state()
+        # Shared lock: the briefing reads freshness from the same transaction
+        # that pollers write under the exclusive lock.
+        with state_read_lock():
+            state = load_etr_state()
+    except CoordinationBusyError:
+        logger.warning("ETR cache read skipped for briefing: state coordination busy")
+        return reports, polled
     except Exception as exc:
         logger.warning("ETR cache unavailable for briefing: %s", exc)
         return reports, polled

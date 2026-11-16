@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import tempfile
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -42,13 +45,54 @@ def load_etr_state(path: Path | None = None) -> dict[str, AssetState]:
     return out
 
 
+def _fsync_directory(directory: Path) -> None:
+    """Persist a rename.
+
+    The caller logs a failure: the new file is already visible at that point, so
+    raising here would misreport a committed write as failed.
+    """
+    fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _atomic_write_json(target: Path, payload: dict[str, Any]) -> None:
+    """Write JSON via temp file + fsync + os.replace.
+
+    A crash before the replace leaves the previous complete file in place; a
+    reader never observes a half-written body because the directory entry is
+    swapped atomically.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
+    tmp = Path(tmp_name)
+    try:
+        # os.fdopen owns the descriptor and closes it even if json.dump fails.
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+            fh.flush()
+            os.fsync(fh.fileno())
+        # mkstemp creates 0600; keep the snapshot as readable as the previous
+        # write_text-based file was for other agents sharing the logs volume.
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, target)
+        try:
+            _fsync_directory(target.parent)
+        except OSError as exc:
+            logger.warning("ETR state directory fsync failed for %s: %s", target.parent, exc)
+    finally:
+        with suppress(FileNotFoundError):
+            tmp.unlink()
+
+
 def save_etr_state(state: dict[str, AssetState], path: Path | None = None) -> None:
     target = path or etr_state_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "assets": {key: value.to_dict() for key, value in state.items()},
     }
-    target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    _atomic_write_json(target, payload)
 
 
 def append_etr_audit(record: dict[str, Any], path: Path | None = None) -> None:
@@ -82,9 +126,8 @@ def save_state_with_meta(
     path: Path | None = None,
 ) -> None:
     target = path or etr_state_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "meta": meta,
         "assets": {key: value.to_dict() for key, value in state.items()},
     }
-    target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    _atomic_write_json(target, payload)

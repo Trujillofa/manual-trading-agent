@@ -1,4 +1,5 @@
 """Exercise timeout handling through the poller using in-memory I/O only."""
+
 from types import SimpleNamespace
 
 import httpx
@@ -23,7 +24,10 @@ async def test_timeout_retry_audit_and_global_alert_cooldown(monkeypatch):
         return httpx.Response(200, json={"text": "partial", "status": 200, "outcome": "timeout"})
 
     monkeypatch.setattr(client, "ensure_session", session)
-    monkeypatch.setattr("src.etr.client.httpx.AsyncClient", lambda **kwargs: original_client(transport=httpx.MockTransport(respond), **kwargs))
+    monkeypatch.setattr(
+        "src.etr.client.httpx.AsyncClient",
+        lambda **kwargs: original_client(transport=httpx.MockTransport(respond), **kwargs),
+    )
     monkeypatch.setattr(service, "is_etr_enabled", lambda config: True)
     monkeypatch.setattr(service, "build_client", lambda config: client)
     monkeypatch.setattr(service, "load_etr_state", lambda: state)
@@ -33,7 +37,9 @@ async def test_timeout_retry_audit_and_global_alert_cooldown(monkeypatch):
     monkeypatch.setattr(service, "process_shadow_for_report", lambda *a, **k: None)
     now = [100000.0]
     monkeypatch.setattr(service.time, "time", lambda: now[0])
-    config = SimpleNamespace(assets=["nasdaq"], telegram_alerts=True, error_alert_cooldown_minutes=360)
+    config = SimpleNamespace(
+        assets=["nasdaq"], telegram_alerts=True, error_alert_cooldown_minutes=360
+    )
 
     class Notifier:
         enabled = True
@@ -44,13 +50,20 @@ async def test_timeout_retry_audit_and_global_alert_cooldown(monkeypatch):
 
     settings = SimpleNamespace(etr=config)
     notifier = Notifier()
+
+    def reserve_error(asset: str) -> None:
+        alert = service._reserve_error_alert(config, meta, asset, "different failure")
+        if alert is not None:
+            messages.append(alert.message)
+
     first = await service.poll_and_notify(settings, notifier, force=True)
     second = await service.poll_and_notify(settings, notifier, force=True)
-    await service._maybe_error_alert(config, meta, notifier, "btc", "different failure", True)
+    reserve_error("btc")
     assert (first.error_count, second.error_count) == (1, 1)
-    assert len(calls) == 4 and [e["event"] for e in events] == ["error", "error"]
+    error_events = [e["event"] for e in events if e["event"] in {"error", "unavailable"}]
+    assert len(calls) == 4 and error_events == ["error", "error"]
     assert len(messages) == 1 and "nasdaq" in messages[0]
     now[0] += 360 * 60
-    await service._maybe_error_alert(config, meta, notifier, "btc", "different failure", True)
+    reserve_error("btc")
     assert len(messages) == 2 and "btc" in messages[1]
     assert state == {}

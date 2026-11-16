@@ -14,7 +14,7 @@ from typing import Any, cast
 import httpx
 
 from src.etr.models import ASSET_PATHS, VALID_ASSETS, EtrReport
-from src.etr.parser import parse_analysis_html, parse_rendered_text
+from src.etr.parser import EtrUnavailableError, parse_analysis_html, parse_rendered_text
 from src.scanner.state import _logs_dir
 
 logger = logging.getLogger(__name__)
@@ -39,12 +39,35 @@ class EtrRenderIncompleteError(RuntimeError):
     """
 
 
+class EtrRendererBusyError(EtrUnavailableError):
+    """The renderer answered that it is busy, or that it runs out of capacity.
+
+    A busy sidecar is a scheduling fact, not an ETR failure, so it stays in the
+    non-alerting ``EtrUnavailableError`` family. The poller counts these
+    separately: a renderer that is busy for poll after poll is starved, and that
+    has to alert instead of staying silent forever.
+    """
+
+
 # Page timeout for one browser render, and for the single retry after a render
 # that timed out without reaching the analysis. The retry is longer because the
 # first attempt died waiting on a half-built page.
 RENDER_TIMEOUT_MS = 75_000
 RENDER_RETRY_TIMEOUT_MS = 90_000
 
+
+def _is_busy_503(response: httpx.Response) -> bool:
+    """True only for a 503 whose body is the renderer's busy payload.
+
+    A proxy 503, a readiness probe or a crashed sidecar all look like 503 too.
+    The renderer names its scheduling outcome in the body, so the body is the
+    only thing that separates "try again later" from "nobody is serving this".
+    """
+    try:
+        payload = response.json()
+    except ValueError:
+        return False
+    return isinstance(payload, dict) and payload.get("outcome") == "busy"
 
 
 class EtrClient:
@@ -250,7 +273,8 @@ class EtrClient:
 
         Outcome is one of ``ready`` (analysis in the DOM), ``notice`` (the
         terminal itself says it has nothing to show), ``timeout`` (the browser
-        gave up first) or ``""`` from a renderer too old to report it.
+        gave up first), ``busy`` (another render held the renderer past the
+        bounded wait) or ``""`` from a renderer too old to report it.
         """
         asset = asset.lower().strip()
         if asset not in VALID_ASSETS:
@@ -280,15 +304,27 @@ class EtrClient:
                     raise RuntimeError(
                         f"ETR renderer {type(exc).__name__} for {asset}: {exc!r}"
                     ) from exc
+                if response.status_code == 503:
+                    # Only a body that says *busy* earns the silent treatment.
+                    # A bare 503 is a dead renderer, a proxy error page or a
+                    # readiness probe: indistinguishable from scheduling only if
+                    # the body is ignored, and then it never alerts at all.
+                    if _is_busy_503(response):
+                        raise EtrRendererBusyError(f"ETR renderer busy (HTTP 503) for {asset}")
+                    raise RuntimeError(f"ETR renderer HTTP 503 for {asset}: {response.text[:200]}")
                 if response.status_code != 200:
                     raise RuntimeError(f"ETR renderer HTTP {response.status_code} for {asset}")
                 payload: dict[str, Any] = response.json()
                 return payload
 
             data = await _render(session)
+            if data.get("outcome") == "busy":
+                raise EtrRendererBusyError(f"ETR renderer busy for {asset}")
             if "/login" in str(data.get("url", "")):
                 session = await self.ensure_session(force_login=True)
                 data = await _render(session)
+                if data.get("outcome") == "busy":
+                    raise EtrRendererBusyError(f"ETR renderer busy for {asset}")
                 if "/login" in str(data.get("url", "")):
                     raise EtrAuthError(f"ETR renderer redirected {asset} to login")
         status = data.get("status")

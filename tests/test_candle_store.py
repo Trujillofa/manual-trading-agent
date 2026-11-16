@@ -78,6 +78,38 @@ def test_upsert_is_idempotent(store: CandleStore) -> None:
     assert pytest.approx(back.iloc[1]["close"]) == 1.9999
 
 
+def test_failed_batch_rolls_back_replaced_and_new_candles(store: CandleStore) -> None:
+    df = _sample_df(n=3, start_ts=1704067200)
+    assert store.save_candles("EURUSD", "15m", df.iloc[:1]) == 1
+    changed = df.copy()
+    changed.iloc[0, changed.columns.get_loc("close")] = 42.0
+    with sqlite3.connect(store._db_path) as conn:
+        conn.execute("""
+            CREATE TRIGGER reject_last BEFORE INSERT ON candles
+            WHEN NEW.timestamp = 1704069000
+            BEGIN SELECT RAISE(ABORT, 'injected failure'); END
+        """)
+    assert store.save_candles("EURUSD", "15m", changed) == 0
+    actual = store.get_candles("EURUSD", "15m")
+    assert len(actual) == 1
+    assert actual.iloc[0]["close"] == pytest.approx(df.iloc[0]["close"])
+
+
+def test_batch_uses_single_transaction(store: CandleStore, monkeypatch) -> None:
+    statements: list[str] = []
+    connect = store._connect
+
+    def traced_connect():
+        conn = connect()
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    monkeypatch.setattr(store, "_connect", traced_connect)
+    assert store.save_candles("EURUSD", "15m", _sample_df(n=5)) == 5
+    assert sum(s.upper().startswith("BEGIN") for s in statements) == 1
+    assert sum(s.upper() == "COMMIT" for s in statements) == 1
+
+
 def test_get_candles_returns_utc_indexed_ohlcv(store: CandleStore) -> None:
     """Read-back produces the canonical schema with a UTC DatetimeIndex."""
     df = _sample_df(n=4)

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Production scanner loop: 15-minute scans, optional Telegram polling, bounded log rotation.
 #
-# Rotates only scan.log and signal_audit.jsonl. Never touches .env, telegram.log,
+# Rotates managed scanner, ETR, and briefing logs. Never touches .env, telegram.log,
 # active_signal_state.json, near_setup_state.json, news_cache.json, or results/.
 #
 # Environment (all optional):
@@ -44,9 +44,16 @@ rotate_file() {
   size=$(wc -c <"$filepath" | tr -d ' ')
   [ "$size" -ge "$ROTATE_THRESHOLD_BYTES" ] || return 0
 
-  tmp="${filepath}.rotate.$$"
-  tail -c "$RETAIN_BYTES" "$filepath" >"$tmp"
-  mv -f "$tmp" "$filepath"
+  tmp=$(mktemp "${filepath}.rotate.XXXXXX")
+  # Do not replace the original unless content and ownership/mode are preserved.
+  # Apply the mode after chown, which may clear special permission bits.
+  if ! tail -c "$RETAIN_BYTES" "$filepath" >"$tmp" ||
+     ! chown --reference="$filepath" "$tmp" ||
+     ! chmod --reference="$filepath" "$tmp" ||
+     ! mv -f "$tmp" "$filepath"; then
+    rm -f "$tmp"
+    return 1
+  fi
 }
 
 rotate_managed_logs() {

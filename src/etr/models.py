@@ -212,6 +212,17 @@ class AssetState:
     last_polled_at: str | None = None
     last_alerted_at: str | None = None
     in_primary_zone: bool | None = None
+    # Latest source ("Actualizado") value ever seen for this asset, independent
+    # of what the last committed report carried. A date-only render must not
+    # lower this watermark, or a later older render of the same day would compare
+    # equal and be committed.
+    source_at_max: str | None = None
+    # A change that would have alerted while notifications were disabled. The
+    # snapshot commits, so the next poll's diff is empty; without this the
+    # preview silently ate the alert. Holds the already-formatted message plus
+    # the fingerprint it belongs to, and is cleared in the same transaction that
+    # reserves the delivery, so it stays at-most-once.
+    pending_alert: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -221,10 +232,13 @@ class AssetState:
             "last_polled_at": self.last_polled_at,
             "last_alerted_at": self.last_alerted_at,
             "in_primary_zone": self.in_primary_zone,
+            "source_at_max": self.source_at_max,
+            "pending_alert": self.pending_alert,
         }
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> AssetState:
+        pending = payload.get("pending_alert")
         return cls(
             fingerprint=str(payload.get("fingerprint") or ""),
             report=dict(payload.get("report") or {}),
@@ -234,6 +248,8 @@ class AssetState:
             in_primary_zone=payload.get("in_primary_zone")
             if isinstance(payload.get("in_primary_zone"), bool)
             else None,
+            source_at_max=_opt_str(payload.get("source_at_max")),
+            pending_alert=dict(pending) if isinstance(pending, dict) else None,
         )
 
 

@@ -61,6 +61,8 @@ services:
   etr-renderer:
     build:
       context: ./deploy/etr-renderer
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     container_name: etr-renderer
     restart: unless-stopped
     shm_size: "512m"

@@ -2,8 +2,18 @@
 # in the browser, so the only faithful way to read it is to run the browser.
 FROM python:3.12-slim
 
+# The deploy contract checks that every running image reports the commit it was
+# built from. Without this the sidecar is unverifiable from `docker inspect`:
+# a stale image looks identical to a fresh one, which is how PR #75's renderer
+# half sat unshipped for nine days.
+ARG GIT_SHA=unknown
+
 ENV PYTHONUNBUFFERED=1 \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    DEPLOY_GIT_SHA=${GIT_SHA}
+
+LABEL org.opencontainers.image.revision=${GIT_SHA} \
+      org.opencontainers.image.source="https://github.com/Trujillofa/manual-trading-agent"
 
 WORKDIR /app
 

@@ -236,6 +236,9 @@ These documents are the source of truth for why current promoted pair profiles w
 ### Local (`/home/yderf/`)
 - manual-trading-agent: `/home/yderf/Projects/trading/manual-trading-agent`
 - Deploy via `scripts/deploy.sh` (target SHA, default `HEAD`):
+  0. Abort unless the host's **docker filesystem** has `DISK_MIN_FREE_GB`
+     (default 5) GB free — a build needs roughly twice the largest image and
+     dying mid-export leaves the host full and the containers already recreated.
   1. Abort if the remote clone has unexpected **tracked** drift (operator edits).
   2. `git fetch` and `git checkout` the target SHA **before** rsync. Do not
      `git reset --hard`. Runtime paths stay in place: `.env`, `logs/`, `data/`,
@@ -249,6 +252,9 @@ These documents are the source of truth for why current promoted pair profiles w
   6. Assert `org.opencontainers.image.revision` on every service equals the
      target SHA; a mismatch fails the deploy. Health alone cannot distinguish a
      rebuilt image from a stale one, which is why this is a separate gate.
+  7. If headroom fell below `DISK_KEEP_FREE_GB` (default 8), prune the build
+     cache. Only reached after every service is healthy and labelled; images and
+     volumes are never pruned.
   Building only the agent left the renderer on an image older than the client
   that talks to it; PR #75's renderer deadline and degrading `/health` sat
   unshipped that way despite being merged and "deployed". Both Dockerfiles now

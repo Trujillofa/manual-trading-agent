@@ -92,6 +92,7 @@ def _install_fakes(
     docker_log: Path,
     *,
     revision: str = "deployed-sha",
+    free_gb: int = 100,
 ) -> None:
     _write_executable(
         bin_dir / "ssh",
@@ -110,6 +111,15 @@ if [[ $# -eq 0 ]]; then
   exec /bin/bash
 fi
 exec /bin/bash -c "$*"
+""",
+    )
+    _write_executable(
+        bin_dir / "df",
+        f"""#!/usr/bin/env bash
+# Report a fixed amount of free space so the disk-headroom guard is deterministic
+# and does not depend on the machine running the tests.
+echo "Filesystem 1B-blocks Used Available Capacity Mounted on"
+echo "/dev/fake 107374182400 0 {free_gb * 1073741824} 0% /"
 """,
     )
     _write_executable(
@@ -244,7 +254,11 @@ def test_unexpected_tracked_drift_fails_before_build(tmp_path: Path) -> None:
     assert (remote / "app.txt").read_text(encoding="utf-8") == "operator-edit\n"
     assert (remote / ".env").read_text(encoding="utf-8") == "SECRET=keep-me\n"
     assert (remote / ".deploy-sha").read_text(encoding="utf-8").strip() == old_sha
-    assert not docker_log.exists() or docker_log.read_text(encoding="utf-8") == ""
+    # The disk probe reads `docker info`; nothing may build, start or stop.
+    if docker_log.exists():
+        calls = docker_log.read_text(encoding="utf-8")
+        for mutating in ("compose build", "compose up", "compose down"):
+            assert mutating not in calls, calls
     assert not (remote / ".staging").exists()
     assert not (remote / "added.txt").exists()
 
@@ -369,3 +383,45 @@ def test_stale_image_revision_aborts_after_health(tmp_path: Path) -> None:
     assert result.returncode != 0
     assert "runs revision 'stale-sha'" in result.stderr, result.stderr
     assert (remote / ".deploy-sha").read_text(encoding="utf-8").strip() == new_sha
+
+
+def test_low_disk_aborts_before_touching_the_remote(tmp_path: Path) -> None:
+    """A full docker filesystem must stop the deploy before anything changes.
+
+    On 2026-11-24 a deploy died at renderer layer export with the host at 100%,
+    after the containers had already been recreated. The guard makes that a
+    pre-flight failure with the remediation in the message.
+    """
+    local, remote, bin_dir, old_sha, new_sha = _build_repos(tmp_path)
+    docker_log = tmp_path / "docker.log"
+    _install_fakes(bin_dir, remote, docker_log, revision="from-git", free_gb=2)
+
+    result = _run_deploy(local, remote, bin_dir, new_sha)
+
+    assert result.returncode != 0
+    assert "2 GB free" in result.stderr, result.stderr
+    assert "docker builder prune" in result.stderr
+    assert _git(remote, "rev-parse", "HEAD").stdout.strip() == old_sha
+    assert (remote / ".deploy-sha").read_text(encoding="utf-8").strip() == old_sha
+    assert not (remote / "added.txt").exists()
+    if docker_log.exists():
+        assert "compose build" not in docker_log.read_text(encoding="utf-8")
+
+
+def test_thin_headroom_after_deploy_reclaims_build_cache(tmp_path: Path) -> None:
+    """A successful deploy must not leave the host one build from full.
+
+    Build cache is what grows across deploys, so it is reclaimed only after every
+    service is healthy and labelled — never before the deploy has succeeded.
+    """
+    local, remote, bin_dir, _old_sha, new_sha = _build_repos(tmp_path)
+    docker_log = tmp_path / "docker.log"
+    _install_fakes(bin_dir, remote, docker_log, revision="from-git", free_gb=6)
+
+    result = _run_deploy(local, remote, bin_dir, new_sha)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    calls = docker_log.read_text(encoding="utf-8")
+    assert "builder prune" in calls, calls
+    # Prune happens after the revision gate, not in place of it.
+    assert calls.index("opencontainers.image.revision") < calls.index("builder prune")

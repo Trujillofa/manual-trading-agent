@@ -423,8 +423,10 @@ def test_thin_headroom_after_deploy_reclaims_build_cache(tmp_path: Path) -> None
     assert result.returncode == 0, result.stdout + result.stderr
     calls = docker_log.read_text(encoding="utf-8")
     assert "builder prune" in calls, calls
-    # Prune to a target, not to nothing: wiping the cache forces a full rebuild
-    # (the Chromium layer alone is ~1.9 GB) on every subsequent deploy.
-    assert "--min-free-space" in calls, calls
+    # --min-free-space is deliberately NOT used: on this Docker it either frees
+    # ~nothing (8 GB target, 2.8 GB cache: 3.4 MB freed) or wipes the cache
+    # anyway (12 GB target). Claiming a target it does not honour would make the
+    # logged "headroom after prune" misleading.
+    assert "--min-free-space" not in calls, calls
     # Prune happens after the revision gate, not in place of it.
     assert calls.index("opencontainers.image.revision") < calls.index("builder prune")

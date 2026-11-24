@@ -253,9 +253,10 @@ These documents are the source of truth for why current promoted pair profiles w
      target SHA; a mismatch fails the deploy. Health alone cannot distinguish a
      rebuilt image from a stale one, which is why this is a separate gate.
   7. If headroom fell below `DISK_KEEP_FREE_GB` (default 8), prune the build
-     cache only as far as that target (`--min-free-space`), keeping layers a
-     repeat build reuses. Only reached after every service is healthy and
-     labelled; images and volumes are never pruned.
+     cache. Only reached after every service is healthy and labelled; images and
+     volumes are never pruned. Pruning is all-or-nothing on this Docker —
+     `--min-free-space` does not honour its target (measured: either ~3 MB or
+     the whole cache), so the tradeoff is a rebuild that re-downloads Chromium.
   Building only the agent left the renderer on an image older than the client
   that talks to it; PR #75's renderer deadline and degrading `/health` sat
   unshipped that way despite being merged and "deployed". Both Dockerfiles now

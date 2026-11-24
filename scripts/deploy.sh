@@ -9,19 +9,27 @@
 #   REMOTE_PATH  — absolute path on server (e.g. /opt/manual-trading-agent)
 #
 # Optional env vars:
-#   SERVICE_NAME — docker compose service name (default: manual-trading-agent)
+#   SERVICE_NAME  — primary docker compose service (default: manual-trading-agent)
+#   SIDE_SERVICES — additional services built from this repo (default: etr-renderer)
 #
 # Order of operations (avoids the rsync-then-checkout collision):
 #   1. Abort if the remote clone has unexpected tracked drift
 #   2. Fetch and checkout the target SHA on the remote (no git reset --hard)
 #   3. Stream git archive → staging → rsync, preserving runtime files
 #   4. Verify remote HEAD and .deploy-sha before docker build/up
+#
+# Every service whose image is built from this repo is rebuilt here. Building
+# only SERVICE_NAME left etr-renderer running an image older than the code it
+# talks to, so renderer-side fixes could merge and deploy without ever reaching
+# production (PR #75 shipped a 447-line renderer change that way).
 
 set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────────
 DEPLOY_REF="${1:-HEAD}"
 SERVICE_NAME="${SERVICE_NAME:-manual-trading-agent}"
+SIDE_SERVICES="${SIDE_SERVICES:-etr-renderer}"
+ALL_SERVICES="${SERVICE_NAME} ${SIDE_SERVICES}"
 SSH_HOST="${SSH_HOST:?SSH_HOST env var is required (e.g. user@1.2.3.4)}"
 REMOTE_PATH="${REMOTE_PATH:?REMOTE_PATH env var is required (e.g. /opt/manual-trading-agent)}"
 
@@ -187,47 +195,56 @@ CRON
 chmod 644 /etc/cron.d/manual-trading-pre-ny-briefing
 EOF
 
-# ── 6. Build & restart Docker service ─────────────────────────────────────────
-log "Building Docker image for ${SERVICE_NAME} …"
+# ── 6. Build & restart Docker services ────────────────────────────────────────
+log "Building Docker images for: ${ALL_SERVICES} …"
 remote bash <<EOF
 set -euo pipefail
 cd '${REMOTE_PATH}'
-GIT_SHA='${COMMIT_SHA}' docker compose build ${SERVICE_NAME}
-GIT_SHA='${COMMIT_SHA}' docker compose up -d --no-deps ${SERVICE_NAME}
+GIT_SHA='${COMMIT_SHA}' docker compose build ${ALL_SERVICES}
+GIT_SHA='${COMMIT_SHA}' docker compose up -d --no-deps ${ALL_SERVICES}
 EOF
 
 # ── 7. Health check ───────────────────────────────────────────────────────────
-log "Waiting for container health check …"
-for i in $(seq 1 "${HEALTH_RETRIES}"); do
-  STATUS=$(remote \
-    "docker inspect --format='{{.State.Health.Status}}' '${SERVICE_NAME}' 2>/dev/null || echo 'not-found'")
+check_health() {
+  local service="$1"
+  log "Waiting for '${service}' health check …"
+  for i in $(seq 1 "${HEALTH_RETRIES}"); do
+    local status
+    status=$(remote \
+      "docker inspect --format='{{.State.Health.Status}}' '${service}' 2>/dev/null || echo 'not-found'")
 
-  case "${STATUS}" in
-    healthy)
-      log "Container is healthy ✓"
-      break
-      ;;
-    starting)
-      log "  [${i}/${HEALTH_RETRIES}] Still starting … (sleeping ${HEALTH_SLEEP}s)"
-      sleep "${HEALTH_SLEEP}"
-      ;;
-    not-found)
-      RUNNING=$(remote \
-        "docker inspect --format='{{.State.Running}}' '${SERVICE_NAME}' 2>/dev/null || echo 'false'")
-      if [[ "${RUNNING}" == "true" ]]; then
-        log "Container is running (no HEALTHCHECK defined) ✓"
-        break
-      fi
-      err "Container '${SERVICE_NAME}' not found after deploy"
-      ;;
-    *)
-      err "Container health status: ${STATUS}"
-      ;;
-  esac
+    case "${status}" in
+      healthy)
+        log "'${service}' is healthy ✓"
+        return 0
+        ;;
+      starting)
+        log "  [${i}/${HEALTH_RETRIES}] '${service}' still starting … (sleeping ${HEALTH_SLEEP}s)"
+        sleep "${HEALTH_SLEEP}"
+        ;;
+      not-found)
+        local running
+        running=$(remote \
+          "docker inspect --format='{{.State.Running}}' '${service}' 2>/dev/null || echo 'false'")
+        if [[ "${running}" == "true" ]]; then
+          log "'${service}' is running (no HEALTHCHECK defined) ✓"
+          return 0
+        fi
+        err "Container '${service}' not found after deploy"
+        ;;
+      *)
+        err "Container '${service}' health status: ${status}"
+        ;;
+    esac
 
-  if [[ "${i}" -eq "${HEALTH_RETRIES}" ]]; then
-    err "Health check timed out after $((HEALTH_RETRIES * HEALTH_SLEEP))s"
-  fi
+    if [[ "${i}" -eq "${HEALTH_RETRIES}" ]]; then
+      err "Health check for '${service}' timed out after $((HEALTH_RETRIES * HEALTH_SLEEP))s"
+    fi
+  done
+}
+
+for service in ${ALL_SERVICES}; do
+  check_health "${service}"
 done
 
-log "Deploy complete — ${SERVICE_NAME} @ ${COMMIT_SHA}"
+log "Deploy complete — ${ALL_SERVICES} @ ${COMMIT_SHA}"

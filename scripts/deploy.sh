@@ -286,12 +286,16 @@ done
 # Only reached after every service is healthy and labelled, so this cleans up a
 # deploy that already succeeded. Build cache is regenerable; images and volumes
 # are never touched here.
+#
+# `--min-free-space` prunes only as far as needed, keeping the layers a repeat
+# build reuses. A blunt `-af` reclaimed more but threw away the cached Chromium
+# install every deploy, turning each build into a full ~2.9 GB rebuild.
 left_gb=$(remote "root=\$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true); \
   [ -d \"\${root}\" ] || root='${REMOTE_PATH}'; \
   df -B1 \"\${root}\" | awk 'NR==2 {printf \"%d\", \$4/1073741824}'")
 if [[ -n "${left_gb}" && "${left_gb}" -lt "${DISK_KEEP_FREE_GB}" ]]; then
-  log "Disk down to ${left_gb} GB — reclaiming build cache …"
-  remote "docker builder prune -af >/dev/null 2>&1 || true"
+  log "Disk down to ${left_gb} GB — reclaiming build cache to ${DISK_KEEP_FREE_GB} GB free …"
+  remote "docker builder prune -af --min-free-space ${DISK_KEEP_FREE_GB}GB >/dev/null 2>&1 || true"
   after_gb=$(remote "root=\$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true); \
     [ -d \"\${root}\" ] || root='${REMOTE_PATH}'; \
     df -B1 \"\${root}\" | awk 'NR==2 {printf \"%d\", \$4/1073741824}'")

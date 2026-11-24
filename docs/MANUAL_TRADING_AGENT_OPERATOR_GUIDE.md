@@ -246,17 +246,23 @@ These documents are the source of truth for why current promoted pair profiles w
      from this repo: `manual-trading-agent` plus the `etr-renderer` sidecar
      (`SIDE_SERVICES`). Each is health-checked after restart. Staging is removed
      on success or failure.
+  6. Assert `org.opencontainers.image.revision` on every service equals the
+     target SHA; a mismatch fails the deploy. Health alone cannot distinguish a
+     rebuilt image from a stale one, which is why this is a separate gate.
   Building only the agent left the renderer on an image older than the client
   that talks to it; PR #75's renderer deadline and degrading `/health` sat
-  unshipped that way despite being merged and "deployed".
+  unshipped that way despite being merged and "deployed". Both Dockerfiles now
+  label the revision and compose passes `GIT_SHA` to each build.
   Image label `org.opencontainers.image.revision` and env `DEPLOY_GIT_SHA`
   carry the commit. Do not redeploy solely because `deploy.sh` changed.
 
 ### Hetzner (SSH: `crypto-agent` / `root@46.225.119.221`)
 - manual-trading-agent: `/home/emilio/manual-trading-agent`
-- Container: `manual-trading-agent` (15m scan + Telegram poll + ETR poll + pre-NY briefing)
-- After deploy, `git rev-parse HEAD`, `.deploy-sha`, and the image revision
-  must match. Tracked dirt on the remote is a stop, not something to reset away.
+- Containers: `manual-trading-agent` (15m scan + Telegram poll + ETR poll +
+  pre-NY briefing) and `etr-renderer` (Chromium sidecar for the ETR page).
+- After deploy, `git rev-parse HEAD`, `.deploy-sha`, and the image revision of
+  **each** container must match. `deploy.sh` enforces the revisions; tracked
+  dirt on the remote is a stop, not something to reset away.
 
 ### GitHub (Trujillofa)
 - https://github.com/Trujillofa/manual-trading-agent

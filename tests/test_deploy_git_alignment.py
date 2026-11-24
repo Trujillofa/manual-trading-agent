@@ -86,7 +86,13 @@ def _build_repos(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
     return local, remote, tmp_path / "bin", old_sha, new_sha
 
 
-def _install_fakes(bin_dir: Path, remote: Path, docker_log: Path) -> None:
+def _install_fakes(
+    bin_dir: Path,
+    remote: Path,
+    docker_log: Path,
+    *,
+    revision: str = "deployed-sha",
+) -> None:
     _write_executable(
         bin_dir / "ssh",
         f"""#!/usr/bin/env bash
@@ -116,6 +122,16 @@ if [[ "$*" == *Health.Status* ]]; then
 fi
 if [[ "$*" == *State.Running* ]]; then
   echo true
+  exit 0
+fi
+if [[ "$*" == *opencontainers.image.revision* ]]; then
+  # deploy.sh has already checked out the target SHA in this cwd, so mirroring
+  # HEAD emulates a correctly labelled image. A fixed string emulates staleness.
+  if [[ "{revision}" == "from-git" ]]; then
+    git rev-parse HEAD
+  else
+    echo "{revision}"
+  fi
   exit 0
 fi
 exit 0
@@ -187,7 +203,7 @@ def test_old_rsync_then_checkout_collides(tmp_path: Path) -> None:
 def test_clean_old_commit_deploys_to_newer_commit(tmp_path: Path) -> None:
     local, remote, bin_dir, old_sha, new_sha = _build_repos(tmp_path)
     docker_log = tmp_path / "docker.log"
-    _install_fakes(bin_dir, remote, docker_log)
+    _install_fakes(bin_dir, remote, docker_log, revision="from-git")
 
     result = _run_deploy(local, remote, bin_dir, new_sha)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -204,7 +220,7 @@ def test_clean_old_commit_deploys_to_newer_commit(tmp_path: Path) -> None:
 def test_runtime_files_survive_unchanged(tmp_path: Path) -> None:
     local, remote, bin_dir, _old_sha, new_sha = _build_repos(tmp_path)
     docker_log = tmp_path / "docker.log"
-    _install_fakes(bin_dir, remote, docker_log)
+    _install_fakes(bin_dir, remote, docker_log, revision="from-git")
 
     result = _run_deploy(local, remote, bin_dir, new_sha)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -218,7 +234,7 @@ def test_runtime_files_survive_unchanged(tmp_path: Path) -> None:
 def test_unexpected_tracked_drift_fails_before_build(tmp_path: Path) -> None:
     local, remote, bin_dir, old_sha, new_sha = _build_repos(tmp_path)
     docker_log = tmp_path / "docker.log"
-    _install_fakes(bin_dir, remote, docker_log)
+    _install_fakes(bin_dir, remote, docker_log, revision="from-git")
     (remote / "app.txt").write_text("operator-edit\n", encoding="utf-8")
 
     result = _run_deploy(local, remote, bin_dir, new_sha)
@@ -236,7 +252,7 @@ def test_unexpected_tracked_drift_fails_before_build(tmp_path: Path) -> None:
 def test_head_and_deploy_sha_match_after_success(tmp_path: Path) -> None:
     local, remote, bin_dir, _old_sha, new_sha = _build_repos(tmp_path)
     docker_log = tmp_path / "docker.log"
-    _install_fakes(bin_dir, remote, docker_log)
+    _install_fakes(bin_dir, remote, docker_log, revision="from-git")
 
     result = _run_deploy(local, remote, bin_dir, new_sha)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -256,7 +272,7 @@ def test_rebuilds_every_service_built_from_this_repo(tmp_path: Path) -> None:
     """
     local, remote, bin_dir, _old_sha, new_sha = _build_repos(tmp_path)
     docker_log = tmp_path / "docker.log"
-    _install_fakes(bin_dir, remote, docker_log)
+    _install_fakes(bin_dir, remote, docker_log, revision="from-git")
 
     result = _run_deploy(local, remote, bin_dir, new_sha)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -271,3 +287,85 @@ def test_rebuilds_every_service_built_from_this_repo(tmp_path: Path) -> None:
         assert any(
             "Health.Status" in c and c.split()[-1] == service for c in calls
         ), f"{service} was not health-checked: {calls}"
+
+
+def _compose_builds() -> dict[str, tuple[str, str]]:
+    """Map each service built from this repo to (dockerfile path, compose block)."""
+    import re
+
+    root = DEPLOY_SH.parents[1]
+    compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
+    blocks: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in compose.splitlines():
+        top = re.match(r"^  ([a-z0-9][a-z0-9_-]*):\s*$", line)
+        if top:
+            current = top.group(1)
+            blocks[current] = []
+            continue
+        if current:
+            blocks[current].append(line)
+
+    builds: dict[str, tuple[str, str]] = {}
+    for service, lines in blocks.items():
+        try:
+            idx = lines.index("    build:")
+        except ValueError:
+            continue
+        context = "."
+        dockerfile = "Dockerfile"
+        for line in lines[idx + 1 :]:
+            if line and not line.startswith("      "):
+                break
+            m = re.match(r"^\s+context:\s*(\S+)\s*$", line)
+            if m:
+                context = m.group(1)
+                continue
+            m = re.match(r"^\s+dockerfile:\s*(\S+)\s*$", line)
+            if m:
+                dockerfile = m.group(1)
+        path = (root / context.lstrip("./") / dockerfile).resolve()
+        assert path.exists(), f"{service}: compose points at missing {path}"
+        builds[service] = (str(path), "\n".join(lines))
+    return builds
+
+
+def test_every_built_image_reports_the_deployed_commit() -> None:
+    """Each repo-built image must carry the revision label deploy.sh verifies.
+
+    The operator guide requires a deployed image's revision to match the target
+    SHA. etr-renderer had no ARG/LABEL and no build args, so it reported nothing
+    and a stale sidecar was indistinguishable from a fresh one — exactly how
+    PR #75's renderer changes went unshipped.
+    """
+    import re
+
+    builds = _compose_builds()
+    assert {"manual-trading-agent", "etr-renderer"} <= set(builds), builds
+
+    for service, (path_str, block) in sorted(builds.items()):
+        text = Path(path_str).read_text(encoding="utf-8")
+        assert "org.opencontainers.image.revision=${GIT_SHA}" in text, (
+            f"{service}: {path_str} does not label the image revision"
+        )
+        assert re.search(r"^ARG GIT_SHA", text, re.MULTILINE), (
+            f"{service}: {path_str} has no GIT_SHA build arg for the label"
+        )
+        assert "GIT_SHA:" in block, f"{service} build block passes no GIT_SHA arg"
+
+
+def test_stale_image_revision_aborts_after_health(tmp_path: Path) -> None:
+    """A service whose image reports the wrong commit fails the deploy.
+
+    This is the check that would have flagged the etr-renderer still running its
+    pre-#75 image while health said healthy.
+    """
+    local, remote, bin_dir, _old_sha, new_sha = _build_repos(tmp_path)
+    docker_log = tmp_path / "docker.log"
+    _install_fakes(bin_dir, remote, docker_log, revision="stale-sha")
+
+    result = _run_deploy(local, remote, bin_dir, new_sha)
+
+    assert result.returncode != 0
+    assert "runs revision 'stale-sha'" in result.stderr, result.stderr
+    assert (remote / ".deploy-sha").read_text(encoding="utf-8").strip() == new_sha

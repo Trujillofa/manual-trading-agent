@@ -247,4 +247,17 @@ for service in ${ALL_SERVICES}; do
   check_health "${service}"
 done
 
+# ── 8. Verify image revisions ────────────────────────────────────────────────
+# Health alone cannot tell a rebuilt image from a stale one; the label can.
+# This is what caught nothing when #75's renderer half never shipped.
+log "Verifying image revision on every service …"
+for service in ${ALL_SERVICES}; do
+  revision=$(remote \
+    "docker inspect --format='{{index .Config.Labels \"org.opencontainers.image.revision\"}}' '${service}'")
+  if [[ "${revision}" != "${COMMIT_SHA}" ]]; then
+    err "Service '${service}' runs revision '${revision}', expected ${COMMIT_SHA}"
+  fi
+  log "  '${service}' revision ${revision} ✓"
+done
+
 log "Deploy complete — ${ALL_SERVICES} @ ${COMMIT_SHA}"

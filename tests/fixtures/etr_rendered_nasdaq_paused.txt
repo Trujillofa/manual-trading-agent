@@ -1,0 +1,38 @@
+Journal: actualizado
+Tutorial
+Noticias
+Terminal
+Comunidad
+¿Tienes un problema?
+Ver perfil
+Cerrar sesión
+
+ETR EDGE / EXNESS
+
+Análisis técnico
+
+Tus gráficos, las cotizaciones de tu cuenta y los escenarios H4 / M5 en un solo lugar.
+
+Ir a operar
+Bitcoin
+Oro
+Nasdaq
+Petróleo
+Cuenta Exness
+Exness · 32000003726
+
+No se pudo consultar el instrumento en Exness
+
+Análisis en pausa. Revisa el mensaje y comprueba el acceso de esta cuenta.
+
+Actualizar
+
+Exness devolvió HTTP 404 (código 4000). Falló al consultar el historial de precios. Referencia para soporte: aece0c27-0624-4a66-9cb5-4c22da854f50.
+
+Comprueba el acceso actual y el servidor asignado por Exness.
+
+Comprobar conexión
+Ir a Conexiones
+Ver soluciones paso a paso
+
+Esta lectura usa reglas técnicas de ETR y precios de Exness. La IA permanece en Psicotrading. TP1 y TP2 son zonas técnicas; no sustituyen el SL del 1,72% ni el TP del 4% de tus órdenes. Para enviar o modificar una operación, entra al Trading Terminal.

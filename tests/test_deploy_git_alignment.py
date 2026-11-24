@@ -245,3 +245,29 @@ def test_head_and_deploy_sha_match_after_success(tmp_path: Path) -> None:
     assert head == new_sha
     assert deployed == new_sha
     assert head == deployed
+
+
+def test_rebuilds_every_service_built_from_this_repo(tmp_path: Path) -> None:
+    """The sidecar is built from this repo, so it must be rebuilt and health-checked.
+
+    PR #75 merged a 447-line change to deploy/etr-renderer/app.py, yet deploy.sh
+    built only SERVICE_NAME: the renderer kept running a pre-#75 image and its
+    wedged-browser deadline and degrading /health never reached production.
+    """
+    local, remote, bin_dir, _old_sha, new_sha = _build_repos(tmp_path)
+    docker_log = tmp_path / "docker.log"
+    _install_fakes(bin_dir, remote, docker_log)
+
+    result = _run_deploy(local, remote, bin_dir, new_sha)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    calls = docker_log.read_text(encoding="utf-8").splitlines()
+    build = [c for c in calls if "compose build" in c]
+    up = [c for c in calls if "compose up" in c]
+    assert len(build) == 1 and len(up) == 1, calls
+    for service in ("manual-trading-agent", "etr-renderer"):
+        assert service in build[0].split(), build[0]
+        assert service in up[0].split(), up[0]
+        assert any(
+            "Health.Status" in c and c.split()[-1] == service for c in calls
+        ), f"{service} was not health-checked: {calls}"

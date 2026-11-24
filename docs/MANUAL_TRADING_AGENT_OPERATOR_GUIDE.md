@@ -242,8 +242,13 @@ These documents are the source of truth for why current promoted pair profiles w
      `results/`, `.ops-backups/`, `.deploy-sha`.
   3. `git archive` → staging → rsync (same preserve list, plus `.git` / `.venv`).
   4. Verify remote `HEAD` and `.deploy-sha` both equal the target SHA.
-  5. Only then `GIT_SHA=… docker compose build/up`. Staging is removed on
-     success or failure.
+  5. Only then `GIT_SHA=… docker compose build/up` for **every** service built
+     from this repo: `manual-trading-agent` plus the `etr-renderer` sidecar
+     (`SIDE_SERVICES`). Each is health-checked after restart. Staging is removed
+     on success or failure.
+  Building only the agent left the renderer on an image older than the client
+  that talks to it; PR #75's renderer deadline and degrading `/health` sat
+  unshipped that way despite being merged and "deployed".
   Image label `org.opencontainers.image.revision` and env `DEPLOY_GIT_SHA`
   carry the commit. Do not redeploy solely because `deploy.sh` changed.
 

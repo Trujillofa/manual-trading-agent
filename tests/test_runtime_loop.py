@@ -62,6 +62,41 @@ def test_rotate_once_trims_signal_audit_jsonl(tmp_path: Path) -> None:
     assert audit.read_bytes() == payload[-100:]
 
 
+def test_rotation_preserves_owner_group_and_mode(tmp_path: Path) -> None:
+    audit = tmp_path / "signal_audit.jsonl"
+    audit.write_bytes(b"a" * 300)
+    audit.chmod(0o640)
+    before = audit.stat()
+
+    result = _run_rotate_once(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    after = audit.stat()
+    assert (after.st_uid, after.st_gid, after.st_mode & 0o7777) == (
+        before.st_uid, before.st_gid, before.st_mode & 0o7777
+    )
+    assert audit.read_bytes() == b"a" * 80
+
+
+def test_rotation_keeps_original_if_ownership_copy_fails(tmp_path: Path) -> None:
+    audit = tmp_path / "signal_audit.jsonl"
+    payload = b"a" * 300
+    audit.write_bytes(payload)
+    before = audit.stat()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    chown = bin_dir / "chown"
+    chown.write_text("#!/bin/sh\nexit 1\n")
+    chown.chmod(0o755)
+
+    result = _run_rotate_once(tmp_path, extra_env={"PATH": f"{bin_dir}:{os.environ['PATH']}"})
+
+    assert result.returncode != 0
+    assert audit.read_bytes() == payload
+    assert audit.stat().st_ino == before.st_ino
+    assert not list(tmp_path.glob("*.rotate.*"))
+
+
 def test_rotate_once_skips_files_below_threshold(tmp_path: Path) -> None:
     scan_log = tmp_path / "scan.log"
     payload = b"small"

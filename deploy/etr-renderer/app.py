@@ -52,6 +52,11 @@ NOTICE_MARKERS = (
     "escenarios se mostrar",
     "historial de 5m está desactualizado",
     "historial de 5m esta desactualizado",
+    # The terminal gives up on the instrument itself and says why. Nothing will
+    # hydrate while the account cannot read Exness for that symbol, so waiting
+    # out the deadline only turned a stated pause into a render timeout.
+    "análisis en pausa",
+    "no se pudo consultar el instrumento",
 )
 NOTICE_TICKS = 3
 POLL_INTERVAL_MS = 2_000

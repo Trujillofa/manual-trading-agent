@@ -95,6 +95,20 @@ class RendererDiagnosticsTests(unittest.TestCase):
                 self.assertIn("outcome=" + outcome, log)
                 self.assertTrue(page.closed)
 
+    def test_paused_instrument_is_a_notice_not_a_timeout(self):
+        # Real NASDAQ page (tests/fixtures/etr_rendered_nasdaq_paused.txt): the
+        # terminal paused the instrument and named why — "Análisis en pausa …
+        # Exness devolvió HTTP 404". That is definitive, so the render must end
+        # on the notice instead of burning the whole deadline and reporting a
+        # timeout the client then turned into a hard error with a Telegram alert.
+        paused = (Path(__file__).parent / "fixtures/etr_rendered_nasdaq_paused.txt").read_text(encoding="utf-8")
+        page = Page(paused)
+        result, log = self.run_render(page)
+        self.assertEqual(result["outcome"], "notice")
+        self.assertIn("outcome=notice", log)
+        self.assertIn("Análisis en pausa", result["text"])
+        self.assertTrue(page.closed)
+
     def test_cookie_failure_preserves_original_exception(self):
         async def browser():
             return object()

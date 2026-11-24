@@ -58,6 +58,28 @@ log "Deploying ref '${DEPLOY_REF}' → ${SSH_HOST}:${REMOTE_PATH}"
 COMMIT_SHA=$(git rev-parse "${DEPLOY_REF}")
 log "Resolved to commit ${COMMIT_SHA}"
 
+# ── 0. Disk headroom ─────────────────────────────────────────────────────────
+# Building the renderer image needs roughly twice its size in layers and build
+# cache. Running out mid-build fails at layer export, after the containers have
+# already been recreated, and leaves the host at 100% (which is how a deploy
+# died on 2026-11-24). Fail before touching anything, with the fix in the error.
+DISK_MIN_FREE_GB="${DISK_MIN_FREE_GB:-5}"
+# After a successful build, reclaim the build cache if headroom is still thin.
+# Deploys are what grow it, so without this the host creeps back to 100% and the
+# next deploy dies mid-export (as one did on 2026-11-24).
+DISK_KEEP_FREE_GB="${DISK_KEEP_FREE_GB:-8}"
+# Docker's root is the filesystem that actually fills during a build; fall back
+# to the deploy path when docker cannot report it.
+free_gb=$(remote "root=\$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true); \
+  [ -d \"\${root}\" ] || root='${REMOTE_PATH}'; \
+  df -B1 \"\${root}\" | awk 'NR==2 {printf \"%d\", \$4/1073741824}'")
+if [[ -z "${free_gb}" || "${free_gb}" -lt "${DISK_MIN_FREE_GB}" ]]; then
+  err "remote has ${free_gb:-?} GB free on the docker filesystem, need ${DISK_MIN_FREE_GB} GB. Free space first:
+       ssh ${SSH_HOST} 'docker builder prune -af'   # regenerable build cache
+     Then re-run the deploy."
+fi
+log "Remote disk headroom: ${free_gb} GB free (min ${DISK_MIN_FREE_GB} GB)"
+
 # ── 1. Abort on unexpected tracked drift, then align git BEFORE rsync ─────────
 log "Checking remote git working tree and aligning to ${COMMIT_SHA} …"
 remote bash <<EOF
@@ -259,5 +281,21 @@ for service in ${ALL_SERVICES}; do
   fi
   log "  '${service}' revision ${revision} ✓"
 done
+
+# ── 9. Reclaim build cache when headroom is thin ─────────────────────────────
+# Only reached after every service is healthy and labelled, so this cleans up a
+# deploy that already succeeded. Build cache is regenerable; images and volumes
+# are never touched here.
+left_gb=$(remote "root=\$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true); \
+  [ -d \"\${root}\" ] || root='${REMOTE_PATH}'; \
+  df -B1 \"\${root}\" | awk 'NR==2 {printf \"%d\", \$4/1073741824}'")
+if [[ -n "${left_gb}" && "${left_gb}" -lt "${DISK_KEEP_FREE_GB}" ]]; then
+  log "Disk down to ${left_gb} GB — reclaiming build cache …"
+  remote "docker builder prune -af >/dev/null 2>&1 || true"
+  after_gb=$(remote "root=\$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true); \
+    [ -d \"\${root}\" ] || root='${REMOTE_PATH}'; \
+    df -B1 \"\${root}\" | awk 'NR==2 {printf \"%d\", \$4/1073741824}'")
+  log "Disk headroom after prune: ${after_gb:-?} GB free"
+fi
 
 log "Deploy complete — ${ALL_SERVICES} @ ${COMMIT_SHA}"
